@@ -1,11 +1,8 @@
-server:
-  port: 8761
-
-spring:
-  application:
-    name: eureka-server
-
 eureka:
   client:
     register-with-eureka: false
     fetch-registry: false
+  server:
+    wait-time-in-ms-for-sync: 1000
+server:
+  port: 8761 

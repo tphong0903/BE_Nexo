@@ -1,0 +1,19 @@
+package org.nexo.postservice.service.impl;
+
+import lombok.RequiredArgsConstructor;
+import org.nexo.postservice.feignClient.FileServiceClient;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
+
+import java.util.List;
+
+@Service
+@RequiredArgsConstructor
+public class AsyncFileService {
+    private final FileServiceClient fileServiceClient;
+    @Async
+    public void savePostMedia(List<MultipartFile> files, String postId) {
+        fileServiceClient.savePostMedia(files, postId);
+    }
+}

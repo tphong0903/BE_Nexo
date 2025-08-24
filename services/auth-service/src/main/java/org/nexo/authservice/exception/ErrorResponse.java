@@ -4,7 +4,7 @@ import lombok.Data;
 
 import java.util.Date;
 @Data
-public class ErrorReponse {
+public class ErrorResponse {
     private Date timestamp;
     private int status;
     private String path;

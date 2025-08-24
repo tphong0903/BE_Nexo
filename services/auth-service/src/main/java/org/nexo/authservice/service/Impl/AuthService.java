@@ -1,2 +1,0 @@
-package org.nexo.authservice.service.Impl;public class AuthService {
-}

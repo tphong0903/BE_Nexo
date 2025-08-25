@@ -1,0 +1,20 @@
+package org.nexo.uploadfileservice.grpc;
+
+import net.devh.boot.grpc.client.inject.GrpcClient;
+import org.nexo.postservice.grpc.PostMediaGrpcServiceGrpc;
+import org.nexo.postservice.grpc.PostMediaServiceProto;
+import org.springframework.stereotype.Service;
+
+
+@Service
+public class PostGrpcClient {
+
+    @GrpcClient("posts")
+    private PostMediaGrpcServiceGrpc.PostMediaGrpcServiceBlockingStub postStub;
+
+    public PostMediaServiceProto.PostMediaResponse savePostMedias(
+            PostMediaServiceProto.PostMediaListRequest request) {
+        return postStub.savePostMedias(request);
+    }
+}
+

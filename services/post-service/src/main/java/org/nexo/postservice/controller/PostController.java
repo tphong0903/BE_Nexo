@@ -22,7 +22,7 @@ import java.util.List;
 public class PostController {
     private final IPostService postService;
     @PostMapping
-    public ResponseData<String> addProduct(@RequestPart("productDTO") @Valid String postRequestDTOJson,
+    public ResponseData<String> addPost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
                                            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);

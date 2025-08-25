@@ -37,3 +37,6 @@ feign:
   httpclient:
     enabled: false
 
+grpc:
+  server:
+    port: 9091

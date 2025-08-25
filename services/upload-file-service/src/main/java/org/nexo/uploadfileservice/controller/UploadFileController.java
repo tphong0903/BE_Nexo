@@ -23,7 +23,7 @@ public class UploadFileController {
     public ResponseEntity<String> uploadMedia(@RequestPart("files") List<MultipartFile> files, @RequestPart("postId") String postId ) {
         if (files != null && !files.isEmpty() && postId != null && !postId.isEmpty()) {
             log.info("Add File");
-            uploadFileService.savePostMedia(files, postId);
+            uploadFileService.savePostMedia(files,Long.valueOf(postId));
             return ResponseEntity.ok("Upload thành công");
         }
         return ResponseEntity.badRequest().body("Dữ liệu không hợp lệ");

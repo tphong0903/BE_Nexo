@@ -9,5 +9,5 @@ import java.util.List;
 public interface IUploadFileService {
 
     String upload(MultipartFile multipartFile);
-    void savePostMedia(List<MultipartFile> files,String postId);
+    void savePostMedia(List<MultipartFile> files,Long postId);
 }

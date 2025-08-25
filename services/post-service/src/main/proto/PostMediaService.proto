@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+option java_package = "org.nexo.postservice.grpc";
+option java_outer_classname = "PostMediaServiceProto";
+
+service PostMediaGrpcService {
+  rpc SavePostMedias(PostMediaListRequest) returns (PostMediaResponse);
+}
+
+message PostMediaRequestDTO {
+  int64 postID = 1;
+  int32 mediaOrder = 2;
+  string mediaUrl = 3;
+  string mediaType = 4;
+}
+
+message PostMediaListRequest {
+  repeated PostMediaRequestDTO posts = 1;
+}
+
+message PostMediaResponse {
+  bool success = 1;
+  string message = 2;
+}

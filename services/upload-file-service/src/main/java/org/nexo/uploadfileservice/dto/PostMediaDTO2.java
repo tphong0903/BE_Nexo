@@ -7,9 +7,9 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PostMediaDTO {
-    private String postId;
+public class PostMediaDTO2 {
+    private Long postId;
     private String mediaUrl;
     private String mediaType;
-    private Integer order;
+    private Integer mediaOrder;
 }

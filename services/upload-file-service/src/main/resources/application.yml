@@ -11,6 +11,11 @@ eureka:
     fetch-registry: true
   instance:
     prefer-ip-address: true
+grpc:
+  client:
+    posts:
+      address: static://localhost:9091
+      negotiationType: plaintext
 app:
   firebase:
     file: serviceAccountKey.json

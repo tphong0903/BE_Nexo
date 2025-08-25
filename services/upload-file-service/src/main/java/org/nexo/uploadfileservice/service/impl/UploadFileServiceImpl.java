@@ -3,8 +3,8 @@ package org.nexo.uploadfileservice.service.impl;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
 import lombok.RequiredArgsConstructor;
-import org.nexo.uploadfileservice.dto.PostMediaDTO;
-import org.nexo.uploadfileservice.dto.PostMediaRequestDTO;
+import org.nexo.postservice.grpc.PostMediaServiceProto;
+import org.nexo.uploadfileservice.grpc.PostGrpcClient;
 import org.nexo.uploadfileservice.service.IUploadFileService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -22,10 +22,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
-
 @Service
 @RequiredArgsConstructor
 public class UploadFileServiceImpl implements IUploadFileService {
+    private final PostGrpcClient postGrpcClient;
     @Value("${app.firebase.bucket}")
     private String BUCKET_NAME;
     @Value("${app.firebase.file}")
@@ -49,8 +49,8 @@ public class UploadFileServiceImpl implements IUploadFileService {
     }
 
     @Override
-    public void savePostMedia(List<MultipartFile> files,String postId) {
-        List<PostMediaDTO> postMediaDTOList =  new ArrayList<>();
+    public void savePostMedia(List<MultipartFile> files,Long postId) {
+        List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = new ArrayList<>();
         for(int i=0;i<files.size();i++){
             MultipartFile file = files.get(i);
             String contentType = file.getContentType();
@@ -62,14 +62,22 @@ public class UploadFileServiceImpl implements IUploadFileService {
                 mediaType = "VIDEO";
             }
 
-            PostMediaDTO item = PostMediaDTO.builder()
-                    .postId(postId)
-                    .mediaType(mediaType)
-                    .order(i)
-                    .mediaUrl(upload(files.get(i)))
+            PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
+                    .setPostID(postId)
+                    .setMediaType(mediaType)
+                    .setMediaOrder(i)
+                    .setMediaUrl(upload(file))
                     .build();
-            postMediaDTOList.add(item);
+
+            grpcRequests.add(grpcItem);
         }
+        PostMediaServiceProto.PostMediaListRequest request =
+                PostMediaServiceProto.PostMediaListRequest.newBuilder()
+                        .addAllPosts(grpcRequests)
+                        .build();
+
+        PostMediaServiceProto.PostMediaResponse response = postGrpcClient.savePostMedias(request);
+        System.out.println(response.getMessage());
 
     }
 

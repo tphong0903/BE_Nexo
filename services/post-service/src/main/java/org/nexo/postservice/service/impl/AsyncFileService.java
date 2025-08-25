@@ -13,7 +13,7 @@ import java.util.List;
 public class AsyncFileService {
     private final FileServiceClient fileServiceClient;
     @Async
-    public void savePostMedia(List<MultipartFile> files, String postId) {
-        fileServiceClient.savePostMedia(files, postId);
+    public void savePostMedia(List<MultipartFile> files, Long postId) {
+        fileServiceClient.savePostMedia(files,String.valueOf(postId));
     }
 }

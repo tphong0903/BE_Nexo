@@ -2,10 +2,12 @@ package org.nexo.postservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.nexo.postservice.dto.PostRequestDTO;
+import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.PostModel;
 import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.service.IPostService;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,7 +23,7 @@ public class PostServiceImpl implements IPostService {
         PostModel model;
         if (postRequestDTO.getPostID() != 0) {
             model = postRepository.findById(postRequestDTO.getPostID())
-                    .orElseThrow(() -> new RuntimeException("Post not found"));
+                    .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
             model.setCaption(postRequestDTO.getCaption());
             model.setTag(postRequestDTO.getTag());
             model.setVisibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()));
@@ -35,7 +37,7 @@ public class PostServiceImpl implements IPostService {
         }
         postRepository.save(model);
         if (files != null && !files.isEmpty()) {
-            fileServiceClient.savePostMedia(files, String.valueOf(model.getId()));
+            fileServiceClient.savePostMedia(files,model.getId());
         }
 
         return "Success";

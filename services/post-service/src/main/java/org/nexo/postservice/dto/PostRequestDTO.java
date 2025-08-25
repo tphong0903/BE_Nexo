@@ -4,6 +4,9 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import lombok.*;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
+
+import java.util.List;
+
 @Data
 @Getter
 @NoArgsConstructor
@@ -15,4 +18,5 @@ public class PostRequestDTO {
     private String caption;
     private String visibility;
     private String tag;
+    private List<String> mediaUrl;
 }

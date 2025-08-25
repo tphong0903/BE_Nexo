@@ -1,5 +1,7 @@
 package org.nexo.postservice.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -21,5 +23,6 @@ import java.util.List;
 public class PostModel extends AbstractPost{
     private String tag;
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "postModel", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<PostMediaModel> postMediaModels;
 }

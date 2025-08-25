@@ -51,6 +51,8 @@ public class UploadFileServiceImpl implements IUploadFileService {
     @Override
     public void savePostMedia(List<MultipartFile> files,Long postId) {
         List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = new ArrayList<>();
+        PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient.findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
+        int mediaOrder = postMediaListRequests.getPostsList().size();
         for(int i=0;i<files.size();i++){
             MultipartFile file = files.get(i);
             String contentType = file.getContentType();
@@ -65,7 +67,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
             PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
                     .setPostID(postId)
                     .setMediaType(mediaType)
-                    .setMediaOrder(i)
+                    .setMediaOrder(mediaOrder++)
                     .setMediaUrl(upload(file))
                     .build();
 
@@ -76,8 +78,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
                         .addAllPosts(grpcRequests)
                         .build();
 
-        PostMediaServiceProto.PostMediaResponse response = postGrpcClient.savePostMedias(request);
-        System.out.println(response.getMessage());
+        postGrpcClient.savePostMedias(request);
 
     }
 

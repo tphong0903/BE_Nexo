@@ -3,6 +3,7 @@ package org.nexo.postservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.nexo.postservice.dto.PostMediaDTO;
 import org.nexo.postservice.exception.CustomException;
+import org.nexo.postservice.grpc.PostMediaServiceProto.PostMediaRequestDTO;
 import org.nexo.postservice.model.PostMediaModel;
 import org.nexo.postservice.repository.IPostMediaRepository;
 import org.nexo.postservice.repository.IPostRepository;
@@ -30,5 +31,25 @@ public class PostMediaServiceImp implements IPostMediaService {
             postMediaRepository.save(model);
         }
         return "Success";
+    }
+
+    @Override
+    public List<PostMediaRequestDTO> findPostMediasOfPost(Long postId) {
+        return postMediaRepository.findAllByPostModel_Id(postId).stream().map(PostMediaServiceImp::convertToDTO).toList();
+    }
+
+    @Override
+    public void deletePostMedia(Long postMediaId) {
+        postMediaRepository.delete(postMediaRepository.findById(postMediaId).orElseThrow(()->new CustomException("Post media is not exist",HttpStatus.BAD_REQUEST)));
+    }
+
+    public static PostMediaRequestDTO convertToDTO(PostMediaModel model){
+        return  PostMediaRequestDTO.newBuilder()
+                .setMediaOrder(model.getMediaOrder())
+                .setMediaType(model.getMediaType().toString())
+                .setMediaUrl(model.getMediaUrl())
+                .setPostMediaId(model.getId())
+                .setPostID(model.getId())
+                .build();
     }
 }

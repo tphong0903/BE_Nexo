@@ -1,5 +1,7 @@
 package org.nexo.postservice.model;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import lombok.experimental.SuperBuilder;
@@ -19,6 +21,7 @@ public class PostMediaModel extends AbstractEntity<Long>{
 
     @ManyToOne
     @JoinColumn(name = "post_id")
+    @JsonIgnore
     private PostModel postModel;
 
 }

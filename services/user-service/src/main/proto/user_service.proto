@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+package org.nexo.grpc.user;
+
+option java_package = "org.nexo.grpc.user";
+option java_outer_classname = "UserServiceProto";
+
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc UpdateUserEmailVerification(UpdateEmailVerificationRequest) returns (UpdateEmailVerificationResponse);
+  rpc UpdateAccountStatus(UpdateAccountStatusRequest) returns (UpdateAccountStatusResponse);
+}
+
+message CreateUserRequest {
+  string keycloak_user_id = 1;
+  string email = 2;
+  string username = 3;
+  string first_name = 4;
+  string last_name = 5;
+}
+
+message CreateUserResponse {
+  bool success = 1;
+  string message = 2;
+  int64 user_id = 3;
+}
+
+message UpdateEmailVerificationRequest {
+  string keycloak_user_id = 1;
+  bool email_verified = 2;
+}
+
+message UpdateEmailVerificationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UpdateAccountStatusRequest {
+  string keycloak_user_id = 1;
+  string account_status = 2; // PENDING, ACTIVE, INACTIVE, BLOCKED
+}
+
+message UpdateAccountStatusResponse {
+  bool success = 1;
+  string message = 2;
+}

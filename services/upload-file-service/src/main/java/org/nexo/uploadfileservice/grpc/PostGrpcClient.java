@@ -16,5 +16,15 @@ public class PostGrpcClient {
             PostMediaServiceProto.PostMediaListRequest request) {
         return postStub.savePostMedias(request);
     }
+
+    public PostMediaServiceProto.PostMediaListRequest findPostMediasOfPost(
+            PostMediaServiceProto.PostId request) {
+        return postStub.findPostMediasOfPost(request);
+    }
+
+    public PostMediaServiceProto.PostMediaResponse deletePostMedia(
+            PostMediaServiceProto.PostMediaListRequest request) {
+        return postStub.savePostMedias(request);
+    }
 }
 

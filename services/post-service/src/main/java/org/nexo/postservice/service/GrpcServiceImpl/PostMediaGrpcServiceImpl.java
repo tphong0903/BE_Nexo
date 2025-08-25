@@ -7,7 +7,7 @@ import org.nexo.postservice.dto.PostMediaDTO;
 import org.nexo.postservice.grpc.PostMediaGrpcServiceGrpc;
 import org.nexo.postservice.grpc.PostMediaServiceProto;
 import org.nexo.postservice.service.IPostMediaService;
-
+import org.nexo.postservice.grpc.PostMediaServiceProto.PostMediaRequestDTO;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -21,13 +21,45 @@ public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedia
                                StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
         List<PostMediaDTO> list = new ArrayList<>();
         request.getPostsList().forEach(post -> {
-            list.add(new PostMediaDTO(post.getPostID(), post.getMediaUrl(), post.getMediaType(), post.getMediaOrder()));
+            list.add(PostMediaDTO.builder()
+                            .postId(post.getPostID())
+                            .mediaUrl(post.getMediaUrl())
+                            .mediaType(post.getMediaType())
+                            .mediaOrder(post.getMediaOrder())
+                            .build());
         });
         postMediaService.savePostMedia(list);
         PostMediaServiceProto.PostMediaResponse response =
                 PostMediaServiceProto.PostMediaResponse.newBuilder()
                         .setSuccess(true)
                         .setMessage("Posts saved successfully")
+                        .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void findPostMediasOfPost(PostMediaServiceProto.PostId request,
+                               StreamObserver<PostMediaServiceProto.PostMediaListRequest> responseObserver) {
+        List<PostMediaRequestDTO> list = postMediaService.findPostMediasOfPost(request.getPostId());
+
+        PostMediaServiceProto.PostMediaListRequest response =
+                PostMediaServiceProto.PostMediaListRequest.newBuilder().addAllPosts(list).build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void deletePostMedia(PostMediaServiceProto.PostId request,
+                                     StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
+        postMediaService.deletePostMedia(request.getPostId());
+
+        PostMediaServiceProto.PostMediaResponse response =
+                PostMediaServiceProto.PostMediaResponse.newBuilder()
+                        .setSuccess(true)
+                        .setMessage("Post Media deleted successfully")
                         .build();
 
         responseObserver.onNext(response);

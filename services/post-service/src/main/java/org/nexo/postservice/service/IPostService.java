@@ -7,4 +7,10 @@ import java.util.List;
 
 public interface IPostService {
     String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files);
+
+    String saveReel(PostRequestDTO postRequestDTO, List<MultipartFile> files);
+
+    String inactivePost(Long id);
+
+    String deletePost(Long id);
 }

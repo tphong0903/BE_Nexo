@@ -5,6 +5,7 @@ option java_outer_classname = "PostMediaServiceProto";
 
 service PostMediaGrpcService {
   rpc SavePostMedias(PostMediaListRequest) returns (PostMediaResponse);
+  rpc SaveReelMedias(ReelDto) returns (PostMediaResponse);
   rpc findPostMediasOfPost(PostId) returns (PostMediaListRequest);
   rpc deletePostMedia(PostId) returns (PostMediaResponse);
 }
@@ -28,4 +29,8 @@ message PostMediaResponse {
 
 message PostId {
   int64 postId = 1;
+}
+message ReelDto{
+  int64 postId = 1;
+  string mediaUrl = 4;
 }

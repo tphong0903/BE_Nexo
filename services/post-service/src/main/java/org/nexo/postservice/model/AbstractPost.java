@@ -33,4 +33,6 @@ public abstract class AbstractPost implements Serializable {
     private String caption;
     @Enumerated(EnumType.STRING)
     private EVisibilityPost visibility;
+
+    private Boolean isActive;
 }

@@ -4,7 +4,6 @@ import org.nexo.postservice.config.FeignConfig;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.multipart.MultipartFile;
@@ -12,10 +11,16 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 
-@FeignClient(name = "files",configuration = FeignConfig.class)
+@FeignClient(name = "files", configuration = FeignConfig.class)
 public interface FileServiceClient {
     @PostMapping(value = "/post/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     ResponseEntity<String> savePostMedia(
+            @RequestPart("files") List<MultipartFile> files,
+            @RequestPart("postId") String postId
+    );
+
+    @PostMapping(value = "/reel/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    ResponseEntity<String> saveReelMedia(
             @RequestPart("files") List<MultipartFile> files,
             @RequestPart("postId") String postId
     );

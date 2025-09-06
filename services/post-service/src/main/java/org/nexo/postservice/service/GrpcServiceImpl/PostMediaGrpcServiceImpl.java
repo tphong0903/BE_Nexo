@@ -4,17 +4,23 @@ import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.nexo.postservice.dto.PostMediaDTO;
+import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.grpc.PostMediaGrpcServiceGrpc;
 import org.nexo.postservice.grpc.PostMediaServiceProto;
-import org.nexo.postservice.service.IPostMediaService;
 import org.nexo.postservice.grpc.PostMediaServiceProto.PostMediaRequestDTO;
+import org.nexo.postservice.model.ReelModel;
+import org.nexo.postservice.repository.IReelRepository;
+import org.nexo.postservice.service.IPostMediaService;
+import org.springframework.http.HttpStatus;
+
 import java.util.ArrayList;
 import java.util.List;
 
 @GrpcService
 @RequiredArgsConstructor
-public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMediaGrpcServiceImplBase{
+public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMediaGrpcServiceImplBase {
     private final IPostMediaService postMediaService;
+    private final IReelRepository reelRepository;
 
     @Override
     public void savePostMedias(PostMediaServiceProto.PostMediaListRequest request,
@@ -22,11 +28,11 @@ public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedia
         List<PostMediaDTO> list = new ArrayList<>();
         request.getPostsList().forEach(post -> {
             list.add(PostMediaDTO.builder()
-                            .postId(post.getPostID())
-                            .mediaUrl(post.getMediaUrl())
-                            .mediaType(post.getMediaType())
-                            .mediaOrder(post.getMediaOrder())
-                            .build());
+                    .postId(post.getPostID())
+                    .mediaUrl(post.getMediaUrl())
+                    .mediaType(post.getMediaType())
+                    .mediaOrder(post.getMediaOrder())
+                    .build());
         });
         postMediaService.savePostMedia(list);
         PostMediaServiceProto.PostMediaResponse response =
@@ -40,8 +46,23 @@ public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedia
     }
 
     @Override
+    public void saveReelMedias(PostMediaServiceProto.ReelDto request,
+                               StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
+        ReelModel model = reelRepository.findById(request.getPostId()).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+        model.setVideoUrl(request.getMediaUrl());
+        reelRepository.save(model);
+        PostMediaServiceProto.PostMediaResponse response =
+                PostMediaServiceProto.PostMediaResponse.newBuilder()
+                        .setSuccess(true)
+                        .setMessage("Reel saved successfully")
+                        .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
     public void findPostMediasOfPost(PostMediaServiceProto.PostId request,
-                               StreamObserver<PostMediaServiceProto.PostMediaListRequest> responseObserver) {
+                                     StreamObserver<PostMediaServiceProto.PostMediaListRequest> responseObserver) {
         List<PostMediaRequestDTO> list = postMediaService.findPostMediasOfPost(request.getPostId());
 
         PostMediaServiceProto.PostMediaListRequest response =
@@ -53,7 +74,7 @@ public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedia
 
     @Override
     public void deletePostMedia(PostMediaServiceProto.PostId request,
-                                     StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
+                                StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
         postMediaService.deletePostMedia(request.getPostId());
 
         PostMediaServiceProto.PostMediaResponse response =

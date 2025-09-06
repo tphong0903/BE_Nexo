@@ -12,8 +12,14 @@ import java.util.List;
 @RequiredArgsConstructor
 public class AsyncFileService {
     private final FileServiceClient fileServiceClient;
+
     @Async
     public void savePostMedia(List<MultipartFile> files, Long postId) {
-        fileServiceClient.savePostMedia(files,String.valueOf(postId));
+        fileServiceClient.savePostMedia(files, String.valueOf(postId));
+    }
+
+    @Async
+    public void saveReelMedia(List<MultipartFile> files, Long postId) {
+        fileServiceClient.saveReelMedia(files, String.valueOf(postId));
     }
 }

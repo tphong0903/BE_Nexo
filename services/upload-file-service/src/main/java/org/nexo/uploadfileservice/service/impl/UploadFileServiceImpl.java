@@ -1,7 +1,11 @@
 package org.nexo.uploadfileservice.service.impl;
 
+import com.google.auth.Credentials;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.storage.BlobId;
 import com.google.cloud.storage.BlobInfo;
+import com.google.cloud.storage.Storage;
+import com.google.cloud.storage.StorageOptions;
 import lombok.RequiredArgsConstructor;
 import org.nexo.postservice.grpc.PostMediaServiceProto;
 import org.nexo.uploadfileservice.grpc.PostGrpcClient;
@@ -9,10 +13,7 @@ import org.nexo.uploadfileservice.service.IUploadFileService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import com.google.auth.Credentials;
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -22,6 +23,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class UploadFileServiceImpl implements IUploadFileService {
@@ -30,6 +32,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
     private String BUCKET_NAME;
     @Value("${app.firebase.file}")
     private String FIREBASE_PRIVATE_KEY;
+
     @Override
     public String upload(MultipartFile multipartFile) {
         try {
@@ -49,18 +52,18 @@ public class UploadFileServiceImpl implements IUploadFileService {
     }
 
     @Override
-    public void savePostMedia(List<MultipartFile> files,Long postId) {
+    public void savePostMedia(List<MultipartFile> files, Long postId) {
         List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = new ArrayList<>();
         PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient.findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
         int mediaOrder = postMediaListRequests.getPostsList().size();
-        for(int i=0;i<files.size();i++){
+        for (int i = 0; i < files.size(); i++) {
             MultipartFile file = files.get(i);
             String contentType = file.getContentType();
 
             String mediaType;
             if (contentType.startsWith("image")) {
                 mediaType = "PICTURE";
-            } else  {
+            } else {
                 mediaType = "VIDEO";
             }
 
@@ -80,6 +83,17 @@ public class UploadFileServiceImpl implements IUploadFileService {
 
         postGrpcClient.savePostMedias(request);
 
+    }
+
+    @Override
+    public void saveReelMedia(List<MultipartFile> files, Long postId) {
+        for (MultipartFile file : files) {
+            PostMediaServiceProto.ReelDto grpcItem = PostMediaServiceProto.ReelDto.newBuilder()
+                    .setPostId(postId)
+                    .setMediaUrl(upload(file))
+                    .build();
+            postGrpcClient.saveReelMedias(grpcItem);
+        }
     }
 
     public String uploadFile(File file, String fileName) throws IOException {

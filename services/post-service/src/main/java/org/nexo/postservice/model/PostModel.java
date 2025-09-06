@@ -24,5 +24,8 @@ public class PostModel extends AbstractPost{
     private String tag;
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "postModel", cascade = CascadeType.ALL)
     @JsonIgnore
+    private List<PostHashTagModel> postHashTagModel;
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "postModel", cascade = CascadeType.ALL)
+    @JsonIgnore
     private List<PostMediaModel> postMediaModels;
 }

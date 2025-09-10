@@ -5,6 +5,7 @@ import org.nexo.interactionservice.dto.request.CommentDto;
 import org.nexo.interactionservice.exception.CustomException;
 import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.repository.ICommentRepository;
+import org.nexo.interactionservice.service.ICommentMentionService;
 import org.nexo.interactionservice.service.ICommentService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -13,6 +14,7 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class CommentServiceImpl implements ICommentService {
     private final ICommentRepository commentRepository;
+    private final ICommentMentionService commentMentionService;
 
     @Override
     public String saveComment(CommentDto a) {
@@ -26,7 +28,6 @@ public class CommentServiceImpl implements ICommentService {
                     .build();
         }
 
-
         if (a.getPostId() != null) {
             model.setPostId(a.getPostId());
         } else {
@@ -36,9 +37,8 @@ public class CommentServiceImpl implements ICommentService {
         if (a.getParentId() != null) {
             model.setParentComment(commentRepository.findById(a.getParentId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST)));
         }
-
         commentRepository.save(model);
-
+        a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
         return "Success";
     }
 
@@ -49,4 +49,6 @@ public class CommentServiceImpl implements ICommentService {
         commentRepository.delete(model);
         return "Success";
     }
+
+
 }

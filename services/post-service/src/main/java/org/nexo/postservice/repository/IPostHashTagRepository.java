@@ -14,5 +14,5 @@ public interface IPostHashTagRepository extends JpaRepository<PostHashTagModel, 
     @Transactional
     @Modifying
     @Query("DELETE FROM PostHashTagModel post WHERE (post.postModel.id = :postId OR post.reelModel.id = :postId) ")
-    void deleteByPostIdAndHashtagId(@Param("postId") Long postId);
+    void deleteByPostId(@Param("postId") Long postId);
 }

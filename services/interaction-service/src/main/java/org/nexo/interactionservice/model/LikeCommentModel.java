@@ -13,7 +13,7 @@ import lombok.*;
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
 public class LikeCommentModel extends AbstractEntity<Long> {
-    private Long mentionUserId;
+    private Long userId;
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "comment_id")
     private CommentModel commentModel;

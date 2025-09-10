@@ -23,7 +23,7 @@ public class HashTagServiceImpl implements IHashTagService {
         String caption = post.getCaption();
         Pattern pattern = Pattern.compile("(#\\w+)");
         Matcher matcher = pattern.matcher(caption);
-        postHashTagRepository.deleteByPostIdAndHashtagId(post.getId());
+        postHashTagRepository.deleteByPostId(post.getId());
         while (matcher.find()) {
             String name = matcher.group();
             HashTagModel hashTagModel = hashTagRepository.findByName(name);

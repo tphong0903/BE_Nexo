@@ -2,6 +2,8 @@ package org.nexo.interactionservice.dto.request;
 
 import lombok.*;
 
+import java.util.List;
+
 @Data
 @Getter
 @NoArgsConstructor
@@ -14,4 +16,5 @@ public class CommentDto {
     private Long reelId;
     private Long parentId;
     private String content;
+    private List<Long> listMentionUserId;
 }

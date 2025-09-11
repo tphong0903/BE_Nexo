@@ -79,4 +79,20 @@ public class AuthController {
                         .build()));
 
     }
+    @PostMapping("/resend-verify-email")
+    public Mono<ResponseData<?>> resendVerifyEmail(@RequestHeader("UserId") String userId) {
+        return authService.resendVerifyEmail(userId)
+                .then(Mono.just(ResponseData.<Void>builder()
+                        .status(HttpStatus.OK.value())
+                        .message("Verification email resent successfully")
+                        .build()));
+    }
+    @PostMapping("forgot-password")
+    public Mono<ResponseData<?>> forgotPassword(@RequestHeader("Email") String email) {
+        return authService.forgotPassword(email)
+                .then(Mono.just(ResponseData.<Void>builder()
+                        .status(HttpStatus.OK.value())
+                        .message("If the email exists, a password reset link has been sent")
+                        .build()));
+    }
 }

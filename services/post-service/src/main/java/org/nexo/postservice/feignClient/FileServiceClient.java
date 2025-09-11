@@ -24,4 +24,10 @@ public interface FileServiceClient {
             @RequestPart("files") List<MultipartFile> files,
             @RequestPart("postId") String postId
     );
+
+    @PostMapping(value = "/story/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    ResponseEntity<String> saveStoryMedia(
+            @RequestPart("files") List<MultipartFile> files,
+            @RequestPart("storyId") String postId
+    );
 }

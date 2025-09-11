@@ -22,4 +22,9 @@ public class AsyncFileService {
     public void saveReelMedia(List<MultipartFile> files, Long postId) {
         fileServiceClient.saveReelMedia(files, String.valueOf(postId));
     }
+
+    @Async
+    public void saveStoryMedia(List<MultipartFile> files, Long postId) {
+        fileServiceClient.saveStoryMedia(files, String.valueOf(postId));
+    }
 }

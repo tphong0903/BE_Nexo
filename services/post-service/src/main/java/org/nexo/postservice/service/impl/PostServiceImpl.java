@@ -30,13 +30,13 @@ public class PostServiceImpl implements IPostService {
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
         PostModel model;
-        if (postRequestDTO.getPostID() != 0) {
-            List<PostMediaModel> postMediaModelList = postMediaRepository.findAllByPostModel_Id(postRequestDTO.getPostID());
+        if (postRequestDTO.getPostId() != 0) {
+            List<PostMediaModel> postMediaModelList = postMediaRepository.findAllByPostModel_Id(postRequestDTO.getPostId());
             for (PostMediaModel postMediaModel : postMediaModelList) {
                 if (!postRequestDTO.getMediaUrl().contains(postMediaModel.getMediaUrl()))
                     postMediaRepository.delete(postMediaModel);
             }
-            model = postRepository.findById(postRequestDTO.getPostID())
+            model = postRepository.findById(postRequestDTO.getPostId())
                     .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
             model.setCaption(postRequestDTO.getCaption());
             model.setTag(postRequestDTO.getTag());
@@ -62,8 +62,8 @@ public class PostServiceImpl implements IPostService {
     @Override
     public String saveReel(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
         ReelModel model;
-        if (postRequestDTO.getPostID() != 0) {
-            model = reelRepository.findById(postRequestDTO.getPostID())
+        if (postRequestDTO.getPostId() != 0) {
+            model = reelRepository.findById(postRequestDTO.getPostId())
                     .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
             model.setCaption(postRequestDTO.getCaption());
             model.setVisibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()));
@@ -89,6 +89,14 @@ public class PostServiceImpl implements IPostService {
         PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
         model.setIsActive(!model.getIsActive());
         postRepository.save(model);
+        return "Success";
+    }
+
+    @Override
+    public String inactiveReel(Long id) {
+        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
+        model.setIsActive(!model.getIsActive());
+        reelRepository.save(model);
         return "Success";
     }
 

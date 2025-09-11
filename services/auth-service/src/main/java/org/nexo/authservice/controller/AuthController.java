@@ -8,12 +8,14 @@ import org.nexo.authservice.dto.LoginRequest;
 import org.nexo.authservice.dto.RegisterRequest;
 import org.nexo.authservice.dto.ResponseData;
 import org.nexo.authservice.dto.TokenResponse;
+import org.nexo.authservice.service.AuthService;
 import org.nexo.authservice.service.Impl.AuthServiceImpl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
@@ -23,7 +25,7 @@ import jakarta.validation.Valid;
 @AllArgsConstructor
 @Slf4j
 public class AuthController {
-    private final AuthServiceImpl authService;
+    private final AuthService authService;
 
     @PostMapping("/login")
     public Mono<ResponseData<?>> login(@Valid @RequestBody LoginRequest loginRequest) {
@@ -40,22 +42,24 @@ public class AuthController {
     }
 
     @PostMapping("/register")
-    public Mono<ResponseData<?>>register(@Valid @RequestBody RegisterRequest registerRequest) {
+    public Mono<ResponseData<?>> register(@Valid @RequestBody RegisterRequest registerRequest) {
         return authService.register(registerRequest)
-            .map(tokenResponse -> {
-                log.info("Registration successful for user: {}", registerRequest.getEmail());
-                return ResponseData.<TokenResponse>builder()
-                        .status(HttpStatus.OK.value())
-                        .message("Registration successful")
-                        .build();
-            });
+                .map(tokenResponse -> {
+                    log.info("Registration successful for user: {}", registerRequest.getEmail());
+                    return ResponseData.<TokenResponse>builder()
+                            .status(HttpStatus.OK.value())
+                            .message("Registration successful")
+                            .build();
+                });
     }
 
     @PostMapping("/refresh")
-    public Mono<ResponseData<?>> refresh(@RequestParam String username) {
-        return authService.refreshToken(username)
+    public Mono<ResponseData<?>> refresh(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        String refreshToken = authHeader.replace("Bearer ", "").trim();
+
+        return authService.refreshToken(refreshToken)
                 .map(tokenResponse -> {
-                    log.info("Token refresh successful for user: {}", username);
+                    log.info("Token refresh successful for user with refresh token: {}", refreshToken);
                     return ResponseData.<TokenResponse>builder()
                             .status(HttpStatus.OK.value())
                             .message("Token refresh successful")
@@ -65,12 +69,14 @@ public class AuthController {
     }
 
     @PostMapping("/logout")
-    public Mono<ResponseData<?>> logout(@RequestParam String username) {
-        return authService.logout(username)
+    public Mono<ResponseData<?>> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        String refreshToken = authHeader.replace("Bearer ", "").trim();
+
+        return authService.logout(refreshToken)
                 .then(Mono.just(ResponseData.<Void>builder()
                         .status(HttpStatus.OK.value())
                         .message("Logged out successfully")
                         .build()));
-              
+
     }
 }

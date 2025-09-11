@@ -9,8 +9,11 @@ import org.nexo.postservice.grpc.PostMediaGrpcServiceGrpc;
 import org.nexo.postservice.grpc.PostMediaServiceProto;
 import org.nexo.postservice.grpc.PostMediaServiceProto.PostMediaRequestDTO;
 import org.nexo.postservice.model.ReelModel;
+import org.nexo.postservice.model.StoryModel;
 import org.nexo.postservice.repository.IReelRepository;
+import org.nexo.postservice.repository.IStoryRepository;
 import org.nexo.postservice.service.IPostMediaService;
+import org.nexo.postservice.util.Enum.EMediaType;
 import org.springframework.http.HttpStatus;
 
 import java.util.ArrayList;
@@ -21,6 +24,7 @@ import java.util.List;
 public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMediaGrpcServiceImplBase {
     private final IPostMediaService postMediaService;
     private final IReelRepository reelRepository;
+    private final IStoryRepository storyRepository;
 
     @Override
     public void savePostMedias(PostMediaServiceProto.PostMediaListRequest request,
@@ -55,6 +59,22 @@ public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedia
                 PostMediaServiceProto.PostMediaResponse.newBuilder()
                         .setSuccess(true)
                         .setMessage("Reel saved successfully")
+                        .build();
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void saveStoryMedias(PostMediaServiceProto.StoryDto request,
+                                StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
+        StoryModel model = storyRepository.findById(request.getStoryId()).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+        model.setMediaURL(request.getMediaUrl());
+        model.setMediaType(Enum.valueOf(EMediaType.class, request.getMediaType()));
+        storyRepository.save(model);
+        PostMediaServiceProto.PostMediaResponse response =
+                PostMediaServiceProto.PostMediaResponse.newBuilder()
+                        .setSuccess(true)
+                        .setMessage("Story saved successfully")
                         .build();
         responseObserver.onNext(response);
         responseObserver.onCompleted();

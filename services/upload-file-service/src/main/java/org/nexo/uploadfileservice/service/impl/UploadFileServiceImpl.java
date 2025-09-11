@@ -7,7 +7,7 @@ import com.google.cloud.storage.BlobInfo;
 import com.google.cloud.storage.Storage;
 import com.google.cloud.storage.StorageOptions;
 import lombok.RequiredArgsConstructor;
-import org.nexo.postservice.grpc.PostMediaServiceProto;
+import org.nexo.uploadfile.grpc.PostMediaServiceProto;
 import org.nexo.uploadfileservice.grpc.PostGrpcClient;
 import org.nexo.uploadfileservice.service.IUploadFileService;
 import org.springframework.beans.factory.annotation.Value;
@@ -93,6 +93,26 @@ public class UploadFileServiceImpl implements IUploadFileService {
                     .setMediaUrl(upload(file))
                     .build();
             postGrpcClient.saveReelMedias(grpcItem);
+        }
+    }
+
+    @Override
+    public void saveStoryMedia(List<MultipartFile> files, Long postId) {
+        for (MultipartFile file : files) {
+            String contentType = file.getContentType();
+
+            String mediaType;
+            if (contentType.startsWith("image")) {
+                mediaType = "PICTURE";
+            } else {
+                mediaType = "VIDEO";
+            }
+            PostMediaServiceProto.StoryDto grpcItem = PostMediaServiceProto.StoryDto.newBuilder()
+                    .setStoryId(postId)
+                    .setMediaUrl(upload(file))
+                    .setMediaType(mediaType)
+                    .build();
+            postGrpcClient.saveStoryMedias(grpcItem);
         }
     }
 

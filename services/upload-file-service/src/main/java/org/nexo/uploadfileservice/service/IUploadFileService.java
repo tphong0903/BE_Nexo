@@ -12,4 +12,6 @@ public interface IUploadFileService {
     void savePostMedia(List<MultipartFile> files, Long postId);
 
     void saveReelMedia(List<MultipartFile> files, Long postId);
+
+    void saveStoryMedia(List<MultipartFile> files, Long postId);
 }

@@ -1,9 +1,6 @@
 package org.nexo.postservice.dto;
 
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import lombok.*;
-import org.nexo.postservice.util.Enum.EVisibilityPost;
 
 import java.util.List;
 
@@ -13,7 +10,7 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class PostRequestDTO {
-    private Long postID;
+    private Long postId;
     private Long userId;
     private String caption;
     private String visibility;

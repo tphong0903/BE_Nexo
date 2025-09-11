@@ -2,7 +2,7 @@ package org.nexo.uploadfileservice.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.nexo.uploadfileservice.dto.response.ResponseData;
+import org.nexo.postservice.dto.response.ResponseData;
 import org.nexo.uploadfileservice.service.IUploadFileService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -33,6 +33,16 @@ public class UploadFileController {
         if (files != null && !files.isEmpty() && postId != null && !postId.isEmpty()) {
             log.info("Add File");
             uploadFileService.saveReelMedia(files, Long.valueOf(postId));
+            return ResponseEntity.ok("Upload thành công");
+        }
+        return ResponseEntity.badRequest().body("Dữ liệu không hợp lệ");
+    }
+
+    @PostMapping(value = "/story/media")
+    public ResponseEntity<String> uploadMedia3(@RequestPart("files") List<MultipartFile> files, @RequestPart("storyId") String storyId) {
+        if (files != null && !files.isEmpty() && storyId != null && !storyId.isEmpty()) {
+            log.info("Add File");
+            uploadFileService.saveStoryMedia(files, Long.valueOf(storyId));
             return ResponseEntity.ok("Upload thành công");
         }
         return ResponseEntity.badRequest().body("Dữ liệu không hợp lệ");

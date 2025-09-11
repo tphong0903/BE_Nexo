@@ -190,6 +190,11 @@ public class AuthServiceImpl implements AuthService {
                 });
     }
 
+    public Mono<Void> resendVerifyEmail(String userId) {
+        return getAdminToken()
+                .flatMap(adminToken -> sendVerifyEmail(userId, adminToken));
+    }
+
     private Mono<Void> sendVerifyEmail(String userId, String adminToken) {
         return webClient.put()
                 .uri(keycloakConfig.getUsersUrl() + "/" + userId + "/send-verify-email")
@@ -338,5 +343,47 @@ public class AuthServiceImpl implements AuthService {
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .map(json -> json.get("value").asText());
+    }
+
+    public Mono<Void> forgotPassword(String email) {
+        log.info("Starting forgot password process for email: {}", email);
+
+        return getAdminToken()
+                .flatMap(adminToken -> webClient.get()
+                        .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
+                                + "/users?email=" + email)
+                        .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                        .retrieve()
+                        .bodyToMono(JsonNode.class)
+                        .flatMap(users -> {
+                            if (users.isArray() && users.size() > 0) {
+                                String userId = users.get(0).get("id").asText();
+                                log.info("Found user with ID: {} for email: {}", userId, email);
+
+                                sendResetPasswordEmail(userId, adminToken)
+                                        .doOnSuccess(
+                                                v -> log.info("Reset password email sent successfully to: {}", email))
+                                        .doOnError(error -> log.error(
+                                                "Failed to send reset password email to: {}, error: {}", email,
+                                                error.getMessage()))
+                                        .subscribe();
+
+                                return Mono.<Void>empty();
+                            } else {
+                                log.warn("User not found with email: {}", email);
+                                return Mono.error(new KeycloakClientException(404, "User not found"));
+                            }
+                        }));
+    }
+
+    private Mono<Void> sendResetPasswordEmail(String userId, String adminToken) {
+        return webClient.put()
+                .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm() + "/users/" + userId
+                        + "/execute-actions-email")
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(new String[] { "UPDATE_PASSWORD" })
+                .retrieve()
+                .bodyToMono(Void.class);
     }
 }

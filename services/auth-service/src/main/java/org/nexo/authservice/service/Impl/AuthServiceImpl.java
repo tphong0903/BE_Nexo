@@ -1,6 +1,5 @@
 package org.nexo.authservice.service.Impl;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.authservice.config.KeycloakConfig;
@@ -23,7 +22,6 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClientResponseException;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -31,7 +29,6 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
 import java.time.Duration;
-import java.util.Map;
 
 @Service
 @AllArgsConstructor
@@ -43,12 +40,12 @@ public class AuthServiceImpl implements AuthService {
     private static final String CLIENT_SECRET = "client_secret";
     private static final String EMAIL = "email";
     private static final String USERNAME = "username";
-
     private static final String PASSWORD = "password";
     private static final String REFRESH_TOKEN = "refresh_token";
     private static final String GRANT_TYPE_PASSWORD = "password";
     private static final String GRANT_TYPE_REFRESH_TOKEN = "refresh_token";
     private static final String ADMIN_CLI = "admin-cli";
+    private static final String BEARER_PREFIX = "Bearer ";
 
     private final WebClient webClient;
     private final KeycloakConfig keycloakConfig;
@@ -109,35 +106,6 @@ public class AuthServiceImpl implements AuthService {
                                         tokenResponse.getRefreshToken(),
                                         tokenResponse.getExpiresIn())
                                         .thenReturn(tokenResponse);
-                            })
-                            .onErrorResume(WebClientResponseException.class, ex -> {
-                                try {
-                                    String responseBody = ex.getResponseBodyAsString();
-                                    ObjectMapper mapper = new ObjectMapper();
-
-                                    Map<String, Object> errorMap = mapper.readValue(responseBody,
-                                            new TypeReference<Map<String, Object>>() {
-                                            });
-
-                                    if (errorMap != null) {
-                                        String errorDescription = (String) errorMap.get("error_description");
-                                        String error = (String) errorMap.get("error");
-
-                                        String message = errorDescription != null ? errorDescription : error;
-
-                                        log.error("Keycloak error: {}", message);
-
-                                        return Mono.error(new KeycloakClientException(
-                                                ex.getStatusCode().value(),
-                                                message != null ? message : "Authentication failed"));
-                                    }
-                                } catch (Exception e) {
-                                    log.warn("Could not parse error response: {}", ex.getResponseBodyAsString());
-                                }
-
-                                return Mono.error(new KeycloakClientException(
-                                        ex.getStatusCode().value(),
-                                        "Authentication failed"));
                             });
                 });
     }
@@ -150,7 +118,7 @@ public class AuthServiceImpl implements AuthService {
 
                     return webClient.post()
                             .uri(keycloakConfig.getUsersUrl())
-                            .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                            .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                             .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                             .bodyValue(userJson)
                             .exchangeToMono(response -> {
@@ -222,15 +190,15 @@ public class AuthServiceImpl implements AuthService {
                 });
     }
 
-    private Mono<Void> sendVerifyEmail(String userId, String token) {
+    private Mono<Void> sendVerifyEmail(String userId, String adminToken) {
         return webClient.put()
                 .uri(keycloakConfig.getUsersUrl() + "/" + userId + "/send-verify-email")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                 .retrieve()
                 .bodyToMono(Void.class);
     }
 
-    private void enqueueRetry(String userId, String token, int attempt) {
+    private void enqueueRetry(String userId, String adminToken, int attempt) {
         if (attempt > 3) {
             log.error("Send verify email failed permanently for userId={}", userId);
             return;
@@ -240,57 +208,66 @@ public class AuthServiceImpl implements AuthService {
         log.info("Retry sending verify email for userId={} after {}s (attempt #{})", userId, delaySeconds, attempt);
 
         Mono.delay(Duration.ofSeconds(delaySeconds))
-                .flatMap(t -> sendVerifyEmail(userId, token)
+                .flatMap(t -> sendVerifyEmail(userId, adminToken)
                         .doOnSuccess(v -> log.info("Retry success for userId={}", userId))
                         .doOnError(ex -> {
                             log.error("Retry failed for userId={} (attempt #{}) : {}", userId, attempt,
                                     ex.getMessage());
-                            enqueueRetry(userId, token, attempt + 1);
+                            enqueueRetry(userId, adminToken, attempt + 1);
                         }))
                 .subscribe();
     }
 
-    public Mono<TokenResponse> refreshToken(String username) {
-        return tokenCacheService.getRefreshToken(username)
-                .flatMap(refreshToken -> getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
-                        .flatMap(clientSecret -> {
-                            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-                            formData.add(GRANT_TYPE, GRANT_TYPE_REFRESH_TOKEN);
-                            formData.add(CLIENT_ID, keycloakConfig.getClientId());
-                            formData.add(CLIENT_SECRET, clientSecret);
-                            formData.add(REFRESH_TOKEN, refreshToken);
+    public Mono<TokenResponse> refreshToken(String refreshToken) {
+        log.info("Starting refresh token process");
 
-                            return webClient.post()
-                                    .uri(keycloakConfig.getTokenUrl())
-                                    .body(BodyInserters.fromFormData(formData))
-                                    .retrieve()
-                                    .bodyToMono(TokenResponse.class)
-                                    .flatMap(tokenResponse -> {
-                                        return tokenCacheService.cacheToken(
-                                                username,
-                                                tokenResponse.getAccessToken(),
-                                                tokenResponse.getRefreshToken(),
-                                                tokenResponse.getExpiresIn()).thenReturn(tokenResponse);
-                                    });
-                        }));
+        return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
+                .flatMap(clientSecret -> {
+                    MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+                    formData.add(GRANT_TYPE, GRANT_TYPE_REFRESH_TOKEN);
+                    formData.add(CLIENT_ID, keycloakConfig.getClientId());
+                    formData.add(CLIENT_SECRET, clientSecret);
+                    formData.add(REFRESH_TOKEN, refreshToken);
+
+                    return webClient.post()
+                            .uri(keycloakConfig.getRefreshTokenUrl())
+                            .body(BodyInserters.fromFormData(formData))
+                            .retrieve()
+                            .bodyToMono(TokenResponse.class)
+                            .flatMap(tokenResponse -> {
+                                String email = jwtUtil.getEmailFromToken(tokenResponse.getAccessToken());
+
+                                if (email != null) {
+                                    return tokenCacheService.cacheToken(
+                                            email,
+                                            tokenResponse.getAccessToken(),
+                                            tokenResponse.getRefreshToken(),
+                                            tokenResponse.getExpiresIn()).thenReturn(tokenResponse);
+                                } else {
+                                    log.warn("Could not extract email from token, skipping cache update");
+                                    return Mono.just(tokenResponse);
+                                }
+                            });
+                });
     }
 
-    public Mono<Void> logout(String username) {
-        return tokenCacheService.getRefreshToken(username)
-                .flatMap(refreshToken -> getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
-                        .flatMap(clientSecret -> {
-                            MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
-                            formData.add(CLIENT_ID, keycloakConfig.getClientId());
-                            formData.add(CLIENT_SECRET, clientSecret);
-                            formData.add(REFRESH_TOKEN, refreshToken);
+    public Mono<Void> logout(String refreshToken) {
+        log.info("Starting logout process");
 
-                            return webClient.post()
-                                    .uri(keycloakConfig.getLogoutUrl())
-                                    .body(BodyInserters.fromFormData(formData))
-                                    .retrieve()
-                                    .bodyToMono(String.class)
-                                    .then(tokenCacheService.removeTokens(username));
-                        }));
+        return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
+                .flatMap(clientSecret -> {
+                    MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+                    formData.add(CLIENT_ID, keycloakConfig.getClientId());
+                    formData.add(CLIENT_SECRET, clientSecret);
+                    formData.add(REFRESH_TOKEN, refreshToken);
+
+                    return webClient.post()
+                            .uri(keycloakConfig.getLogoutUrl())
+                            .body(BodyInserters.fromFormData(formData))
+                            .retrieve()
+                            .bodyToMono(String.class)
+                            .then();
+                });
     }
 
     private Mono<String> getAdminToken() {
@@ -338,7 +315,7 @@ public class AuthServiceImpl implements AuthService {
                         webClient.get()
                                 .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + realm + "/clients?clientId="
                                         + clientId)
-                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                                 .retrieve()
                                 .bodyToMono(JsonNode.class)
                                 .flatMap(clients -> {
@@ -357,7 +334,7 @@ public class AuthServiceImpl implements AuthService {
     private Mono<String> fetchClientSecret(String realm, String uuid, String token) {
         return webClient.get()
                 .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + realm + "/clients/" + uuid + "/client-secret")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + token)
                 .retrieve()
                 .bodyToMono(JsonNode.class)
                 .map(json -> json.get("value").asText());

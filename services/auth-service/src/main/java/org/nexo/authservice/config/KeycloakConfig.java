@@ -22,6 +22,9 @@ public class KeycloakConfig {
     public String getTokenUrl() {
         return serverUrl + "/realms/master/protocol/openid-connect/token";
     }
+    public String getRefreshTokenUrl() {
+        return serverUrl + "/realms/" + realm + "/protocol/openid-connect/token";
+    }
 
     public String getLoginUrl() {
         return serverUrl + "/realms/" + realm + "/protocol/openid-connect/token";

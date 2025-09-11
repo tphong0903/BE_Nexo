@@ -1,6 +1,5 @@
 package org.nexo.authservice.exception;
 
-
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 
@@ -16,7 +15,10 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.Date;
 import java.util.HashMap;
@@ -69,15 +71,12 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
     }
 
-
-
     @ExceptionHandler(DataIntegrityViolationException.class)
     @ResponseStatus(HttpStatus.CONFLICT)
     public ResponseData<?> handleDataConflict(DataIntegrityViolationException ex) {
         return new ResponseData<>(HttpStatus.CONFLICT.value(),
                 "Database constraint violation: " + ex.getMostSpecificCause().getMessage());
     }
-
 
     @ExceptionHandler(KeycloakClientException.class)
     public ResponseEntity<Map<String, Object>> handleKeycloakException(KeycloakClientException ex) {
@@ -87,6 +86,40 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.valueOf(ex.getStatus())).body(body);
     }
 
+    @ExceptionHandler(WebClientResponseException.class)
+    public ResponseEntity<ResponseData<Object>> handleWebClientException(WebClientResponseException ex) {
+        log.error("WebClient error: Status={}, Response={}", ex.getStatusCode(), ex.getResponseBodyAsString());
 
+        try {
+            String responseBody = ex.getResponseBodyAsString();
+            ObjectMapper mapper = new ObjectMapper();
+
+            Map<String, Object> errorMap = mapper.readValue(responseBody,
+                    new TypeReference<Map<String, Object>>() {
+                    });
+
+            if (errorMap != null) {
+                String errorDescription = (String) errorMap.get("error_description");
+                String error = (String) errorMap.get("error");
+                String message = errorDescription != null ? errorDescription : error;
+
+                ResponseData<Object> errorResponse = ResponseData.builder()
+                        .status(ex.getStatusCode().value())
+                        .message(message != null ? message : "External service error")
+                        .build();
+
+                return ResponseEntity.status(ex.getStatusCode()).body(errorResponse);
+            }
+        } catch (Exception e) {
+            log.warn("Could not parse error response: {}", ex.getResponseBodyAsString());
+        }
+
+        ResponseData<Object> errorResponse = ResponseData.builder()
+                .status(ex.getStatusCode().value())
+                .message("External service error")
+                .build();
+
+        return ResponseEntity.status(ex.getStatusCode()).body(errorResponse);
+    }
 
 }

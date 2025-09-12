@@ -54,9 +54,8 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                 .keycloakUserId(request.getKeycloakUserId())
                                 .email(request.getEmail())
                                 .username(request.getUsername())
-                                .fullName(request.getFirstName() + " " + request.getLastName())
-                                .accountStatus(EAccountStatus.PENDING) // Chờ xác thực email
-                                .onlineStatus(false)
+                                .fullName(request.getFullName())
+                                .accountStatus(EAccountStatus.PENDING)
                                 .createdAt(OffsetDateTime.now())
                                 .build();
 

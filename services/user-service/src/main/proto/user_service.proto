@@ -15,8 +15,7 @@ message CreateUserRequest {
   string keycloak_user_id = 1;
   string email = 2;
   string username = 3;
-  string first_name = 4;
-  string last_name = 5;
+  string full_name = 4;
 }
 
 message CreateUserResponse {

@@ -293,7 +293,7 @@ public class AuthServiceImpl implements AuthService {
     private ObjectNode createUserJson(RegisterRequest request) {
         ObjectNode userNode = objectMapper.createObjectNode();
         userNode.put(EMAIL, request.getEmail());
-        userNode.put(USERNAME, request.getEmail());
+        userNode.put(USERNAME, request.getUsername());
         userNode.put("lastName", request.getFullname());
         ArrayNode requiredActions = userNode.putArray("requiredActions");
         requiredActions.add("VERIFY_EMAIL");

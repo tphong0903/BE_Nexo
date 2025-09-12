@@ -9,7 +9,6 @@ import org.nexo.authservice.dto.RegisterRequest;
 import org.nexo.authservice.dto.ResponseData;
 import org.nexo.authservice.dto.TokenResponse;
 import org.nexo.authservice.service.AuthService;
-import org.nexo.authservice.service.Impl.AuthServiceImpl;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;

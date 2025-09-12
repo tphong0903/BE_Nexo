@@ -21,8 +21,8 @@ public class UserGrpcClient {
                         UserServiceProto.CreateUserRequest request = UserServiceProto.CreateUserRequest.newBuilder()
                                         .setKeycloakUserId(keycloakUserId)
                                         .setEmail(email)
-                                        .setFullName(fullname)
                                         .setUsername(username)
+                                        .setFullName(fullname)
                                         .build();
 
                         log.info("Calling user-service gRPC to create user: {}", email);

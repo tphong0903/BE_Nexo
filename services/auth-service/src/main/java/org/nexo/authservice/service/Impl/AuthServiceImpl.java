@@ -145,8 +145,8 @@ public class AuthServiceImpl implements AuthService {
         return userGrpcClient.createUser(
                 userId,
                 registerRequest.getEmail(),
-                registerRequest.getFirstName(),
-                registerRequest.getLastName())
+                registerRequest.getUsername(),
+                registerRequest.getFullname())
                 .doOnSuccess(grpcResponse -> {
                     if (grpcResponse.getSuccess()) {
                         log.info("User created in user-service successfully: userId={}, userServiceId={}",
@@ -294,8 +294,7 @@ public class AuthServiceImpl implements AuthService {
         ObjectNode userNode = objectMapper.createObjectNode();
         userNode.put(EMAIL, request.getEmail());
         userNode.put(USERNAME, request.getEmail());
-        userNode.put("firstName", request.getFirstName());
-        userNode.put("lastName", request.getLastName());
+        userNode.put("lastName", request.getFullname());
         ArrayNode requiredActions = userNode.putArray("requiredActions");
         requiredActions.add("VERIFY_EMAIL");
         userNode.put("enabled", true);

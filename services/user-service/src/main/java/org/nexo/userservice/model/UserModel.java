@@ -1,6 +1,7 @@
 package org.nexo.userservice.model;
 
 import org.nexo.userservice.enums.EAccountStatus;
+
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -34,15 +35,22 @@ public class UserModel {
     @Column(name = "fullname", nullable = false)
     private String fullName;
 
+    @Column(name = "avatar_url")
+    private String avatar;
+
+    @Column(name = "bio")
+    private String bio;
+
+    @Column(name = "is_private")
+    @Builder.Default
+    private Boolean isPrivate = false;
+
     @Column(name = "online_status")
     private Boolean onlineStatus;
 
     @Column(name = "account_status")
     @Enumerated(EnumType.STRING)
     private EAccountStatus accountStatus;
-
-    @Lob
-    private String settingsJson;
 
     @Column(name = "last_login")
     private OffsetDateTime lastLogin;

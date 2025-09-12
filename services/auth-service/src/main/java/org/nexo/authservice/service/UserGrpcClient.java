@@ -16,14 +16,13 @@ public class UserGrpcClient {
         private UserServiceGrpc.UserServiceBlockingStub userServiceStub;
 
         public Mono<UserServiceProto.CreateUserResponse> createUser(String keycloakUserId, String email,
-                        String firstName, String lastName) {
+                        String fullname, String username) {
                 return Mono.fromCallable(() -> {
                         UserServiceProto.CreateUserRequest request = UserServiceProto.CreateUserRequest.newBuilder()
                                         .setKeycloakUserId(keycloakUserId)
                                         .setEmail(email)
-                                        .setUsername(email)
-                                        .setFirstName(firstName)
-                                        .setLastName(lastName)
+                                        .setFullName(fullname)
+                                        .setUsername(username)
                                         .build();
 
                         log.info("Calling user-service gRPC to create user: {}", email);

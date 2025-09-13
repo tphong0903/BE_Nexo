@@ -4,7 +4,9 @@ import lombok.RequiredArgsConstructor;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.StoryModel;
+import org.nexo.postservice.model.StoryViewModel;
 import org.nexo.postservice.repository.IStoryRepository;
+import org.nexo.postservice.repository.IStoryViewRepository;
 import org.nexo.postservice.service.IStoryService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ import java.util.List;
 public class StoryServiceImpl implements IStoryService {
     private final AsyncFileService fileServiceClient;
     private final IStoryRepository storyRepository;
+    private final IStoryViewRepository storyViewRepository;
 
     @Override
     public String saveStory(StoryRequestDto dto, List<MultipartFile> files) {
@@ -40,6 +43,35 @@ public class StoryServiceImpl implements IStoryService {
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty() && dto.getStoryId() == 0) {
             fileServiceClient.saveStoryMedia(files, model.getId());
         }
+        return "Success";
+    }
+
+    @Override
+    public String deleteStory(Long id) {
+        //TODO Check owner's story
+        StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        storyRepository.delete(model);
+        return "Success";
+    }
+
+    @Override
+    public String archiveStory(Long id) {
+        //TODO Check owner's story
+        StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        model.setIsArchive(true);
+        storyRepository.save(model);
+        return "Success";
+    }
+
+    @Override
+    public String viewStory(Long id) {
+        //TODO Check who watch from jwt
+        StoryViewModel model = StoryViewModel.builder()
+                .isLike(false)
+                .seenUserId(1L)
+                .storyModel(storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST)))
+                .build();
+        storyViewRepository.save(model);
         return "Success";
     }
 }

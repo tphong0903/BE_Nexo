@@ -24,19 +24,38 @@ public class StoryController {
     private final IStoryService storyService;
 
     @PostMapping
-    public ResponseData<String> addPost(@RequestPart("storyRequestDTO") @Valid String postRequestDTOJson,
-                                        @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
+    public ResponseData<String> addStory(@RequestPart("storyRequestDTO") @Valid String postRequestDTOJson,
+                                         @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
         ObjectMapper objectMapper = new ObjectMapper();
         StoryRequestDto postRequestDTO = objectMapper.readValue(postRequestDTOJson, StoryRequestDto.class);
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.saveStory(postRequestDTO, files));
     }
 
     @PutMapping
-    public ResponseData<String> updatePost(@RequestPart("storyRequestDTO") @Valid String postRequestDTOJson,
-                                           @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
+    public ResponseData<String> updateStory(@RequestPart("storyRequestDTO") @Valid String postRequestDTOJson,
+                                            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
         ObjectMapper objectMapper = new ObjectMapper();
         StoryRequestDto postRequestDTO = objectMapper.readValue(postRequestDTOJson, StoryRequestDto.class);
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.saveStory(postRequestDTO, files));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseData<String> deleteStory(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.deleteStory(id));
+    }
+
+    @PutMapping("/{id}")
+    public ResponseData<String> archiveStory(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.archiveStory(id));
+    }
+
+    @PostMapping("/view/{id}")
+    public ResponseData<String> viewStory(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.viewStory(id));
+    }
+
+    @GetMapping("/view/{id}")
+    public ResponseData<String> getViewStory(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.archiveStory(id));
+    }
 }

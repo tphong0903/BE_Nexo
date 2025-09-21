@@ -58,4 +58,9 @@ public class StoryController {
     public ResponseData<String> getViewStory(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.archiveStory(id));
     }
+
+    @GetMapping("/{id}")
+    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id));
+    }
 }

@@ -45,6 +45,7 @@ public class PostController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactivePost(id));
     }
 
+    
     @GetMapping
     public ResponseData<String> test() {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test Post Service");

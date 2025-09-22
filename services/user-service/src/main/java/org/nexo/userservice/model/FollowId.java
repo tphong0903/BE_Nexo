@@ -10,7 +10,8 @@ import jakarta.persistence.Embeddable;
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
-@EqualsAndHashCode 
+@EqualsAndHashCode
+@Builder
 public class FollowId implements Serializable {
 
     @Column(name = "follower_id")

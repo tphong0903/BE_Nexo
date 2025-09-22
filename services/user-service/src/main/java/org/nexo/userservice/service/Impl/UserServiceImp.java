@@ -1,4 +1,4 @@
-package org.nexo.userservice.service.service;
+package org.nexo.userservice.service.Impl;
 
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;

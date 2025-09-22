@@ -9,6 +9,7 @@ service UserService {
   rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
   rpc UpdateUserEmailVerification(UpdateEmailVerificationRequest) returns (UpdateEmailVerificationResponse);
   rpc UpdateAccountStatus(UpdateAccountStatusRequest) returns (UpdateAccountStatusResponse);
+  rpc GetUserFollowees(GetUserFolloweesRequest) returns (GetUserFolloweesResponse);
 }
 
 message CreateUserRequest {
@@ -42,4 +43,21 @@ message UpdateAccountStatusRequest {
 message UpdateAccountStatusResponse {
   bool success = 1;
   string message = 2;
+}
+
+message GetUserFolloweesRequest {
+  int64 user_id = 1;
+}
+
+message GetUserFolloweesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated FolloweeInfo followees = 3;
+}
+
+message FolloweeInfo {
+  string user_id = 1;
+  string user_name = 2;
+  string avatar = 3;
+  bool is_close_friend = 4;
 }

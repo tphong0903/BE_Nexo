@@ -46,7 +46,7 @@ public class JwtUtil {
             return false;
         }
     }
-
+    //id cua keycloak
     public String getUserIdFromToken(String accessToken) {
         try {
             String[] tokenParts = accessToken.split("\\.");

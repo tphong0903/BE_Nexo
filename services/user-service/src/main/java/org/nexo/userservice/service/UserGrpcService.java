@@ -6,11 +6,13 @@ import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.nexo.grpc.user.UserServiceGrpc;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.UserRepository;
 
 import java.time.OffsetDateTime;
+import java.util.Set;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -18,6 +20,7 @@ import java.time.OffsetDateTime;
 public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
         private final UserRepository userRepository;
+        private final FollowService followService;
 
         @Override
         public void createUser(UserServiceProto.CreateUserRequest request,
@@ -191,6 +194,51 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                         .newBuilder()
                                         .setSuccess(false)
                                         .setMessage("Error updating account status: " + e.getMessage())
+                                        .build();
+
+                        responseObserver.onNext(response);
+                        responseObserver.onCompleted();
+                }
+        }
+
+        @Override
+        public void getUserFollowees(UserServiceProto.GetUserFolloweesRequest request,
+                        StreamObserver<UserServiceProto.GetUserFolloweesResponse> responseObserver) {
+
+                try {
+                        Long userId = request.getUserId();
+                        Set<FolloweeDTO> followees = followService.getFolloweesByUserId(userId);
+
+                        UserServiceProto.GetUserFolloweesResponse.Builder responseBuilder = UserServiceProto.GetUserFolloweesResponse
+                                        .newBuilder()
+                                        .setSuccess(true)
+                                        .setMessage("Followees retrieved successfully");
+
+                        for (FolloweeDTO followee : followees) {
+                                UserServiceProto.FolloweeInfo followeeInfo = UserServiceProto.FolloweeInfo.newBuilder()
+                                                .setUserId(followee.getUserId())
+                                                .setUserName(followee.getUserName())
+                                                .setAvatar(followee.getAvatar() != null ? followee.getAvatar() : "")
+                                                .setIsCloseFriend(followee.isCloseFriend())
+                                                .build();
+
+                                responseBuilder.addFollowees(followeeInfo);
+                        }
+
+                        UserServiceProto.GetUserFolloweesResponse response = responseBuilder.build();
+
+                        responseObserver.onNext(response);
+                        responseObserver.onCompleted();
+
+                        log.info("Successfully returned {} followees for userId={}", followees.size(), userId);
+
+                } catch (Exception e) {
+                        log.error("Error getting user followees: {}", e.getMessage(), e);
+
+                        UserServiceProto.GetUserFolloweesResponse response = UserServiceProto.GetUserFolloweesResponse
+                                        .newBuilder()
+                                        .setSuccess(false)
+                                        .setMessage("Error getting user followees: " + e.getMessage())
                                         .build();
 
                         responseObserver.onNext(response);

@@ -4,21 +4,31 @@ spring:
   application:
     name: posts
   datasource:
-    url: jdbc:mysql://localhost:3306/nexo?createDatabaseIfNotExist=true
-    username: root
-    password: 09032004
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:postgresql://localhost:5433/userdb?createDatabaseIfNotExist=true
+    driver-class-name: org.postgresql.Driver
+    username: user
+    password: pass
   jpa:
     hibernate:
       ddl-auto: update
-    database-platform: org.hibernate.dialect.MySQL8Dialect
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
   h2:
     console:
       enabled: false
   servlet:
     multipart:
       enabled: true
-
+      max-file-size: 500MB
+      max-request-size: 500MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/nexo-network
+          jwk-set-uri: http://localhost:9090/realms/nexo-network/protocol/openid-connect/certs
 eureka:
   client:
     serviceUrl:
@@ -40,3 +50,7 @@ feign:
 grpc:
   server:
     port: 9091
+  client:
+    users:
+      address: static://localhost:9092
+      negotiation-type: plaintext

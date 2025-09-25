@@ -5,4 +5,10 @@ eureka:
   server:
     wait-time-in-ms-for-sync: 1000
 server:
-  port: 8761 
+  port: 8761
+
+spring:
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB

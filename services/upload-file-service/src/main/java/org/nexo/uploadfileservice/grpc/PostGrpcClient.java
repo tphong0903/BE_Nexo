@@ -1,8 +1,8 @@
 package org.nexo.uploadfileservice.grpc;
 
 import net.devh.boot.grpc.client.inject.GrpcClient;
-import org.nexo.postservice.grpc.PostMediaGrpcServiceGrpc;
-import org.nexo.postservice.grpc.PostMediaServiceProto;
+import org.nexo.uploadfile.grpc.PostMediaGrpcServiceGrpc;
+import org.nexo.uploadfile.grpc.PostMediaServiceProto;
 import org.springframework.stereotype.Service;
 
 
@@ -20,6 +20,11 @@ public class PostGrpcClient {
     public PostMediaServiceProto.PostMediaResponse saveReelMedias(
             PostMediaServiceProto.ReelDto request) {
         return postStub.saveReelMedias(request);
+    }
+
+    public PostMediaServiceProto.PostMediaResponse saveStoryMedias(
+            PostMediaServiceProto.StoryDto request) {
+        return postStub.saveStoryMedias(request);
     }
 
     public PostMediaServiceProto.PostMediaListRequest findPostMediasOfPost(

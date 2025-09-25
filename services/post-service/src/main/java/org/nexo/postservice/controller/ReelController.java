@@ -16,47 +16,36 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 @RestController
-@RequestMapping("/")
+@RequestMapping("/reel")
 @Validated
 @Slf4j
 @RequiredArgsConstructor
-public class PostController {
+public class ReelController {
     private final IPostService postService;
 
     @PostMapping
-    public ResponseData<String> addPost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
+    public ResponseData<String> addReel(@RequestPart("reelRequestDTO") @Valid String postRequestDTOJson,
                                         @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
-
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
-
-
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.saveReel(postRequestDTO, files));
     }
 
-
-    @PutMapping
-    public ResponseData<String> updatePost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
+    @PutMapping()
+    public ResponseData<String> updateReel(@RequestPart("reelRequestDTO") @Valid String postRequestDTOJson,
                                            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
-
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.saveReel(postRequestDTO, files));
     }
 
     @PatchMapping("/{id}")
-    public ResponseData<String> inactivePost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactivePost(id));
+    public ResponseData<String> inactiveReel(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactiveReel(id));
     }
 
     @DeleteMapping("/{id}")
     public ResponseData<String> deletePost(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
-    }
-
-
-    @GetMapping
-    public ResponseData<String> test() {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test Post Service");
     }
 }

@@ -18,229 +18,283 @@ import java.util.Set;
 @Slf4j
 public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
-        private final UserRepository userRepository;
-        private final FollowService followService;
 
-        @Override
-        public void createUser(UserServiceProto.CreateUserRequest request,
-                        StreamObserver<UserServiceProto.CreateUserResponse> responseObserver) {
-                log.info("Received gRPC request to create user: email={}, keycloakUserId={}",
-                                request.getEmail(), request.getKeycloakUserId());
+    private final UserRepository userRepository;
+    private final FollowService followService;
 
-                if (userRepository.existsByEmail(request.getEmail())) {
-                        UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("User with email " + request.getEmail() + " already exists")
-                                        .setUserId(0)
-                                        .build();
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                        return;
-                }
+    @Override
+    public void createUser(UserServiceProto.CreateUserRequest request,
+                           StreamObserver<UserServiceProto.CreateUserResponse> responseObserver) {
+        log.info("Received gRPC request to create user: email={}, keycloakUserId={}",
+                request.getEmail(), request.getKeycloakUserId());
 
-                if (userRepository.existsByKeycloakUserId(request.getKeycloakUserId())) {
-                        UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("User with keycloak ID " + request.getKeycloakUserId()
-                                                        + " already exists")
-                                        .setUserId(0)
-                                        .build();
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                        return;
-                }
+        if (userRepository.existsByEmail(request.getEmail())) {
+            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("User with email " + request.getEmail() + " already exists")
+                    .setUserId(0)
+                    .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            return;
+        }
 
-                UserModel user = UserModel.builder()
-                                .keycloakUserId(request.getKeycloakUserId())
-                                .email(request.getEmail())
-                                .username(request.getUsername())
-                                .fullName(request.getFullName())
-                                .accountStatus(EAccountStatus.PENDING)
-                                .build();
+        if (userRepository.existsByKeycloakUserId(request.getKeycloakUserId())) {
+            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("User with keycloak ID " + request.getKeycloakUserId()
+                            + " already exists")
+                    .setUserId(0)
+                    .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            return;
+        }
 
-                UserModel savedUser = userRepository.save(user);
+        UserModel user = UserModel.builder()
+                .keycloakUserId(request.getKeycloakUserId())
+                .email(request.getEmail())
+                .username(request.getUsername())
+                .fullName(request.getFullName())
+                .accountStatus(EAccountStatus.PENDING)
+                .createdAt(OffsetDateTime.now())
+                .build();
 
-                UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse.newBuilder()
-                                .setSuccess(true)
-                                .setMessage("User created successfully")
-                                .setUserId(savedUser.getId())
-                                .build();
+        UserModel savedUser = userRepository.save(user);
 
-                log.info("User created successfully: id={}, email={}, keycloakUserId={}",
-                                savedUser.getId(), savedUser.getEmail(), savedUser.getKeycloakUserId());
+        UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse.newBuilder()
+                .setSuccess(true)
+                .setMessage("User created successfully")
+                .setUserId(savedUser.getId())
+                .build();
+
+        log.info("User created successfully: id={}, email={}, keycloakUserId={}",
+                savedUser.getId(), savedUser.getEmail(), savedUser.getKeycloakUserId());
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void updateUserEmailVerification(UserServiceProto.UpdateEmailVerificationRequest request,
+                                            StreamObserver<UserServiceProto.UpdateEmailVerificationResponse> responseObserver) {
+        log.info("Received gRPC request to update email verification: keycloakUserId={}, emailVerified={}",
+                request.getKeycloakUserId(), request.getEmailVerified());
+
+        try {
+            UserModel user = userRepository.findByKeycloakUserId(request.getKeycloakUserId())
+                    .orElse(null);
+
+            if (user == null) {
+                UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
+                        .newBuilder()
+                        .setSuccess(false)
+                        .setMessage("User not found with keycloak ID: "
+                                + request.getKeycloakUserId())
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+                return;
+            }
+
+            // Update email verification status and account status
+            if (request.getEmailVerified()) {
+                user.setAccountStatus(EAccountStatus.ACTIVE); // Kích hoạt tài khoản khi email được xác
+                // thực
+                log.info("User account activated for keycloakUserId: {}", request.getKeycloakUserId());
+            } else {
+                user.setAccountStatus(EAccountStatus.PENDING); // Đặt lại về trạng thái chờ
+            }
+
+            UserModel updatedUser = userRepository.save(user);
+
+            UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
+                    .newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Email verification status updated successfully. Account status: " +
+                            updatedUser.getAccountStatus())
+                    .build();
+
+            log.info("Email verification updated successfully: keycloakUserId={}, accountStatus={}",
+                    updatedUser.getKeycloakUserId(), updatedUser.getAccountStatus());
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+
+        } catch (Exception e) {
+            log.error("Error updating email verification: {}", e.getMessage(), e);
+
+            UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("Error updating email verification: " + e.getMessage())
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        }
+    }
+
+    @Override
+    public void updateAccountStatus(UserServiceProto.UpdateAccountStatusRequest request,
+                                    StreamObserver<UserServiceProto.UpdateAccountStatusResponse> responseObserver) {
+        log.info("Received gRPC request to update account status: keycloakUserId={}, accountStatus={}",
+                request.getKeycloakUserId(), request.getAccountStatus());
+
+        try {
+            UserModel user = userRepository.findByKeycloakUserId(request.getKeycloakUserId())
+                    .orElse(null);
+
+            if (user == null) {
+                UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
+                        .newBuilder()
+                        .setSuccess(false)
+                        .setMessage("User not found with keycloak ID: "
+                                + request.getKeycloakUserId())
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+                return;
+            }
+
+            try {
+                EAccountStatus accountStatus = EAccountStatus.valueOf(request.getAccountStatus());
+                user.setAccountStatus(accountStatus);
+                UserModel updatedUser = userRepository.save(user);
+
+                UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
+                        .newBuilder()
+                        .setSuccess(true)
+                        .setMessage("Account status updated successfully to: " +
+                                updatedUser.getAccountStatus())
+                        .build();
+
+                log.info("Account status updated successfully: keycloakUserId={}, newStatus={}",
+                        updatedUser.getKeycloakUserId(), updatedUser.getAccountStatus());
 
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
+
+            } catch (IllegalArgumentException e) {
+                UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
+                        .newBuilder()
+                        .setSuccess(false)
+                        .setMessage("Invalid account status: " + request.getAccountStatus())
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+            }
+
+        } catch (Exception e) {
+            log.error("Error updating account status: {}", e.getMessage(), e);
+
+            UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("Error updating account status: " + e.getMessage())
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
         }
+    }
 
-        @Override
-        public void updateUserEmailVerification(UserServiceProto.UpdateEmailVerificationRequest request,
-                        StreamObserver<UserServiceProto.UpdateEmailVerificationResponse> responseObserver) {
-                log.info("Received gRPC request to update email verification: keycloakUserId={}, emailVerified={}",
-                                request.getKeycloakUserId(), request.getEmailVerified());
+    @Override
+    public void getUserFollowees(UserServiceProto.GetUserFolloweesRequest request,
+                                 StreamObserver<UserServiceProto.GetUserFolloweesResponse> responseObserver) {
 
-                try {
-                        UserModel user = userRepository.findByKeycloakUserId(request.getKeycloakUserId())
-                                        .orElse(null);
+        try {
+            Long userId = request.getUserId();
+            Set<FolloweeDTO> followees = followService.getFolloweesByUserId(userId);
 
-                        if (user == null) {
-                                UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
-                                                .newBuilder()
-                                                .setSuccess(false)
-                                                .setMessage("User not found with keycloak ID: "
-                                                                + request.getKeycloakUserId())
-                                                .build();
-                                responseObserver.onNext(response);
-                                responseObserver.onCompleted();
-                                return;
-                        }
+            UserServiceProto.GetUserFolloweesResponse.Builder responseBuilder = UserServiceProto.GetUserFolloweesResponse
+                    .newBuilder()
+                    .setSuccess(true)
+                    .setMessage("Followees retrieved successfully");
 
-                        // Update email verification status and account status
-                        if (request.getEmailVerified()) {
-                                user.setAccountStatus(EAccountStatus.ACTIVE); // Kích hoạt tài khoản khi email được xác
-                                                                              // thực
-                                log.info("User account activated for keycloakUserId: {}", request.getKeycloakUserId());
-                        } else {
-                                user.setAccountStatus(EAccountStatus.PENDING); // Đặt lại về trạng thái chờ
-                        }
+            for (FolloweeDTO followee : followees) {
+                UserServiceProto.FolloweeInfo followeeInfo = UserServiceProto.FolloweeInfo.newBuilder()
+                        .setUserId(followee.getUserId())
+                        .setUserName(followee.getUserName())
+                        .setAvatar(followee.getAvatar() != null ? followee.getAvatar() : "")
+                        .setIsCloseFriend(followee.isCloseFriend())
+                        .build();
 
-                        UserModel updatedUser = userRepository.save(user);
+                responseBuilder.addFollowees(followeeInfo);
+            }
 
-                        UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
-                                        .newBuilder()
-                                        .setSuccess(true)
-                                        .setMessage("Email verification status updated successfully. Account status: " +
-                                                        updatedUser.getAccountStatus())
-                                        .build();
+            UserServiceProto.GetUserFolloweesResponse response = responseBuilder.build();
 
-                        log.info("Email verification updated successfully: keycloakUserId={}, accountStatus={}",
-                                        updatedUser.getKeycloakUserId(), updatedUser.getAccountStatus());
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
 
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
+            log.info("Successfully returned {} followees for userId={}", followees.size(), userId);
 
-                } catch (Exception e) {
-                        log.error("Error updating email verification: {}", e.getMessage(), e);
+        } catch (Exception e) {
+            log.error("Error getting user followees: {}", e.getMessage(), e);
 
-                        UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("Error updating email verification: " + e.getMessage())
-                                        .build();
+            UserServiceProto.GetUserFolloweesResponse response = UserServiceProto.GetUserFolloweesResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("Error getting user followees: " + e.getMessage())
+                    .build();
 
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                }
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
         }
+    }
 
-        @Override
-        public void updateAccountStatus(UserServiceProto.UpdateAccountStatusRequest request,
-                        StreamObserver<UserServiceProto.UpdateAccountStatusResponse> responseObserver) {
-                log.info("Received gRPC request to update account status: keycloakUserId={}, accountStatus={}",
-                                request.getKeycloakUserId(), request.getAccountStatus());
+    @Override
+    public void getUserDto(UserServiceProto.KeycloakId request,
+                           StreamObserver<UserServiceProto.UserDto> responseObserver) {
+        try {
+            String keycloakId = request.getKeycloakUserId();
+            UserModel user = userRepository.findByKeycloakUserId(keycloakId).orElse(null);
 
-                try {
-                        UserModel user = userRepository.findByKeycloakUserId(request.getKeycloakUserId())
-                                        .orElse(null);
+            if (user == null) {
+                UserServiceProto.UserDto response = UserServiceProto.UserDto.newBuilder()
+                        .setUserId(0L)
+                        .setKeycloakUserId(keycloakId)
+                        .setEmail("")
+                        .setUsername("")
+                        .setFullName("")
+                        .build();
 
-                        if (user == null) {
-                                UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
-                                                .newBuilder()
-                                                .setSuccess(false)
-                                                .setMessage("User not found with keycloak ID: "
-                                                                + request.getKeycloakUserId())
-                                                .build();
-                                responseObserver.onNext(response);
-                                responseObserver.onCompleted();
-                                return;
-                        }
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+                return;
+            }
 
-                        try {
-                                EAccountStatus accountStatus = EAccountStatus.valueOf(request.getAccountStatus());
-                                user.setAccountStatus(accountStatus);
-                                UserModel updatedUser = userRepository.save(user);
+            UserServiceProto.UserDto response = UserServiceProto.UserDto.newBuilder()
+                    .setUserId(user.getId())
+                    .setKeycloakUserId(user.getKeycloakUserId())
+                    .setEmail(user.getEmail() != null ? user.getEmail() : "")
+                    .setUsername(user.getUsername() != null ? user.getUsername() : "")
+                    .setFullName(user.getFullName() != null ? user.getFullName() : "")
+                    .build();
 
-                                UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
-                                                .newBuilder()
-                                                .setSuccess(true)
-                                                .setMessage("Account status updated successfully to: " +
-                                                                updatedUser.getAccountStatus())
-                                                .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
 
-                                log.info("Account status updated successfully: keycloakUserId={}, newStatus={}",
-                                                updatedUser.getKeycloakUserId(), updatedUser.getAccountStatus());
+            log.info("Successfully returned user dto for userId={}, keycloakId={}", user.getId(), keycloakId);
 
-                                responseObserver.onNext(response);
-                                responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("Error getting user dto: {}", e.getMessage(), e);
 
-                        } catch (IllegalArgumentException e) {
-                                UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
-                                                .newBuilder()
-                                                .setSuccess(false)
-                                                .setMessage("Invalid account status: " + request.getAccountStatus())
-                                                .build();
-                                responseObserver.onNext(response);
-                                responseObserver.onCompleted();
-                        }
+            UserServiceProto.UserDto response = UserServiceProto.UserDto.newBuilder()
+                    .setUserId(0L)
+                    .setKeycloakUserId("")
+                    .setEmail("")
+                    .setUsername("")
+                    .setFullName("")
+                    .build();
 
-                } catch (Exception e) {
-                        log.error("Error updating account status: {}", e.getMessage(), e);
-
-                        UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("Error updating account status: " + e.getMessage())
-                                        .build();
-
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                }
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
         }
+    }
 
-        @Override
-        public void getUserFollowees(UserServiceProto.GetUserFolloweesRequest request,
-                        StreamObserver<UserServiceProto.GetUserFolloweesResponse> responseObserver) {
 
-                try {
-                        Long userId = request.getUserId();
-                        Set<FolloweeDTO> followees = followService.getFolloweesByUserId(userId);
-
-                        UserServiceProto.GetUserFolloweesResponse.Builder responseBuilder = UserServiceProto.GetUserFolloweesResponse
-                                        .newBuilder()
-                                        .setSuccess(true)
-                                        .setMessage("Followees retrieved successfully");
-
-                        for (FolloweeDTO followee : followees) {
-                                UserServiceProto.FolloweeInfo followeeInfo = UserServiceProto.FolloweeInfo.newBuilder()
-                                                .setUserId(followee.getUserId())
-                                                .setUserName(followee.getUserName())
-                                                .setAvatar(followee.getAvatar() != null ? followee.getAvatar() : "")
-                                                .setIsCloseFriend(followee.isCloseFriend())
-                                                .build();
-
-                                responseBuilder.addFollowees(followeeInfo);
-                        }
-
-                        UserServiceProto.GetUserFolloweesResponse response = responseBuilder.build();
-
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-
-                        log.info("Successfully returned {} followees for userId={}", followees.size(), userId);
-
-                } catch (Exception e) {
-                        log.error("Error getting user followees: {}", e.getMessage(), e);
-
-                        UserServiceProto.GetUserFolloweesResponse response = UserServiceProto.GetUserFolloweesResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("Error getting user followees: " + e.getMessage())
-                                        .build();
-
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                }
-        }
 }

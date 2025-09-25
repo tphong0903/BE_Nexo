@@ -1,8 +1,6 @@
 package org.nexo.postservice.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -11,6 +9,8 @@ import lombok.experimental.SuperBuilder;
 import org.nexo.postservice.util.Enum.EMediaType;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Entity
@@ -27,4 +27,7 @@ public class StoryModel extends AbstractEntity<Long> {
     private LocalDateTime expiresAt;
     private Boolean isArchive;
     private Boolean isActive;
+
+    @OneToMany(mappedBy = "storyModel", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<StoryViewModel> views = new ArrayList<>();
 }

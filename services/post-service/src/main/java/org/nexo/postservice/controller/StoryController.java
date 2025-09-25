@@ -63,11 +63,7 @@ public class StoryController {
     }
 
     @GetMapping("/{id}")
-    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id, @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
-//        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-//        String userId = auth.getName(); // subject trong JWT
-//        Map<String, Object> claims = ((Jwt) auth.getPrincipal()).getClaims();
-        String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id, accessToken));
+    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id));
     }
 }

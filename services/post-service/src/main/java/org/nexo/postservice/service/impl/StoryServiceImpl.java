@@ -1,6 +1,7 @@
 package org.nexo.postservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.dto.response.StoryResponse;
 import org.nexo.postservice.exception.CustomException;
@@ -8,7 +9,9 @@ import org.nexo.postservice.model.StoryModel;
 import org.nexo.postservice.model.StoryViewModel;
 import org.nexo.postservice.repository.IStoryRepository;
 import org.nexo.postservice.repository.IStoryViewRepository;
+import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IStoryService;
+import org.nexo.postservice.util.Enum.SecurityUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -26,9 +29,12 @@ public class StoryServiceImpl implements IStoryService {
     private final AsyncFileService fileServiceClient;
     private final IStoryRepository storyRepository;
     private final IStoryViewRepository storyViewRepository;
+    private final SecurityUtil securityUtil;
+    private final UserGrpcClient userGrpcClient;
 
     @Override
     public String saveStory(StoryRequestDto dto, List<MultipartFile> files) {
+        securityUtil.checkOwner(dto.getUserId());
         StoryModel model;
         if (dto.getStoryId() != 0) {
             model = storyRepository.findById(dto.getStoryId())
@@ -55,16 +61,16 @@ public class StoryServiceImpl implements IStoryService {
 
     @Override
     public String deleteStory(Long id) {
-        //TODO Check owner's story
         StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(model.getUserId());
         storyRepository.delete(model);
         return "Success";
     }
 
     @Override
     public String archiveStory(Long id) {
-        //TODO Check owner's story
         StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(model.getUserId());
         model.setIsArchive(true);
         model.setIsActive(false);
         storyRepository.save(model);
@@ -73,10 +79,10 @@ public class StoryServiceImpl implements IStoryService {
 
     @Override
     public String viewStory(Long id) {
-        //TODO Check who watch from jwt
+        Long userId = securityUtil.getUserIdFromToken();
         StoryViewModel model = StoryViewModel.builder()
                 .isLike(false)
-                .seenUserId(1L)
+                .seenUserId(userId)
                 .storyModel(storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST)))
                 .build();
         storyViewRepository.save(model);
@@ -84,47 +90,32 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @Override
-    public List<StoryResponse> getAllStoryOfFriend(Long id, String accessToken) {
+    public List<StoryResponse> getAllStoryOfFriend(Long id) {
+        securityUtil.checkOwner(id);
+        Long userId = securityUtil.getUserIdFromToken();
+        UserServiceProto.GetUserFolloweesResponse response = userGrpcClient.getUserFollowees(userId);
 
-        //TODO Goi GRPC qua UserService de lay list nguoi dang fl
-        List<Object> listFriend = new ArrayList<>();
+        if (!response.getSuccess()) {
+            throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
+        }
+
+        List<UserServiceProto.FolloweeInfo> listFriend = response.getFolloweesList();
         List<StoryResponse> storyResponseList = new ArrayList<>();
-        for (int i = 0; i < listFriend.size(); i++) {
-            Long userId = 100L; // listFriend.get(i).getId()
+        for (UserServiceProto.FolloweeInfo followeeInfo : listFriend) {
+            Long friendId = followeeInfo.getUserId();
             List<StoryResponse.Story> storyList = new ArrayList<>();
-            List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(userId, true);
-            for (StoryModel model : listStory1) {
-                StoryResponse.Story story = StoryResponse.Story.builder()
-                        .creatAt(model.getCreatedAt())
-                        .storyId(model.getId())
-                        .mediaUrl(model.getMediaURL())
-                        .mediaType(String.valueOf(model.getMediaType()))
-                        //TODO: .isLike check da xem va like chua
-                        .isActive(model.getIsActive())
-                        .isCloseFriend(model.getIsClosedFriend())
-                        .build();
-                storyList.add(story);
-            }
-            if (true) { //listFriend.get(i).getIsClosedFriend()
-                List<StoryModel> listStory2 = storyRepository.findByUserIdAndIsActiveAndIsClosedFriend(userId, true, true);
-                for (StoryModel model : listStory2) {
-                    StoryResponse.Story story = StoryResponse.Story.builder()
-                            .creatAt(model.getCreatedAt())
-                            .storyId(model.getId())
-                            .mediaUrl(model.getMediaURL())
-                            .mediaType(String.valueOf(model.getMediaType()))
-                            //TODO: .isLike check da xem va like chua
-                            .isActive(model.getIsActive())
-                            .isCloseFriend(model.getIsClosedFriend())
-                            .build();
-                    storyList.add(story);
-                }
+            List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(friendId, true);
+            listStory1.forEach(model -> storyList.add(toStoryResponse(model, userId)));
+
+            if (followeeInfo.getIsCloseFriend()) {
+                List<StoryModel> listStory2 = storyRepository.findByUserIdAndIsActiveAndIsClosedFriend(friendId, true, true);
+                listStory2.forEach(model -> storyList.add(toStoryResponse(model, userId)));
             }
 
             if (!storyList.isEmpty()) {
                 StoryResponse storyResponse = StoryResponse.builder()
-                        .userName("hehe") //listFriend.get(i).getName()
-                        .avatarUrl("url") //listFriend.get(i).getAvatarUrl()
+                        .userName(followeeInfo.getUserName())
+                        .avatarUrl(followeeInfo.getAvatar())
                         .userId(userId)
                         .storyList(storyList)
                         .build();
@@ -134,4 +125,22 @@ public class StoryServiceImpl implements IStoryService {
         }
         return storyResponseList;
     }
+
+    private StoryResponse.Story toStoryResponse(StoryModel model, Long currentUserId) {
+        boolean isLike = storyViewRepository
+                .findByStoryModel_IdAndSeenUserId(model.getId(), currentUserId)
+                .map(StoryViewModel::getIsLike)
+                .orElse(false);
+
+        return StoryResponse.Story.builder()
+                .creatAt(model.getCreatedAt())
+                .storyId(model.getId())
+                .mediaUrl(model.getMediaURL())
+                .mediaType(model.getMediaType().name())
+                .isLike(isLike)
+                .isActive(model.getIsActive())
+                .isCloseFriend(model.getIsClosedFriend())
+                .build();
+    }
+
 }

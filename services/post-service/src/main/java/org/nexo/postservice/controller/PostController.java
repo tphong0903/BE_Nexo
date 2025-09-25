@@ -21,7 +21,6 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class PostController {
-    private static final String BEARER_PREFIX = "Bearer ";
     private final IPostService postService;
 
     @PostMapping
@@ -30,6 +29,8 @@ public class PostController {
 
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
+
+
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
     }
 
@@ -43,9 +44,14 @@ public class PostController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
     }
 
-    @DeleteMapping("/{id}")
+    @PatchMapping("/{id}")
     public ResponseData<String> inactivePost(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactivePost(id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseData<String> deletePost(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
     }
 
 

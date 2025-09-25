@@ -15,5 +15,5 @@ public interface IStoryService {
 
     String viewStory(Long id);
 
-    List<StoryResponse> getAllStoryOfFriend(Long id, String accessToken);
+    List<StoryResponse> getAllStoryOfFriend(Long id);
 }

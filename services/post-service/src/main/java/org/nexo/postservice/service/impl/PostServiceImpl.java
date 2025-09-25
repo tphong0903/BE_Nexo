@@ -12,6 +12,7 @@ import org.nexo.postservice.repository.IReelRepository;
 import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
+import org.nexo.postservice.util.Enum.SecurityUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -29,9 +30,12 @@ public class PostServiceImpl implements IPostService {
     private final IPostMediaRepository postMediaRepository;
     private final AsyncFileService fileServiceClient;
     private final IHashTagService hashTagService;
+    private final SecurityUtil securityUtil;
 
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
+        securityUtil.checkOwner(postRequestDTO.getUserId());
+
         PostModel model;
         if (postRequestDTO.getPostId() != 0) {
             List<PostMediaModel> postMediaModelList = postMediaRepository.findAllByPostModel_Id(postRequestDTO.getPostId());
@@ -66,6 +70,8 @@ public class PostServiceImpl implements IPostService {
 
     @Override
     public String saveReel(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
+        securityUtil.checkOwner(postRequestDTO.getUserId());
+
         ReelModel model;
         if (postRequestDTO.getPostId() != 0) {
             model = reelRepository.findById(postRequestDTO.getPostId())
@@ -93,7 +99,10 @@ public class PostServiceImpl implements IPostService {
 
     @Override
     public String inactivePost(Long id) {
+
         PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(model.getUserId());
+
         model.setIsActive(!model.getIsActive());
         postRepository.save(model);
         return "Success";
@@ -102,6 +111,7 @@ public class PostServiceImpl implements IPostService {
     @Override
     public String inactiveReel(Long id) {
         ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(model.getUserId());
         model.setIsActive(!model.getIsActive());
         reelRepository.save(model);
         return "Success";
@@ -110,6 +120,7 @@ public class PostServiceImpl implements IPostService {
     @Override
     public String deletePost(Long id) {
         PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(model.getUserId());
         postRepository.delete(model);
         return "Success";
     }

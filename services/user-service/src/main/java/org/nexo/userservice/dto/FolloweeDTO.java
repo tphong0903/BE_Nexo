@@ -10,7 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FolloweeDTO {
-    private String userId;
+    private Long userId;
     private String userName;
     private String avatar;
     private boolean isCloseFriend;

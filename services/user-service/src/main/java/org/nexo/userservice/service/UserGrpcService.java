@@ -11,13 +11,13 @@ import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.UserRepository;
 
-import java.time.OffsetDateTime;
 import java.util.Set;
 
 @GrpcService
 @RequiredArgsConstructor
 @Slf4j
 public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
+
 
     private final UserRepository userRepository;
     private final FollowService followService;

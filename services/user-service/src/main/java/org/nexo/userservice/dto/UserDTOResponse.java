@@ -1,6 +1,6 @@
 package org.nexo.userservice.dto;
 
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
 
@@ -16,6 +16,6 @@ public class UserDTOResponse {
     private String gender;
 
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
-    private OffsetDateTime createdAt;
+    private LocalDateTime createdAt;
 
 }

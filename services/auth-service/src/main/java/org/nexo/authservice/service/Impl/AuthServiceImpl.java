@@ -1,5 +1,9 @@
 package org.nexo.authservice.service.Impl;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.authservice.config.KeycloakConfig;
@@ -11,8 +15,6 @@ import org.nexo.authservice.exception.KeycloakClientException;
 import org.nexo.authservice.service.AuthService;
 import org.nexo.authservice.service.UserGrpcClient;
 import org.nexo.authservice.util.JwtUtil;
-import reactor.core.publisher.Mono;
-
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -22,11 +24,7 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
-
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 
@@ -101,10 +99,10 @@ public class AuthServiceImpl implements AuthService {
                                         .subscribe();
 
                                 return tokenCacheService.cacheToken(
-                                        loginRequest.getEmail(),
-                                        tokenResponse.getAccessToken(),
-                                        tokenResponse.getRefreshToken(),
-                                        tokenResponse.getExpiresIn())
+                                                loginRequest.getEmail(),
+                                                tokenResponse.getAccessToken(),
+                                                tokenResponse.getRefreshToken(),
+                                                tokenResponse.getExpiresIn())
                                         .thenReturn(tokenResponse);
                             });
                 });
@@ -143,10 +141,10 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return userGrpcClient.createUser(
-                userId,
-                registerRequest.getEmail(),
-                registerRequest.getUsername(),
-                registerRequest.getFullname())
+                        userId,
+                        registerRequest.getEmail(),
+                        registerRequest.getFullname(),
+                        registerRequest.getUsername())
                 .doOnSuccess(grpcResponse -> {
                     if (grpcResponse.getSuccess()) {
                         log.info("User created in user-service successfully: userId={}, userServiceId={}",
@@ -381,7 +379,7 @@ public class AuthServiceImpl implements AuthService {
                         + "/execute-actions-email")
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .bodyValue(new String[] { "UPDATE_PASSWORD" })
+                .bodyValue(new String[]{"UPDATE_PASSWORD"})
                 .retrieve()
                 .bodyToMono(Void.class);
     }

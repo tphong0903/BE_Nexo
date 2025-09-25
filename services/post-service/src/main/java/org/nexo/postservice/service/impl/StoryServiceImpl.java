@@ -10,6 +10,9 @@ import org.nexo.postservice.repository.IStoryRepository;
 import org.nexo.postservice.repository.IStoryViewRepository;
 import org.nexo.postservice.service.IStoryService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -43,7 +46,9 @@ public class StoryServiceImpl implements IStoryService {
         }
         storyRepository.save(model);
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty() && dto.getStoryId() == 0) {
-            fileServiceClient.saveStoryMedia(files, model.getId());
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
+            fileServiceClient.saveStoryMedia(files, model.getId(), token);
         }
         return "Success";
     }
@@ -79,7 +84,8 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @Override
-    public List<StoryResponse> getAllStoryOfFriend(Long id) {
+    public List<StoryResponse> getAllStoryOfFriend(Long id, String accessToken) {
+
         //TODO Goi GRPC qua UserService de lay list nguoi dang fl
         List<Object> listFriend = new ArrayList<>();
         List<StoryResponse> storyResponseList = new ArrayList<>();

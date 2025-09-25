@@ -21,11 +21,13 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class PostController {
+    private static final String BEARER_PREFIX = "Bearer ";
     private final IPostService postService;
 
     @PostMapping
     public ResponseData<String> addPost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
                                         @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
+
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
@@ -35,6 +37,7 @@ public class PostController {
     @PutMapping
     public ResponseData<String> updatePost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
                                            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
+
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
@@ -45,7 +48,7 @@ public class PostController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactivePost(id));
     }
 
-    
+
     @GetMapping
     public ResponseData<String> test() {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test Post Service");

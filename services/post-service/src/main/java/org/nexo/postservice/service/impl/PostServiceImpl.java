@@ -13,6 +13,9 @@ import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -53,7 +56,9 @@ public class PostServiceImpl implements IPostService {
         }
         postRepository.save(model);
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
-            fileServiceClient.savePostMedia(files, model.getId());
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
+            fileServiceClient.savePostMedia(files, model.getId(), token);
         }
         hashTagService.findAndAddHashTagFromCaption(model);
         return "Success";
@@ -78,7 +83,9 @@ public class PostServiceImpl implements IPostService {
         }
         reelRepository.save(model);
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
-            fileServiceClient.saveReelMedia(files, model.getId());
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
+            fileServiceClient.saveReelMedia(files, model.getId(), token);
         }
         hashTagService.findAndAddHashTagFromCaption(model);
         return "Success";

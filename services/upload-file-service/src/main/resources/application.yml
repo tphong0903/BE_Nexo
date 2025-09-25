@@ -7,6 +7,12 @@ spring:
     multipart:
       max-file-size: 500MB
       max-request-size: 500MB
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/nexo-network
+          jwk-set-uri: http://localhost:9090/realms/nexo-network/protocol/openid-connect/certs
 eureka:
   client:
     serviceUrl:
@@ -16,6 +22,8 @@ eureka:
   instance:
     prefer-ip-address: true
 grpc:
+  server:
+    port: 9093
   client:
     posts:
       address: static://localhost:9091

@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.dto.response.ResponseData;
 import org.nexo.postservice.service.IStoryService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -21,6 +22,7 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class StoryController {
+    private static final String BEARER_PREFIX = "Bearer ";
     private final IStoryService storyService;
 
     @PostMapping
@@ -40,7 +42,8 @@ public class StoryController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseData<String> deleteStory(@PathVariable Long id) {
+    public ResponseData<String> deleteStory(@PathVariable Long id, @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.deleteStory(id));
     }
 
@@ -60,7 +63,11 @@ public class StoryController {
     }
 
     @GetMapping("/{id}")
-    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id));
+    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id, @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+//        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+//        String userId = auth.getName(); // subject trong JWT
+//        Map<String, Object> claims = ((Jwt) auth.getPrincipal()).getClaims();
+        String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id, accessToken));
     }
 }

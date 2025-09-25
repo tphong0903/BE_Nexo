@@ -49,7 +49,7 @@ public class FollowServiceImpl implements FollowService {
                         List<FollowModel> rows = followRepository.findAllByFollower(user);
                         return rows.stream()
                                         .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollowing().getId().toString())
+                                                        .userId(f.getFollowing().getId())
                                                         .userName(f.getFollowing().getUsername())
                                                         .avatar(f.getFollowing().getAvatar())
                                                         .isCloseFriend(f.getIsCloseFriend())
@@ -60,7 +60,7 @@ public class FollowServiceImpl implements FollowService {
                 List<FollowModel> rows = followRepository.findAllByFollower(user);
                 Set<FolloweeDTO> followees = rows.stream()
                                 .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollowing().getId().toString())
+                                                .userId(f.getFollowing().getId())
                                                 .userName(f.getFollowing().getUsername())
                                                 .avatar(f.getFollowing().getAvatar())
                                                 .isCloseFriend(f.getIsCloseFriend())
@@ -69,7 +69,7 @@ public class FollowServiceImpl implements FollowService {
 
                 if (!followees.isEmpty()) {
                         Set<String> userIds = followees.stream()
-                                        .map(FolloweeDTO::getUserId)
+                                        .map(followee -> followee.getUserId().toString())
                                         .collect(Collectors.toSet());
                         redis.opsForSet().add(key, userIds.toArray(new String[0]));
                 }
@@ -90,7 +90,7 @@ public class FollowServiceImpl implements FollowService {
                         List<FollowModel> rows = followRepository.findAllByFollowing(user);
                         return rows.stream()
                                         .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollowing().getId().toString())
+                                                        .userId(f.getFollowing().getId())
                                                         .userName(f.getFollowing().getUsername())
                                                         .avatar(f.getFollowing().getAvatar())
                                                         .isCloseFriend(f.getIsCloseFriend())
@@ -101,7 +101,7 @@ public class FollowServiceImpl implements FollowService {
                 List<FollowModel> rows = followRepository.findAllByFollowing(user);
                 Set<FolloweeDTO> followings = rows.stream()
                                 .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollowing().getId().toString())
+                                                .userId(f.getFollowing().getId())
                                                 .userName(f.getFollowing().getUsername())
                                                 .avatar(f.getFollowing().getAvatar())
                                                 .isCloseFriend(f.getIsCloseFriend())
@@ -110,7 +110,7 @@ public class FollowServiceImpl implements FollowService {
 
                 if (!followings.isEmpty()) {
                         Set<String> userIds = followings.stream()
-                                        .map(FolloweeDTO::getUserId)
+                                        .map(followee -> followee.getUserId().toString())
                                         .collect(Collectors.toSet());
                         redis.opsForSet().add(key, userIds.toArray(new String[0]));
                 }
@@ -131,7 +131,7 @@ public class FollowServiceImpl implements FollowService {
                         List<FollowModel> rows = followRepository.findAllByFollowingRequest(user);
                         return rows.stream()
                                         .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollower().getId().toString())
+                                                        .userId(f.getFollower().getId())
                                                         .userName(f.getFollower().getUsername())
                                                         .avatar(f.getFollower().getAvatar())
                                                         .isCloseFriend(f.getIsCloseFriend())
@@ -142,7 +142,7 @@ public class FollowServiceImpl implements FollowService {
                 List<FollowModel> rows = followRepository.findAllByFollowingRequest(user);
                 Set<FolloweeDTO> followees = rows.stream()
                                 .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollower().getId().toString())
+                                                .userId(f.getFollower().getId())
                                                 .userName(f.getFollower().getUsername())
                                                 .avatar(f.getFollower().getAvatar())
                                                 .isCloseFriend(f.getIsCloseFriend())
@@ -151,7 +151,7 @@ public class FollowServiceImpl implements FollowService {
 
                 if (!followees.isEmpty()) {
                         Set<String> userIds = followees.stream()
-                                        .map(FolloweeDTO::getUserId)
+                                        .map(followee -> followee.getUserId().toString())
                                         .collect(Collectors.toSet());
                         redis.opsForSet().add(key, userIds.toArray(new String[0]));
                 }
@@ -276,7 +276,7 @@ public class FollowServiceImpl implements FollowService {
                         List<FollowModel> rows = followRepository.findAllByFollower(user);
                         return rows.stream()
                                         .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollowing().getId().toString())
+                                                        .userId(f.getFollowing().getId())
                                                         .userName(f.getFollowing().getUsername())
                                                         .avatar(f.getFollowing().getAvatar())
                                                         .isCloseFriend(f.getIsCloseFriend())
@@ -287,7 +287,7 @@ public class FollowServiceImpl implements FollowService {
                 List<FollowModel> rows = followRepository.findAllByFollower(user);
                 Set<FolloweeDTO> followees = rows.stream()
                                 .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollowing().getId().toString())
+                                                .userId(f.getFollowing().getId())
                                                 .userName(f.getFollowing().getUsername())
                                                 .avatar(f.getFollowing().getAvatar())
                                                 .isCloseFriend(f.getIsCloseFriend())
@@ -296,7 +296,7 @@ public class FollowServiceImpl implements FollowService {
 
                 if (!followees.isEmpty()) {
                         Set<String> userIds = followees.stream()
-                                        .map(FolloweeDTO::getUserId)
+                                        .map(followee -> followee.getUserId().toString())
                                         .collect(Collectors.toSet());
                         redis.opsForSet().add(key, userIds.toArray(new String[0]));
                 }

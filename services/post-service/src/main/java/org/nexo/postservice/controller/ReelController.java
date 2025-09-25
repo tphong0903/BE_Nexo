@@ -24,7 +24,7 @@ public class ReelController {
     private final IPostService postService;
 
     @PostMapping
-    public ResponseData<String> addReel(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
+    public ResponseData<String> addReel(@RequestPart("reelRequestDTO") @Valid String postRequestDTOJson,
                                         @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
@@ -32,15 +32,20 @@ public class ReelController {
     }
 
     @PutMapping()
-    public ResponseData<String> updateReel(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
+    public ResponseData<String> updateReel(@RequestPart("reelRequestDTO") @Valid String postRequestDTOJson,
                                            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.saveReel(postRequestDTO, files));
     }
 
-    @DeleteMapping("/{id}")
+    @PatchMapping("/{id}")
     public ResponseData<String> inactiveReel(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactiveReel(id));
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseData<String> deletePost(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
     }
 }

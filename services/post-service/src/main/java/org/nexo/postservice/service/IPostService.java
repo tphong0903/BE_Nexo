@@ -15,4 +15,6 @@ public interface IPostService {
     String inactiveReel(Long id);
 
     String deletePost(Long id);
+
+    String deleteReel(Long id);
 }

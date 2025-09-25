@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.postservice.dto.response.ResponseData;
 import org.nexo.uploadfileservice.service.IUploadFileService;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -18,7 +19,7 @@ import java.util.List;
 public class UploadFileController {
     private final IUploadFileService uploadFileService;
 
-    @PostMapping(value = "/post/media")
+    @PostMapping(value = "/post/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> uploadMedia(@RequestPart("files") List<MultipartFile> files, @RequestPart("postId") String postId) {
         if (files != null && !files.isEmpty() && postId != null && !postId.isEmpty()) {
             log.info("Add File");
@@ -28,7 +29,7 @@ public class UploadFileController {
         return ResponseEntity.badRequest().body("Dữ liệu không hợp lệ");
     }
 
-    @PostMapping(value = "/reel/media")
+    @PostMapping(value = "/reel/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> uploadMedia2(@RequestPart("files") List<MultipartFile> files, @RequestPart("postId") String postId) {
         if (files != null && !files.isEmpty() && postId != null && !postId.isEmpty()) {
             log.info("Add File");
@@ -38,7 +39,7 @@ public class UploadFileController {
         return ResponseEntity.badRequest().body("Dữ liệu không hợp lệ");
     }
 
-    @PostMapping(value = "/story/media")
+    @PostMapping(value = "/story/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<String> uploadMedia3(@RequestPart("files") List<MultipartFile> files, @RequestPart("storyId") String storyId) {
         if (files != null && !files.isEmpty() && storyId != null && !storyId.isEmpty()) {
             log.info("Add File");

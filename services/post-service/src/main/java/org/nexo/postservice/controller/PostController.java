@@ -26,8 +26,11 @@ public class PostController {
     @PostMapping
     public ResponseData<String> addPost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
                                         @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
+
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
+
+
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
     }
 
@@ -35,17 +38,23 @@ public class PostController {
     @PutMapping
     public ResponseData<String> updatePost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
                                            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
+
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
     }
 
-    @DeleteMapping("/{id}")
+    @PatchMapping("/{id}")
     public ResponseData<String> inactivePost(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactivePost(id));
     }
 
-    
+    @DeleteMapping("/{id}")
+    public ResponseData<String> deletePost(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
+    }
+
+
     @GetMapping
     public ResponseData<String> test() {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test Post Service");

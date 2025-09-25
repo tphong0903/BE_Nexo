@@ -1,13 +1,10 @@
 package org.nexo.userservice.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import lombok.*;
+import org.hibernate.annotations.CreationTimestamp;
 
-import java.time.OffsetDateTime;
+import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "follow")
@@ -18,23 +15,20 @@ import java.time.OffsetDateTime;
 @Builder
 public class FollowModel {
 
+    @Column(name = "created_at", nullable = false, updatable = false)
+    @CreationTimestamp
+    protected LocalDateTime createdAt;
     @EmbeddedId
     private FollowId id;
-
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @MapsId("followerId")
     @JoinColumn(name = "follower_id")
     private UserModel follower;
-
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne()
     @MapsId("followingId")
     @JoinColumn(name = "following_id")
     private UserModel following;
-
     @Column(name = "is_close_friend")
     private Boolean isCloseFriend;
-
-    @Column(name = "created_at", nullable = false, updatable = false)
-    private OffsetDateTime createdAt;
 
 }

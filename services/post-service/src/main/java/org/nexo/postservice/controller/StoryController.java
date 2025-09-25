@@ -56,14 +56,19 @@ public class StoryController {
     public ResponseData<String> viewStory(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.viewStory(id));
     }
+//
+//    @GetMapping("/view/{id}")
+//    public ResponseData<String> getViewStory(@PathVariable Long id) {
+//        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.archiveStory(id));
+//    }
 
     @GetMapping("/view/{id}")
-    public ResponseData<String> getViewStory(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.archiveStory(id));
+    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id));
     }
 
     @GetMapping("/{id}")
-    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id));
+    public ResponseData<?> getStoriesOfUser(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getStoriesOfUser(id));
     }
 }

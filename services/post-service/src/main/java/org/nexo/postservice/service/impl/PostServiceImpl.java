@@ -27,6 +27,8 @@ import java.util.List;
 public class PostServiceImpl implements IPostService {
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
+
+
     private final IPostMediaRepository postMediaRepository;
     private final AsyncFileService fileServiceClient;
     private final IHashTagService hashTagService;
@@ -125,5 +127,11 @@ public class PostServiceImpl implements IPostService {
         return "Success";
     }
 
-
+    @Override
+    public String deleteReel(Long id) {
+        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(model.getUserId());
+        reelRepository.delete(model);
+        return "Success";
+    }
 }

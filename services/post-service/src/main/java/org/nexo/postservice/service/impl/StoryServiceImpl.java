@@ -22,6 +22,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 @Service
 @RequiredArgsConstructor
@@ -126,11 +127,35 @@ public class StoryServiceImpl implements IStoryService {
         return storyResponseList;
     }
 
+    @Override
+    public List<StoryResponse> getStoriesOfUser(Long id) {
+        String klId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(klId);
+        List<StoryResponse> storyResponseList = new ArrayList<>();
+        List<StoryResponse.Story> storyList = new ArrayList<>();
+        List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(id, true);
+        listStory1.forEach(model -> storyList.add(toStoryResponse(model, id)));
+        if (!storyList.isEmpty()) {
+            //TODO lay url
+            StoryResponse storyResponse = StoryResponse.builder()
+                    .userName(response.getUsername())
+                    .avatarUrl("https://firebasestorage.googleapis.com/v0/b/savefileimage.appspot.com/o/4d4ff0ebb595d5b3247e21d3f5955d08.jpg?alt=media")
+                    .userId(response.getUserId())
+                    .storyList(storyList)
+                    .build();
+            storyResponseList.add(storyResponse);
+        }
+        return storyResponseList;
+    }
+
     private StoryResponse.Story toStoryResponse(StoryModel model, Long currentUserId) {
-        boolean isLike = storyViewRepository
-                .findByStoryModel_IdAndSeenUserId(model.getId(), currentUserId)
-                .map(StoryViewModel::getIsLike)
-                .orElse(false);
+        boolean isLike = false;
+        if (!Objects.equals(model.getUserId(), currentUserId)) {
+            isLike = storyViewRepository
+                    .findByStoryModel_IdAndSeenUserId(model.getId(), currentUserId)
+                    .map(StoryViewModel::getIsLike)
+                    .orElse(false);
+        }
 
         return StoryResponse.Story.builder()
                 .creatAt(model.getCreatedAt())

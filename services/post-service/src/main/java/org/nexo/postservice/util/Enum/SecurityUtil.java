@@ -22,6 +22,10 @@ public class SecurityUtil {
             throw new CustomException("Stop Joke", HttpStatus.BAD_REQUEST);
     }
 
+    public String getKeyloakId() {
+        return tokenService.getKeyloakIdFromContext();
+    }
+
     public Long getUserIdFromToken() {
         String sub = tokenService.getKeyloakIdFromContext();
         UserServiceProto.UserDto user = userClient.getUserByKeycloakId(sub);

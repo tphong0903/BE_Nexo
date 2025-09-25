@@ -2,6 +2,9 @@ package org.nexo.userservice.model;
 
 import lombok.*;
 import java.io.Serializable;
+
+import org.hibernate.annotations.Check;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Embeddable;
 
@@ -12,6 +15,7 @@ import jakarta.persistence.Embeddable;
 @AllArgsConstructor
 @EqualsAndHashCode
 @Builder
+@Check(constraints = "follower_id <> following_id")
 public class FollowId implements Serializable {
 
     @Column(name = "follower_id")

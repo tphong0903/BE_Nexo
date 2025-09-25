@@ -11,7 +11,6 @@ import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.UserRepository;
 
-import java.time.OffsetDateTime;
 import java.util.Set;
 
 @GrpcService
@@ -59,7 +58,6 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                 .username(request.getUsername())
                                 .fullName(request.getFullName())
                                 .accountStatus(EAccountStatus.PENDING)
-                                .createdAt(OffsetDateTime.now())
                                 .build();
 
                 UserModel savedUser = userRepository.save(user);

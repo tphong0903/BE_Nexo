@@ -1,11 +1,12 @@
 package org.nexo.userservice.service.Impl;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 import org.nexo.userservice.dto.FolloweeDTO;
+import org.nexo.userservice.enums.EStatusFollow;
+import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.nexo.userservice.model.FollowId;
 import org.nexo.userservice.model.FollowModel;
 import org.nexo.userservice.model.UserModel;
@@ -76,29 +77,151 @@ public class FollowServiceImpl implements FollowService {
                 return followees;
         }
 
+        public Set<FolloweeDTO> getFollowings(String accessToken) {
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+
+                UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new RuntimeException("User not found"));
+
+                String key = followsKey(user.getId());
+                Set<String> cached = redis.opsForSet().members(key);
+
+                if (cached != null && !cached.isEmpty()) {
+                        List<FollowModel> rows = followRepository.findAllByFollowing(user);
+                        return rows.stream()
+                                        .map(f -> FolloweeDTO.builder()
+                                                        .userId(f.getFollowing().getId().toString())
+                                                        .userName(f.getFollowing().getUsername())
+                                                        .avatar(f.getFollowing().getAvatar())
+                                                        .isCloseFriend(f.getIsCloseFriend())
+                                                        .build())
+                                        .collect(Collectors.toSet());
+                }
+
+                List<FollowModel> rows = followRepository.findAllByFollowing(user);
+                Set<FolloweeDTO> followings = rows.stream()
+                                .map(f -> FolloweeDTO.builder()
+                                                .userId(f.getFollowing().getId().toString())
+                                                .userName(f.getFollowing().getUsername())
+                                                .avatar(f.getFollowing().getAvatar())
+                                                .isCloseFriend(f.getIsCloseFriend())
+                                                .build())
+                                .collect(Collectors.toSet());
+
+                if (!followings.isEmpty()) {
+                        Set<String> userIds = followings.stream()
+                                        .map(FolloweeDTO::getUserId)
+                                        .collect(Collectors.toSet());
+                        redis.opsForSet().add(key, userIds.toArray(new String[0]));
+                }
+
+                return followings;
+        }
+
+        public Set<FolloweeDTO> getFollowRequests(String accessToken) {
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+
+                UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new RuntimeException("User not found"));
+
+                String key = followsKey(user.getId());
+                Set<String> cached = redis.opsForSet().members(key);
+
+                if (cached != null && !cached.isEmpty()) {
+                        List<FollowModel> rows = followRepository.findAllByFollowingRequest(user);
+                        return rows.stream()
+                                        .map(f -> FolloweeDTO.builder()
+                                                        .userId(f.getFollower().getId().toString())
+                                                        .userName(f.getFollower().getUsername())
+                                                        .avatar(f.getFollower().getAvatar())
+                                                        .isCloseFriend(f.getIsCloseFriend())
+                                                        .build())
+                                        .collect(Collectors.toSet());
+                }
+
+                List<FollowModel> rows = followRepository.findAllByFollowingRequest(user);
+                Set<FolloweeDTO> followees = rows.stream()
+                                .map(f -> FolloweeDTO.builder()
+                                                .userId(f.getFollower().getId().toString())
+                                                .userName(f.getFollower().getUsername())
+                                                .avatar(f.getFollower().getAvatar())
+                                                .isCloseFriend(f.getIsCloseFriend())
+                                                .build())
+                                .collect(Collectors.toSet());
+
+                if (!followees.isEmpty()) {
+                        Set<String> userIds = followees.stream()
+                                        .map(FolloweeDTO::getUserId)
+                                        .collect(Collectors.toSet());
+                        redis.opsForSet().add(key, userIds.toArray(new String[0]));
+                }
+
+                return followees;
+        }
+
         @Transactional
         public void addFollow(String accessToken, Long followingId) {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
-                UserModel followerUser = userRepository.findByKeycloakUserId(keycloakUserId)
-                                .orElseThrow(() -> new RuntimeException("Follower user not found"));
-
+                UserModel followerUser = userRepository.findActiveByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Follower user not found"));
+                UserModel followingUser = userRepository.findActiveById(followingId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Following user not found"));
                 Long followerId = followerUser.getId();
+                if (followerId.equals(followingId)) {
+                        throw new ResourceNotFoundException("You cannot follow yourself");
+                }
 
                 FollowId id = FollowId.builder()
                                 .followerId(followerId)
                                 .followingId(followingId)
                                 .build();
+
                 FollowModel follow = FollowModel.builder()
                                 .id(id)
                                 .follower(UserModel.builder().id(followerId).build())
                                 .following(UserModel.builder().id(followingId).build())
                                 .build();
 
+                if (Boolean.TRUE.equals(followingUser.getIsPrivate())) {
+                        follow.setStatus(EStatusFollow.PENDING);
+                }
+
                 followRepository.save(follow);
 
                 redis.opsForSet().add(followsKey(followerId), followingId.toString());
                 redis.opsForSet().add(followersKey(followingId), followerId.toString());
+        }
+
+        @Transactional
+        public void acceptFollowRequest(String accessToken, Long followerId) {
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+
+                UserModel followingUser = userRepository.findActiveByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Following user not found"));
+                FollowId id = FollowId.builder()
+                                .followerId(followerId)
+                                .followingId(followingUser.getId())
+                                .build();
+                FollowModel follow = followRepository.findByIdAndStatus(id, EStatusFollow.PENDING)
+                                .orElseThrow(() -> new ResourceNotFoundException("Follow request not found"));
+                follow.setStatus(EStatusFollow.ACTIVE);
+                followRepository.save(follow);
+        }
+
+        @Transactional
+        public void rejectFollowRequest(String accessToken, Long followerId) {
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+
+                UserModel followingUser = userRepository.findActiveByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new ResourceNotFoundException("Following user not found"));
+                FollowId id = FollowId.builder()
+                                .followerId(followerId)
+                                .followingId(followingUser.getId())
+                                .build();
+                FollowModel follow = followRepository.findByIdAndStatus(id, EStatusFollow.PENDING)
+                                .orElseThrow(() -> new ResourceNotFoundException("Follow request not found"));
+                followRepository.delete(follow);
         }
 
         @Transactional

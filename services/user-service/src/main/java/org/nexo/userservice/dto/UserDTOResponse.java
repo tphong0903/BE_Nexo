@@ -13,8 +13,6 @@ public class UserDTOResponse {
     private String fullName;
     private String avatar;
     private String bio;
-    private String gender;
-
     @JsonFormat(pattern = "yyyy-MM-dd HH:mm:ss")
     private LocalDateTime createdAt;
 

@@ -90,9 +90,9 @@ public class FollowServiceImpl implements FollowService {
                         List<FollowModel> rows = followRepository.findAllByFollowing(user);
                         return rows.stream()
                                         .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollowing().getId())
-                                                        .userName(f.getFollowing().getUsername())
-                                                        .avatar(f.getFollowing().getAvatar())
+                                                        .userId(f.getFollower().getId())
+                                                        .userName(f.getFollower().getUsername())
+                                                        .avatar(f.getFollower().getAvatar())
                                                         .isCloseFriend(f.getIsCloseFriend())
                                                         .build())
                                         .collect(Collectors.toSet());
@@ -101,9 +101,9 @@ public class FollowServiceImpl implements FollowService {
                 List<FollowModel> rows = followRepository.findAllByFollowing(user);
                 Set<FolloweeDTO> followings = rows.stream()
                                 .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollowing().getId())
-                                                .userName(f.getFollowing().getUsername())
-                                                .avatar(f.getFollowing().getAvatar())
+                                                .userId(f.getFollower().getId())
+                                                .userName(f.getFollower().getUsername())
+                                                .avatar(f.getFollower().getAvatar())
                                                 .isCloseFriend(f.getIsCloseFriend())
                                                 .build())
                                 .collect(Collectors.toSet());
@@ -265,6 +265,7 @@ public class FollowServiceImpl implements FollowService {
 
         }
 
+        @Transactional
         public Set<FolloweeDTO> getFolloweesByUserId(Long userId) {
                 UserModel user = userRepository.findById(userId)
                                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -302,5 +303,45 @@ public class FollowServiceImpl implements FollowService {
                 }
 
                 return followees;
+        }
+
+        @Transactional
+        public Set<FolloweeDTO> getFollowingsByUserId(Long userId) {
+                UserModel user = userRepository.findById(userId)
+                                .orElseThrow(() -> new RuntimeException("User not found"));
+
+                String key = followsKey(user.getId());
+                Set<String> cached = redis.opsForSet().members(key);
+
+                if (cached != null && !cached.isEmpty()) {
+                        List<FollowModel> rows = followRepository.findAllByFollowing(user);
+                        return rows.stream()
+                                        .map(f -> FolloweeDTO.builder()
+                                                        .userId(f.getFollower().getId())
+                                                        .userName(f.getFollower().getUsername())
+                                                        .avatar(f.getFollower().getAvatar())
+                                                        .isCloseFriend(f.getIsCloseFriend())
+                                                        .build())
+                                        .collect(Collectors.toSet());
+                }
+
+                List<FollowModel> rows = followRepository.findAllByFollowing(user);
+                Set<FolloweeDTO> followings = rows.stream()
+                                .map(f -> FolloweeDTO.builder()
+                                                .userId(f.getFollower().getId())
+                                                .userName(f.getFollower().getUsername())
+                                                .avatar(f.getFollower().getAvatar())
+                                                .isCloseFriend(f.getIsCloseFriend())
+                                                .build())
+                                .collect(Collectors.toSet());
+
+                if (!followings.isEmpty()) {
+                        Set<String> userIds = followings.stream()
+                                        .map(followee -> followee.getUserId().toString())
+                                        .collect(Collectors.toSet());
+                        redis.opsForSet().add(key, userIds.toArray(new String[0]));
+                }
+
+                return followings;
         }
 }

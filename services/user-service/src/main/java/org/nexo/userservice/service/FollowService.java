@@ -22,4 +22,6 @@ public interface FollowService {
 
     Set<FolloweeDTO> getFolloweesByUserId(Long userId);
 
+    Set<FolloweeDTO> getFollowingsByUserId(Long userId);
+
 }

@@ -245,6 +245,44 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
         }
 
         @Override
+        public void getUserFollowings(UserServiceProto.GetUserFollowingsRequest request,
+                        StreamObserver<UserServiceProto.GetUserFollowingsResponse> responseObserver) {
+                try {
+                        Long userId = request.getUserId();
+                        Set<FolloweeDTO> followings = followService.getFollowingsByUserId(userId);
+
+                        UserServiceProto.GetUserFollowingsResponse.Builder responseBuilder = UserServiceProto.GetUserFollowingsResponse
+                                        .newBuilder()
+                                        .setSuccess(true)
+                                        .setMessage("Followings retrieved successfully");
+
+                        for (FolloweeDTO following : followings) {
+                                UserServiceProto.FolloweeInfo followingInfo = UserServiceProto.FolloweeInfo.newBuilder()
+                                                .setUserId(following.getUserId())
+                                                .setUserName(following.getUserName())
+                                                .setAvatar(following.getAvatar() != null ? following.getAvatar() : "")
+                                                .setIsCloseFriend(following.isCloseFriend())
+                                                .build();
+                                responseBuilder.addFollowings(followingInfo);
+                        }
+
+                        UserServiceProto.GetUserFollowingsResponse response = responseBuilder.build();
+                        responseObserver.onNext(response);
+                        responseObserver.onCompleted();
+                        log.info("Successfully returned {} followings for userId={}", followings.size(), userId);
+                } catch (Exception e) {
+                        log.error("Error getting user followings: {}", e.getMessage(), e);
+                        UserServiceProto.GetUserFollowingsResponse response = UserServiceProto.GetUserFollowingsResponse
+                                        .newBuilder()
+                                        .setSuccess(false)
+                                        .setMessage("Error getting user followings: " + e.getMessage())
+                                        .build();
+                        responseObserver.onNext(response);
+                        responseObserver.onCompleted();
+                }
+        }
+
+        @Override
         public void getUserDto(UserServiceProto.KeycloakId request,
                         StreamObserver<UserServiceProto.UserDto> responseObserver) {
                 try {
@@ -290,6 +328,52 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                         .setFullName("")
                                         .build();
 
+                        responseObserver.onNext(response);
+                        responseObserver.onCompleted();
+                }
+        }
+
+        @Override
+        public void getUserDtoById(UserServiceProto.GetUserDtoByIdRequest request,
+                        StreamObserver<UserServiceProto.UserDTOResponse> responseObserver) {
+                try {
+                        Long userId = request.getUserId();
+                        var userOpt = userRepository.findById(userId);
+                        if (userOpt.isEmpty()) {
+                                UserServiceProto.UserDTOResponse response = UserServiceProto.UserDTOResponse
+                                                .newBuilder()
+                                                .setId(0L)
+                                                .setUsername("")
+                                                .setFullName("")
+                                                .setAvatar("")
+                                                .setBio("")
+                                                .setCreatedAt("")
+                                                .build();
+                                responseObserver.onNext(response);
+                                responseObserver.onCompleted();
+                                return;
+                        }
+                        var user = userOpt.get();
+                        UserServiceProto.UserDTOResponse response = UserServiceProto.UserDTOResponse.newBuilder()
+                                        .setId(user.getId())
+                                        .setUsername(user.getUsername() != null ? user.getUsername() : "")
+                                        .setFullName(user.getFullName() != null ? user.getFullName() : "")
+                                        .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
+                                        .setBio(user.getBio() != null ? user.getBio() : "")
+                                        .setCreatedAt(user.getCreatedAt() != null ? user.getCreatedAt().toString() : "")
+                                        .build();
+                        responseObserver.onNext(response);
+                        responseObserver.onCompleted();
+                } catch (Exception e) {
+                        log.error("Error getting user dto by id: {}", e.getMessage(), e);
+                        UserServiceProto.UserDTOResponse response = UserServiceProto.UserDTOResponse.newBuilder()
+                                        .setId(0L)
+                                        .setUsername("")
+                                        .setFullName("")
+                                        .setAvatar("")
+                                        .setBio("")
+                                        .setCreatedAt("")
+                                        .build();
                         responseObserver.onNext(response);
                         responseObserver.onCompleted();
                 }

@@ -46,6 +46,6 @@ public class ReelController {
 
     @DeleteMapping("/{id}")
     public ResponseData<String> deletePost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deleteReel(id));
     }
 }

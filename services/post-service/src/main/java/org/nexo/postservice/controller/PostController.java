@@ -8,6 +8,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.response.ResponseData;
 import org.nexo.postservice.service.IPostService;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -21,7 +22,9 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 public class PostController {
+    private static final String FEED_KEY_PREFIX = "feed:";
     private final IPostService postService;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @PostMapping
     public ResponseData<String> addPost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
@@ -58,5 +61,10 @@ public class PostController {
     @GetMapping
     public ResponseData<String> test() {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test Post Service");
+    }
+
+    @GetMapping("{id}")
+    public ResponseData<?> getAllPostOf(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
     }
 }

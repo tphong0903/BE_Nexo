@@ -131,6 +131,18 @@ public class StoryServiceImpl implements IStoryService {
     public List<StoryResponse> getStoriesOfUser(Long id) {
         String klId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(klId);
+
+        //TODO
+//        UserServiceProto.CheckFollower response2 = userGrpcClient.checkFollwer(id, response.getUserId());
+//
+//        Boolean isAllow = false;
+//        if (id == response.getUserId()) {
+//            isAllow = true;
+//        } else if (response2.getIsPublic || response2.getIsFollowed) {
+//            isAllow = true;
+//        }
+//        if (!isAllow)
+//            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
         List<StoryResponse> storyResponseList = new ArrayList<>();
         List<StoryResponse.Story> storyList = new ArrayList<>();
         List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(id, true);

@@ -1,0 +1,30 @@
+server:
+  port: 8085
+spring:
+  application:
+    name: feed
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:9090/realms/nexo-network
+          jwk-set-uri: http://localhost:9090/realms/nexo-network/protocol/openid-connect/certs
+  data:
+    redis:
+      port: 6379
+      host: localhost
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    prefer-ip-address: true
+
+grpc:
+  client:
+    posts:
+      address: static://localhost:9091
+      negotiation-type: plaintext
+

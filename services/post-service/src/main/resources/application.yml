@@ -29,6 +29,10 @@ spring:
         jwt:
           issuer-uri: http://localhost:9090/realms/nexo-network
           jwk-set-uri: http://localhost:9090/realms/nexo-network/protocol/openid-connect/certs
+  data:
+    redis:
+      port: 6379
+      host: localhost
 eureka:
   client:
     serviceUrl:

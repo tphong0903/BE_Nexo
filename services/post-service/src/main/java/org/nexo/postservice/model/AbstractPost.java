@@ -1,7 +1,10 @@
 package org.nexo.postservice.model;
 
 import jakarta.persistence.*;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 import lombok.experimental.SuperBuilder;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
@@ -29,10 +32,10 @@ public abstract class AbstractPost implements Serializable {
     @Column(name = "updated_at")
     @UpdateTimestamp
     protected LocalDateTime updatedAt;
-    private Long userId;
-    private String caption;
+    protected Long userId;
+    protected String caption;
     @Enumerated(EnumType.STRING)
-    private EVisibilityPost visibility;
+    protected EVisibilityPost visibility;
 
-    private Boolean isActive;
+    protected Boolean isActive;
 }

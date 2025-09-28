@@ -24,4 +24,6 @@ public interface FollowService {
 
     Set<FolloweeDTO> getFollowingsByUserId(Long userId);
 
+    boolean isMutualFollow(Long userId1, Long userId2);
+
 }

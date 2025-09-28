@@ -379,4 +379,16 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                 }
         }
 
+        @Override
+        public void checkMutualFollow(UserServiceProto.CheckMutualFollowRequest request,
+                        StreamObserver<UserServiceProto.CheckMutualFollowResponse> responseObserver) {
+                boolean isMutual = followService.isMutualFollow(request.getUserId1(), request.getUserId2());
+                UserServiceProto.CheckMutualFollowResponse response = UserServiceProto.CheckMutualFollowResponse
+                                .newBuilder()
+                                .setIsMutualFollow(isMutual)
+                                .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
 }

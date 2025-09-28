@@ -23,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 @Service
 @RequiredArgsConstructor
 public class FollowServiceImpl implements FollowService {
+
         private final FollowRepository followRepository;
         private final UserRepository userRepository;
         private final StringRedisTemplate redis;
@@ -343,5 +344,17 @@ public class FollowServiceImpl implements FollowService {
                 }
 
                 return followings;
+        }
+
+        public boolean isMutualFollow(Long userId1, Long userId2) {
+                FollowId id1 = FollowId.builder()
+                                .followerId(userId1)
+                                .followingId(userId2)
+                                .build();
+                FollowId id2 = FollowId.builder()
+                                .followerId(userId2)
+                                .followingId(userId1)
+                                .build();
+                return followRepository.existsById(id1) && followRepository.existsById(id2);
         }
 }

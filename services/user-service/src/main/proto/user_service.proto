@@ -13,6 +13,8 @@ service UserService {
   rpc GetUserDto(KeycloakId) returns (UserDto);
   rpc GetUserFollowings(GetUserFollowingsRequest) returns (GetUserFollowingsResponse);
   rpc GetUserDtoById(GetUserDtoByIdRequest) returns (UserDTOResponse);
+  rpc CheckMutualFollow(CheckMutualFollowRequest) returns (CheckMutualFollowResponse);
+
 }
 
 message CreateUserRequest {
@@ -97,4 +99,12 @@ message UserDTOResponse {
 
 message GetUserDtoByIdRequest {
   int64 user_id = 1;
+}
+
+message CheckMutualFollowRequest {
+  int64 user_id_1 = 1;
+  int64 user_id_2 = 2;
+}
+message CheckMutualFollowResponse {
+  bool is_mutual_follow = 1;
 }

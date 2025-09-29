@@ -26,4 +26,21 @@ public class UserGrpcClient {
 
         return userStub.getUserFollowees(request);
     }
+
+    public UserServiceProto.UserDTOResponse getUserDTOById(Long userId) {
+        UserServiceProto.GetUserDtoByIdRequest request = UserServiceProto.GetUserDtoByIdRequest.newBuilder()
+                .setUserId(userId)
+                .build();
+
+        return userStub.getUserDtoById(request);
+    }
+
+    public UserServiceProto.CheckFollowResponse checkFollow(Long userId, Long userId2) {
+        UserServiceProto.CheckMutualFollowRequest request = UserServiceProto.CheckMutualFollowRequest.newBuilder()
+                .setUserId1(userId)
+                .setUserId2(userId2)
+                .build();
+
+        return userStub.checkFollow(request);
+    }
 }

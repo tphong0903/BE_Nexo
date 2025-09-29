@@ -32,7 +32,7 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class PostServiceImpl implements IPostService {
-    private static final String FEED_KEY_PREFIX = "feed:";
+
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
     private final UserGrpcClient userGrpcClient;
@@ -41,7 +41,6 @@ public class PostServiceImpl implements IPostService {
     private final IHashTagService hashTagService;
     private final SecurityUtil securityUtil;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final AsyncFeedService asyncFeedService;
 
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
@@ -51,7 +50,6 @@ public class PostServiceImpl implements IPostService {
         if (!response.getSuccess()) {
             throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
         }
-        List<UserServiceProto.FolloweeInfo> listFriend = response.getFolloweesList();
 
         PostModel model;
         if (postRequestDTO.getPostId() != 0) {
@@ -82,10 +80,7 @@ public class PostServiceImpl implements IPostService {
             fileServiceClient.savePostMedia(files, model.getId(), token);
         }
         if (postRequestDTO.getPostId() == 0) {
-            asyncFeedService.saveFeedAsync(model.getUserId(), listFriend, model.getId());
-            String event = "{ \"postId\": " + model.getId()
-                    + ", \"authorId\": " + postRequestDTO.getUserId()
-                    + ", \"createdAt\": " + Instant.now().toEpochMilli() + " }";
+            String event = "{ \"postId\": " + model.getId() + ", \"authorId\": " + postRequestDTO.getUserId() + ", \"createdAt\": " + Instant.now().toEpochMilli() + " }";
 
             redisTemplate.convertAndSend("post-created", event);
         }
@@ -152,26 +147,30 @@ public class PostServiceImpl implements IPostService {
 
     @Override
     public List<PostResponseDTO> getAllPostOfUser(Long id) {
-        UserServiceProto.UserDto response = userGrpcClient.getUserById(id);
-        List<PostModel> listPost;
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        List<PostModel> listPost = new ArrayList<>();
         List<PostResponseDTO> postResponseList = new ArrayList<>();
-        //TODO
-//        UserServiceProto.CheckFollower response2 = userGrpcClient.checkFollwer(id, response.getUserId());
-//
-//        Boolean isAllow = false;
-//        if (id == response.getUserId()) {
-//            isAllow = true;
-//            listPost = postRepository.findByUserId(id, true);
-//        } else if (response2.getIsPublic || response2.getIsFollowed) {
-//            isAllow = true;
-//        }
-//        if (!isAllow)
-//            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
-        listPost = postRepository.findByUserIdAndIsActive(id, true);
 
+
+        Boolean isAllow = false;
+        if (id == response.getUserId()) {
+            isAllow = true;
+            listPost = postRepository.findByUserId(id);
+        } else {
+            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), id);
+            if (!response2.getIsPrivate() || response2.getIsFollow()) {
+                listPost = postRepository.findByUserIdAndIsActive(id, true);
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+
+        UserServiceProto.UserDTOResponse response3 = userGrpcClient.getUserDTOById(id);
         if (!listPost.isEmpty()) {
             for (PostModel model : listPost) {
-                postResponseList.add(convertToPostResponseDTO(model, response));
+                postResponseList.add(convertToPostResponseDTO(model, response3));
             }
 
         }
@@ -181,7 +180,7 @@ public class PostServiceImpl implements IPostService {
     @Override
     public PostResponseDTO getPostById(Long id) {
         PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
-        UserServiceProto.UserDto response = userGrpcClient.getUserById(id);
+        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
         return convertToPostResponseDTO(model, response);
     }
 
@@ -193,20 +192,22 @@ public class PostServiceImpl implements IPostService {
         return "Success";
     }
 
-    PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDto userDto) {
+    PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse userDto) {
         List<UserTagDTO> userTagDTOList = new ArrayList<>();
-        for (String id : model.getTag().split(",")) {
-            UserServiceProto.UserDto response = userGrpcClient.getUserById(id);
-            userTagDTOList.add(UserTagDTO.builder()
-                    .userId(response.getUserId())
-                    .userName(response.getUsername())
-                    .build());
+        if (!model.getTag().isEmpty()) {
+            for (String id : model.getTag().split(",")) {
+                UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(Long.parseLong(id));
+                userTagDTOList.add(UserTagDTO.builder()
+                        .userId(response.getId())
+                        .userName(response.getUsername())
+                        .build());
+            }
         }
 
         return PostResponseDTO.builder()
                 .postId(model.getId())
                 .userName(userDto.getUsername())
-                .avatarUrl("Dang doi Quang")
+                .avatarUrl(userDto.getAvatar())
                 .visibility(model.getVisibility().toString())
                 .tag(model.getTag())
                 .listUserTag(userTagDTOList)
@@ -215,6 +216,7 @@ public class PostServiceImpl implements IPostService {
                 .isActive(model.getIsActive())
                 .quantityLike(99999L)
                 .quantityComment(99999L)
+                .userId(model.getUserId())
                 .mediaUrl(model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
                 .build();
     }

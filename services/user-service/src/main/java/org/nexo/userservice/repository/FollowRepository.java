@@ -22,6 +22,10 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
 
     List<FollowModel> findAllByFollowingAndStatus(UserModel following, EStatusFollow status);
 
+    List<FollowModel> findAllByFollowingId(Long id);
+
+    List<FollowModel> findAllByFollowerId(Long id);
+
     default List<FollowModel> findAllByFollowing(UserModel following) {
         return findAllByFollowingAndStatus(following, EStatusFollow.ACTIVE);
     }

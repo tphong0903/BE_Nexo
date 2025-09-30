@@ -1,7 +1,9 @@
 package org.nexo.userservice.service;
 
-import java.util.Set;
 import org.nexo.userservice.dto.FolloweeDTO;
+
+import java.util.List;
+import java.util.Set;
 
 public interface FollowService {
     void addFollow(String accessToken, Long followingId);
@@ -14,9 +16,9 @@ public interface FollowService {
 
     void toggleCloseFriend(String accessToken, Long followingId);
 
-    Set<FolloweeDTO> getFollowees(String accessToken);
+    Set<FolloweeDTO> getFollowees(Long accessToken);
 
-    Set<FolloweeDTO> getFollowings(String accessToken);
+    Set<FolloweeDTO> getFollowings(Long accessToken);
 
     Set<FolloweeDTO> getFollowRequests(String accessToken);
 
@@ -24,6 +26,6 @@ public interface FollowService {
 
     Set<FolloweeDTO> getFollowingsByUserId(Long userId);
 
-    boolean isMutualFollow(Long userId1, Long userId2);
+    List<Boolean> isFollow(Long userId1, Long userId2);
 
 }

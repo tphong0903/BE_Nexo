@@ -1,4 +1,4 @@
-package org.nexo.postservice.model;
+package org.nexo.feedservice.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;

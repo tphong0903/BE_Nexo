@@ -131,27 +131,29 @@ public class StoryServiceImpl implements IStoryService {
     public List<StoryResponse> getStoriesOfUser(Long id) {
         String klId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(klId);
+        UserServiceProto.UserDTOResponse response4 = userGrpcClient.getUserDTOById(response.getUserId());
 
-        //TODO
-//        UserServiceProto.CheckFollower response2 = userGrpcClient.checkFollwer(id, response.getUserId());
-//
-//        Boolean isAllow = false;
-//        if (id == response.getUserId()) {
-//            isAllow = true;
-//        } else if (response2.getIsPublic || response2.getIsFollowed) {
-//            isAllow = true;
-//        }
-//        if (!isAllow)
-//            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+
+        Boolean isAllow = false;
+        if (id == response.getUserId()) {
+            isAllow = true;
+        } else {
+            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), id);
+            if (!response2.getIsPrivate() || response2.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+
         List<StoryResponse> storyResponseList = new ArrayList<>();
         List<StoryResponse.Story> storyList = new ArrayList<>();
         List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(id, true);
         listStory1.forEach(model -> storyList.add(toStoryResponse(model, id)));
         if (!storyList.isEmpty()) {
-            //TODO lay url
             StoryResponse storyResponse = StoryResponse.builder()
                     .userName(response.getUsername())
-                    .avatarUrl("https://firebasestorage.googleapis.com/v0/b/savefileimage.appspot.com/o/4d4ff0ebb595d5b3247e21d3f5955d08.jpg?alt=media")
+                    .avatarUrl(response4.getAvatar())
                     .userId(response.getUserId())
                     .storyList(storyList)
                     .build();

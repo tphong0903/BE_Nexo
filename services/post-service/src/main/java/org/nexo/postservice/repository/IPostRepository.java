@@ -10,5 +10,5 @@ import java.util.List;
 public interface IPostRepository extends JpaRepository<PostModel, Long> {
     List<PostModel> findByUserIdAndIsActive(Long id, Boolean isActive);
 
-    List<PostModel> findByUserId(Long id, Boolean isActive);
+    List<PostModel> findByUserId(Long id);
 }

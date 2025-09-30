@@ -14,10 +14,6 @@ spring:
     gateway:
       server:
         webflux:
-          discovery:
-            locator:
-              enabled: true
-              lower-case-service-id: true
           routes:
             - id: user-service
               uri: lb://users
@@ -46,7 +42,6 @@ spring:
                 - Path=/api/auth/**
               filters:
                 - StripPrefix=2
-
 
 eureka:
   client:

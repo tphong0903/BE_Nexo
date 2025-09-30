@@ -1,12 +1,15 @@
 server:
   port: 8080
+
 spring:
   servlet:
     multipart:
       max-file-size: 500MB
       max-request-size: 500MB
+
   application:
     name: api-gateway
+
   cloud:
     gateway:
       server:
@@ -15,10 +18,41 @@ spring:
             locator:
               enabled: true
               lower-case-service-id: true
+          routes:
+            - id: user-service
+              uri: lb://users
+              predicates:
+                - Path=/api/users/**
+              filters:
+                - StripPrefix=2
+
+            - id: post-service
+              uri: lb://posts
+              predicates:
+                - Path=/api/posts/**
+              filters:
+                - StripPrefix=2
+
+            - id: feed-service
+              uri: lb://feeds
+              predicates:
+                - Path=/api/feeds/**
+              filters:
+                - StripPrefix=2
+
+            - id: auth-service
+              uri: lb://auth
+              predicates:
+                - Path=/api/auth/**
+              filters:
+                - StripPrefix=2
+
+
 eureka:
   client:
     serviceUrl:
       defaultZone: http://localhost:8761/eureka/
+
 management:
   endpoints:
     web:

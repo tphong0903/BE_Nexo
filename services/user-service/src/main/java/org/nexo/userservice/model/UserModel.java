@@ -40,7 +40,7 @@ public class UserModel {
 
     @Column(name = "avatar_url", length = 1024)
     @Builder.Default
-    private String avatar = "https://instagram.ffor13-1.fna.fbcdn.net/v/t51.2885-19/464760996_1254146839119862_3605321457742435801_n.png?stp=dst-jpg_e0_s150x150_tt6&efg=eyJ2ZW5jb2RlX3RhZyI6InByb2ZpbGVfcGljLmRqYW5nby4xNTAuYzIifQ&_nc_ht=instagram.ffor13-1.fna.fbcdn.net&_nc_cat=1&_nc_oc=Q6cZ2QFWh5_bE6BAPY0C_Jbn98e7Y20UeHvv6o3_Y2RdUoMRMX7mBTvK8-KDwsFe-QAigro&_nc_ohc=-KM7KClcdWwQ7kNvwEqDrpS&_nc_gid=uffOii7oJRW3BbIAlWZgBg&edm=AFs-eF8BAAAA&ccb=7-5&ig_cache_key=YW5vbnltb3VzX3Byb2ZpbGVfcGlj.3-ccb7-5&oh=00_AfaCqLhG1eK8f4cJRihPA6-leyKH1I6cktS3YJb5FHH7vA&oe=68DB10A8&_nc_sid=72eed0";
+    private String avatar = "https://www.wins.org/wp-content/themes/psBella/assets/img/fallbacks/user-avatar.jpg";
 
     @Column(name = "bio")
     private String bio;

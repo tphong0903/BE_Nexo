@@ -29,6 +29,13 @@ public class UserServiceImp implements UserService {
         return userMapper.toUserDTOResponse(user);
     }
 
+    public UserDTOResponse getUserProfileMe(String accessToken) {
+        String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+        return userMapper.toUserDTOResponse(user);
+    }
+
     @Transactional
     public UserDTOResponse updateUser(String accessToken, UpdateUserRequest request) {
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);

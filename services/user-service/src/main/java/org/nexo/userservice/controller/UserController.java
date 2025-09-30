@@ -31,6 +31,15 @@ public class UserController {
                 .data(userService.getUserProfile(userId, accessToken))
                 .build();
     }
+     @GetMapping("/profile")
+    public ResponseData<?> getProfile(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        String accessToken = authHeader.replace("Bearer ", "").trim();
+        return ResponseData.builder()
+                .status(200)
+                .message("User profile retrieved successfully")
+                .data(userService.getUserProfileMe( accessToken))
+                .build();
+    }
 
     @PutMapping("/profile")
     public ResponseData<?> updateProfile(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,

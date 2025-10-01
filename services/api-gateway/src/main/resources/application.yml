@@ -47,6 +47,12 @@ spring:
               filters:
                 - StripPrefix=2
 
+            - id: interaction-service
+              uri: lb://interaction
+              predicates:
+                - Path=/api/interaction/**
+              filters:
+                - StripPrefix=2
 
 eureka:
   client:

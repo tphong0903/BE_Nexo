@@ -23,13 +23,13 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.web.PagedResourcesAssembler;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.nexo.postservice.service.impl.AsyncFileService;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -38,16 +38,14 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class PostServiceImpl implements IPostService {
-
+    private final AsyncFileService fileServiceClient;
+    private final SecurityUtil securityUtil;
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
     private final UserGrpcClient userGrpcClient;
     private final IPostMediaRepository postMediaRepository;
-    private final AsyncFileService fileServiceClient;
     private final IHashTagService hashTagService;
-    private final SecurityUtil securityUtil;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final PagedResourcesAssembler<PostResponseDTO> pagedResourcesAssembler;
 
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {

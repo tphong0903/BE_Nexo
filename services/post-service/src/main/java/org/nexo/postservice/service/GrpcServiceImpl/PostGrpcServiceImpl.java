@@ -67,7 +67,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     }
 
     @Override
-    public void AddLikeQuantityById(PostServiceOuterClass.GetPostRequest2 request, StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
+    public void addLikeQuantityById(org.nexo.grpc.post.PostServiceOuterClass.GetPostRequest2 request, StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
         try {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();
@@ -92,7 +92,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     }
 
     @Override
-    public void AddCommentQuantityById(PostServiceOuterClass.GetPostRequest2 request, StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
+    public void addCommentQuantityById(PostServiceOuterClass.GetPostRequest2 request, StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
         try {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();

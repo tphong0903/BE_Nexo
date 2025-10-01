@@ -2,7 +2,7 @@ server:
   port: 8083
 spring:
   application:
-    name: posts
+    name: interaction
   datasource:
     url: jdbc:postgresql://localhost:5433/userdb?createDatabaseIfNotExist=true
     driver-class-name: org.postgresql.Driver
@@ -53,7 +53,7 @@ feign:
 
 grpc:
   server:
-    port: 9091
+    port: 9095
   client:
     users:
       address: static://localhost:9092

@@ -38,7 +38,8 @@ public abstract class AbstractPost implements Serializable {
     protected EVisibilityPost visibility;
 
     protected Boolean isActive;
-
-    protected Long likeQuantity = 0L;
-    protected Long commentQuantity = 0L;
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    protected Long likeQuantity;
+    @Column(nullable = false, columnDefinition = "BIGINT DEFAULT 0")
+    protected Long commentQuantity;
 }

@@ -4,7 +4,7 @@ package org.nexo.grpc.post;
 
 service PostService {
   rpc GetPostById (GetPostRequest) returns (PostResponse);
-  rpc addLikeQuantityById (GetPostRequest2) returns (PostResponse);
+  rpc addLikeQuantityById (GetPostRequest2) returns (PostMessageResponse);
   rpc addCommentQuantityById (GetPostRequest2) returns (PostMessageResponse);
 }
 

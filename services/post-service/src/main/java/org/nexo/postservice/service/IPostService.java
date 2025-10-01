@@ -1,6 +1,7 @@
 package org.nexo.postservice.service;
 
 import org.nexo.postservice.dto.PostRequestDTO;
+import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -17,7 +18,7 @@ public interface IPostService {
 
     String deletePost(Long id);
 
-    List<PostResponseDTO> getAllPostOfUser(Long id);
+    PageModelResponse getAllPostOfUser(Long id, int page, int limit);
 
     PostResponseDTO getPostById(Long id);
 

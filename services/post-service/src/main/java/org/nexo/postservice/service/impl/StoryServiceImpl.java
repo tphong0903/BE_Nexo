@@ -18,6 +18,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import org.nexo.postservice.service.impl.AsyncFileService;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;

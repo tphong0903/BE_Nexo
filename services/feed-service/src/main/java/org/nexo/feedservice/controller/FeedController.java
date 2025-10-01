@@ -24,6 +24,6 @@ public class FeedController {
     public Flux<PostResponseDTO> getFeedOfReels(@PathVariable Long userId,
                                                 @RequestParam(defaultValue = "0") int page,
                                                 @RequestParam(defaultValue = "20") Long limit) {
-        return feedService.getLatestFeed(userId, page, limit);
+        return feedService.getLatestReelsFeed(userId, page, limit);
     }
 }

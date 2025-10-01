@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.*;
 public class CommentController {
     private final ICommentService commentService;
 
-    @PostMapping
+    @PostMapping()
     public ResponseData<String> addComment(@RequestBody CommentDto dto) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.saveComment(dto));
     }
@@ -27,5 +27,9 @@ public class CommentController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.saveComment(dto));
     }
 
+    @DeleteMapping("/comment/{id}")
+    public ResponseData<String> deleteComment(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.deleteComment(id));
+    }
 
 }

@@ -6,4 +6,5 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public interface ILikeCommentRepository extends JpaRepository<LikeCommentModel, Long> {
+    LikeCommentModel findByCommentModelIdAndAndUserId(Long cmtId, Long userId);
 }

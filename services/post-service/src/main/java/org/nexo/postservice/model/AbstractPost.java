@@ -38,4 +38,7 @@ public abstract class AbstractPost implements Serializable {
     protected EVisibilityPost visibility;
 
     protected Boolean isActive;
+
+    protected Long likeQuantity = 0L;
+    protected Long commentQuantity = 0L;
 }

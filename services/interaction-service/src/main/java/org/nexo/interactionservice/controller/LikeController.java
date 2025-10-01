@@ -2,14 +2,14 @@ package org.nexo.interactionservice.controller;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.nexo.interactionservice.dto.request.LikeCommentRequestDto;
-import org.nexo.interactionservice.dto.request.LikePostRequestDto;
 import org.nexo.interactionservice.dto.response.ResponseData;
-import org.nexo.interactionservice.service.ICommentService;
 import org.nexo.interactionservice.service.ILikeService;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/like")
@@ -17,21 +17,20 @@ import org.springframework.web.bind.annotation.*;
 @Slf4j
 @RequiredArgsConstructor
 public class LikeController {
-    private final ICommentService commentService;
     private final ILikeService likeService;
 
-    @DeleteMapping("/comment/{id}")
-    public ResponseData<String> deleteComment(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.deleteComment(id));
+    @PostMapping("/comment/{id}")
+    public ResponseData<String> saveLikeComment(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.saveLikeComment(id));
     }
 
-    @PutMapping("/comment/like")
-    public ResponseData<String> saveLikeComment(@RequestBody LikeCommentRequestDto dto) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.saveLikeComment(dto));
+    @PostMapping("/post/{id}")
+    public ResponseData<String> saveLikePost(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.saveLikePost(id));
     }
 
-    @PostMapping("/post/like")
-    public ResponseData<String> saveLikePost(@RequestBody LikePostRequestDto dto) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.saveLikePost(dto));
+    @PostMapping("/reel/{id}")
+    public ResponseData<String> saveLikeReel(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.saveLikeReel(id));
     }
 }

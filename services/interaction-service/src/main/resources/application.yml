@@ -1,5 +1,5 @@
 server:
-  port: 8087
+  port: 8083
 spring:
   application:
     name: posts
@@ -53,11 +53,8 @@ feign:
 
 grpc:
   server:
-    port: 9094
+    port: 9091
   client:
     users:
       address: static://localhost:9092
       negotiation-type: plaintext
-    posts:
-      address: static://localhost:9091
-      negotiationType: plaintext

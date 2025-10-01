@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.UserTagDTO;
+import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.PostMediaModel;
@@ -17,7 +18,12 @@ import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
 import org.nexo.postservice.util.Enum.SecurityUtil;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.web.PagedResourcesAssembler;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -41,6 +47,7 @@ public class PostServiceImpl implements IPostService {
     private final IHashTagService hashTagService;
     private final SecurityUtil securityUtil;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final PagedResourcesAssembler<PostResponseDTO> pagedResourcesAssembler;
 
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
@@ -146,21 +153,23 @@ public class PostServiceImpl implements IPostService {
     }
 
     @Override
-    public List<PostResponseDTO> getAllPostOfUser(Long id) {
+    public PageModelResponse getAllPostOfUser(Long id, int page, int limit) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        List<PostModel> listPost = new ArrayList<>();
+        Page<PostModel> listPost = null;
         List<PostResponseDTO> postResponseList = new ArrayList<>();
 
-
-        Boolean isAllow = false;
+        Sort sort = Sort.by("createAt").descending();
+        Pageable pageable = PageRequest.of(page, limit, sort);
+        boolean isAllow = false;
         if (id == response.getUserId()) {
             isAllow = true;
-            listPost = postRepository.findByUserId(id);
+            listPost = postRepository.findByUserId(id, pageable);
         } else {
             UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), id);
             if (!response2.getIsPrivate() || response2.getIsFollow()) {
-                listPost = postRepository.findByUserIdAndIsActive(id, true);
+
+                listPost = postRepository.findByUserIdAndIsActive(id, true, pageable);
                 isAllow = true;
             }
         }
@@ -172,9 +181,8 @@ public class PostServiceImpl implements IPostService {
             for (PostModel model : listPost) {
                 postResponseList.add(convertToPostResponseDTO(model, response3));
             }
-
         }
-        return postResponseList;
+        return PageModelResponse.builder().pageNo(page).pageSize(limit).postResponseDTOList(postResponseList).build();
     }
 
     @Override

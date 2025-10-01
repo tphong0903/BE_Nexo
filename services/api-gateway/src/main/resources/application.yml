@@ -14,10 +14,15 @@ spring:
     gateway:
       server:
         webflux:
-          discovery:
-            locator:
-              enabled: true
-              lower-case-service-id: true
+          globalcors:
+            cors-configurations:
+              "[/**]":
+                allowedOrigins:
+                  - "http://localhost:3000"
+                allowedMethods: "*"
+                allowedHeaders: "*"
+                allowCredentials: true
+
           routes:
             - id: user-service
               uri: lb://users
@@ -47,12 +52,14 @@ spring:
               filters:
                 - StripPrefix=2
 
+
             - id: interaction-service
               uri: lb://interaction
               predicates:
                 - Path=/api/interaction/**
               filters:
                 - StripPrefix=2
+
 
 eureka:
   client:

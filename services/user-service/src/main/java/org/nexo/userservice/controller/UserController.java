@@ -5,6 +5,7 @@ import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.service.UserService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -21,13 +22,22 @@ import lombok.extern.slf4j.Slf4j;
 public class UserController {
     private final UserService userService;
 
-    @GetMapping("/profile")
+    @GetMapping("/profile/{userId}")
+    public ResponseData<?> getProfile(@PathVariable Long userId, @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        String accessToken = authHeader.replace("Bearer ", "").trim();
+        return ResponseData.builder()
+                .status(200)
+                .message("User profile retrieved successfully")
+                .data(userService.getUserProfile(userId, accessToken))
+                .build();
+    }
+     @GetMapping("/profile")
     public ResponseData<?> getProfile(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
         String accessToken = authHeader.replace("Bearer ", "").trim();
         return ResponseData.builder()
                 .status(200)
                 .message("User profile retrieved successfully")
-                .data(userService.getUserProfile(accessToken))
+                .data(userService.getUserProfileMe( accessToken))
                 .build();
     }
 

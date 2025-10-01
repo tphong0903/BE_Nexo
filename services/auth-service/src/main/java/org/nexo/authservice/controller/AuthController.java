@@ -24,74 +24,77 @@ import jakarta.validation.Valid;
 @AllArgsConstructor
 @Slf4j
 public class AuthController {
-    private final AuthService authService;
+        private final AuthService authService;
 
-    @PostMapping("/login")
-    public Mono<ResponseData<?>> login(@Valid @RequestBody LoginRequest loginRequest) {
-        log.info("Login request received for user: {}", loginRequest.getEmail());
-        return authService.login(loginRequest)
-                .map(tokenResponse -> {
-                    log.info("Login successful for user: {}", loginRequest.getEmail());
-                    return ResponseData.<TokenResponse>builder()
-                            .status(HttpStatus.OK.value())
-                            .message("Login successful")
-                            .data(tokenResponse)
-                            .build();
-                });
-    }
+        @PostMapping("/login")
+        public Mono<ResponseData<?>> login(@Valid @RequestBody LoginRequest loginRequest) {
+                log.info("Login request received for user: {}", loginRequest.getEmail());
+                return authService.login(loginRequest)
+                                .map(tokenResponse -> {
+                                        log.info("Login successful for user: {}", loginRequest.getEmail());
+                                        return ResponseData.<TokenResponse>builder()
+                                                        .status(HttpStatus.OK.value())
+                                                        .message("Login successful")
+                                                        .data(tokenResponse)
+                                                        .build();
+                                });
+        }
 
-    @PostMapping("/register")
-    public Mono<ResponseData<?>> register(@Valid @RequestBody RegisterRequest registerRequest) {
-        return authService.register(registerRequest)
-                .map(tokenResponse -> {
-                    log.info("Registration successful for user: {}", registerRequest.getEmail());
-                    return ResponseData.<TokenResponse>builder()
-                            .status(HttpStatus.OK.value())
-                            .message("Registration successful")
-                            .build();
-                });
-    }
+        @PostMapping("/register")
+        public Mono<ResponseData<?>> register(@Valid @RequestBody RegisterRequest registerRequest) {
+                return authService.register(registerRequest)
+                                .map(tokenResponse -> {
+                                        log.info("Registration successful for user: {}", registerRequest.getEmail());
+                                        return ResponseData.<TokenResponse>builder()
+                                                        .status(HttpStatus.OK.value())
+                                                        .message("Registration successful")
+                                                        .build();
+                                });
+        }
 
-    @PostMapping("/refresh")
-    public Mono<ResponseData<?>> refresh(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
-        String refreshToken = authHeader.replace("Bearer ", "").trim();
+        @PostMapping("/refresh")
+        public Mono<ResponseData<?>> refresh(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+                String refreshToken = authHeader.replace("Bearer ", "").trim();
 
-        return authService.refreshToken(refreshToken)
-                .map(tokenResponse -> {
-                    log.info("Token refresh successful for user with refresh token: {}", refreshToken);
-                    return ResponseData.<TokenResponse>builder()
-                            .status(HttpStatus.OK.value())
-                            .message("Token refresh successful")
-                            .data(tokenResponse)
-                            .build();
-                });
-    }
+                return authService.refreshToken(refreshToken)
+                                .map(tokenResponse -> {
+                                        log.info("Token refresh successful for user with refresh token: {}",
+                                                        refreshToken);
+                                        return ResponseData.<TokenResponse>builder()
+                                                        .status(HttpStatus.OK.value())
+                                                        .message("Token refresh successful")
+                                                        .data(tokenResponse)
+                                                        .build();
+                                });
+        }
 
-    @PostMapping("/logout")
-    public Mono<ResponseData<?>> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
-        String refreshToken = authHeader.replace("Bearer ", "").trim();
+        @PostMapping("/logout")
+        public Mono<ResponseData<?>> logout(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+                String refreshToken = authHeader.replace("Bearer ", "").trim();
 
-        return authService.logout(refreshToken)
-                .then(Mono.just(ResponseData.<Void>builder()
-                        .status(HttpStatus.OK.value())
-                        .message("Logged out successfully")
-                        .build()));
+                return authService.logout(refreshToken)
+                                .then(Mono.just(ResponseData.<Void>builder()
+                                                .status(HttpStatus.OK.value())
+                                                .message("Logged out successfully")
+                                                .build()));
 
-    }
-    @PostMapping("/resend-verify-email")
-    public Mono<ResponseData<?>> resendVerifyEmail(@RequestHeader("UserId") String userId) {
-        return authService.resendVerifyEmail(userId)
-                .then(Mono.just(ResponseData.<Void>builder()
-                        .status(HttpStatus.OK.value())
-                        .message("Verification email resent successfully")
-                        .build()));
-    }
-    @PostMapping("forgot-password")
-    public Mono<ResponseData<?>> forgotPassword(@RequestHeader("Email") String email) {
-        return authService.forgotPassword(email)
-                .then(Mono.just(ResponseData.<Void>builder()
-                        .status(HttpStatus.OK.value())
-                        .message("If the email exists, a password reset link has been sent")
-                        .build()));
-    }
+        }
+
+        @PostMapping("/resend-verify-email")
+        public Mono<ResponseData<?>> resendVerifyEmail(@RequestHeader("UserId") String userId) {
+                return authService.resendVerifyEmail(userId)
+                                .then(Mono.just(ResponseData.<Void>builder()
+                                                .status(HttpStatus.OK.value())
+                                                .message("Verification email resent successfully")
+                                                .build()));
+        }
+
+        @PostMapping("forgot-password")
+        public Mono<ResponseData<?>> forgotPassword(@RequestHeader("Email") String email) {
+                return authService.forgotPassword(email)
+                                .then(Mono.just(ResponseData.<Void>builder()
+                                                .status(HttpStatus.OK.value())
+                                                .message("If the email exists, a password reset link has been sent")
+                                                .build()));
+        }
 }

@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
+import org.nexo.authservice.dto.ForgotPasswordRequest;
 import org.nexo.authservice.dto.LoginRequest;
 import org.nexo.authservice.dto.RegisterRequest;
 import org.nexo.authservice.dto.ResponseData;
@@ -90,8 +91,8 @@ public class AuthController {
         }
 
         @PostMapping("forgot-password")
-        public Mono<ResponseData<?>> forgotPassword(@Valid @RequestBody String EMAIL) {
-                return authService.forgotPassword(EMAIL)
+        public Mono<ResponseData<?>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+                return authService.forgotPassword(request.getEMAIL())
                                 .then(Mono.just(ResponseData.<Void>builder()
                                                 .status(HttpStatus.OK.value())
                                                 .message("If the email exists, a password reset link has been sent")

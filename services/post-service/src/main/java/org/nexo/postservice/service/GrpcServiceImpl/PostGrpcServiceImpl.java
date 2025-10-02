@@ -71,7 +71,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
         try {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();
-            Boolean isIncrease = request.getIsPost();
+            Boolean isIncrease = request.getIsIncrease();
             int count = isIncrease ? 1 : -1;
             if (isPost) {
                 PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
@@ -96,7 +96,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
         try {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();
-            Boolean isIncrease = request.getIsPost();
+            Boolean isIncrease = request.getIsIncrease();
             int count = isIncrease ? 1 : -1;
             if (isPost) {
                 PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));

@@ -27,7 +27,7 @@ public class CommentController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.saveComment(dto));
     }
 
-    @DeleteMapping("/comment/{id}")
+    @DeleteMapping("/{id}")
     public ResponseData<String> deleteComment(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.deleteComment(id));
     }

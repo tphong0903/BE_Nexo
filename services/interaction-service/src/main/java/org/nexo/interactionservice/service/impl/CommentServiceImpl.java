@@ -29,9 +29,13 @@ public class CommentServiceImpl implements ICommentService {
         if (response.getUserId() != a.getUserId())
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
         CommentModel model;
+
+        Boolean isAdd = false;
         if (a.getId() != 0) {
             model = commentRepository.findById(a.getId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
+            model.setContent(a.getContent());
         } else {
+            isAdd = true;
             model = CommentModel.builder()
                     .content(a.getContent())
                     .userId(a.getUserId())
@@ -44,16 +48,19 @@ public class CommentServiceImpl implements ICommentService {
             model.setReelId(a.getReelId());
         }
 
-        if (a.getParentId() != null) {
+        if (a.getParentId() != 0) {
             model.setParentComment(commentRepository.findById(a.getParentId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST)));
         }
         commentRepository.save(model);
         a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
-        if (model.getPostId() != 0) {
-            postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getPostId()).setIsPost(true).setIsIncrease(true).build());
-        } else {
-            postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getReelId()).setIsPost(false).setIsIncrease(true).build());
+        if (isAdd) {
+            if (model.getPostId() != 0) {
+                postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getPostId()).setIsPost(true).setIsIncrease(true).build());
+            } else {
+                postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getReelId()).setIsPost(false).setIsIncrease(true).build());
+            }
         }
+
         return "Success";
     }
 

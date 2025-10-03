@@ -40,6 +40,10 @@ eureka:
 grpc:
   server:
     port: 9092
+  client:
+    upload-file-service:
+      address: "static://localhost:9093"
+      negotiationType: plaintext
 
 logging:
   level:

@@ -24,10 +24,8 @@ public class UploadFileGrpcClient {
 
             log.info("Uploading avatar via gRPC: {}", avatarFile.getOriginalFilename());
 
-            // Convert MultipartFile to bytes
             byte[] avatarData = avatarFile.getBytes();
 
-            // Build gRPC request
             PostMediaServiceProto.AvatarUploadRequest request = PostMediaServiceProto.AvatarUploadRequest.newBuilder()
                     .setAvatarData(ByteString.copyFrom(avatarData))
                     .setFileName(
@@ -35,7 +33,6 @@ public class UploadFileGrpcClient {
                     .setContentType(avatarFile.getContentType() != null ? avatarFile.getContentType() : "image/jpeg")
                     .build();
 
-            // Call gRPC service
             PostMediaServiceProto.AvatarUploadResponse response = uploadFileStub.uploadAvatar(request);
 
             if (response.getSuccess()) {

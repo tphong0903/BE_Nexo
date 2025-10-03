@@ -21,16 +21,13 @@ public class UploadFileGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedi
         try {
             log.info("Received avatar upload request for file: {}", request.getFileName());
 
-            // Convert ByteString to byte array
             byte[] avatarData = request.getAvatarData().toByteArray();
 
-            // Upload avatar and get URL
             String avatarUrl = uploadFileService.uploadAvatar(
                     avatarData,
                     request.getFileName(),
                     request.getContentType());
 
-            // Build successful response
             PostMediaServiceProto.AvatarUploadResponse response = PostMediaServiceProto.AvatarUploadResponse
                     .newBuilder()
                     .setSuccess(true)
@@ -46,7 +43,6 @@ public class UploadFileGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedi
         } catch (Exception e) {
             log.error("Error uploading avatar: {}", e.getMessage(), e);
 
-            // Build error response
             PostMediaServiceProto.AvatarUploadResponse response = PostMediaServiceProto.AvatarUploadResponse
                     .newBuilder()
                     .setSuccess(false)

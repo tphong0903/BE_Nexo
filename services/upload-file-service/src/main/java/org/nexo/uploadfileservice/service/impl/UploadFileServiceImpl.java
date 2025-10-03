@@ -247,7 +247,6 @@ public class UploadFileServiceImpl implements IUploadFileService {
                         "Please set 'app.firebase.file' in application.properties");
             }
 
-            // Tạo tên file unique cho avatar
             String uniqueFileName = "avatars/" + UUID.randomUUID() + "_" + fileName;
             BlobId blobId = BlobId.of(BUCKET_NAME, uniqueFileName);
             BlobInfo blobInfo = BlobInfo.newBuilder(blobId)

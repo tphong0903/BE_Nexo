@@ -165,11 +165,11 @@ public class StoryServiceImpl implements IStoryService {
 
     private StoryResponse.Story toStoryResponse(StoryModel model, Long currentUserId) {
         boolean isLike = false;
+        boolean isSeen = false;
         if (!Objects.equals(model.getUserId(), currentUserId)) {
-            isLike = storyViewRepository
-                    .findByStoryModel_IdAndSeenUserId(model.getId(), currentUserId)
-                    .map(StoryViewModel::getIsLike)
-                    .orElse(false);
+            StoryViewModel storyViewModel = storyViewRepository.findByStoryModel_IdAndSeenUserId(model.getId(), currentUserId).orElse(null);
+            isLike = storyViewModel != null && storyViewModel.getIsLike();
+            isSeen = storyViewModel != null;
         }
 
         return StoryResponse.Story.builder()
@@ -178,6 +178,7 @@ public class StoryServiceImpl implements IStoryService {
                 .mediaUrl(model.getMediaURL())
                 .mediaType(model.getMediaType().name())
                 .isLike(isLike)
+                .isSeen(isSeen)
                 .isActive(model.getIsActive())
                 .isCloseFriend(model.getIsClosedFriend())
                 .build();

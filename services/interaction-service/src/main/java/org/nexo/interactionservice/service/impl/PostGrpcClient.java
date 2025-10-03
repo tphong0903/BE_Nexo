@@ -12,14 +12,20 @@ public class PostGrpcClient {
     @GrpcClient("posts")
     private PostServiceGrpc.PostServiceBlockingStub postStub;
 
-    public void addLikeQuantityById(
-            PostServiceOuterClass.GetPostRequest2 request) {
-        postStub.addLikeQuantityById(request);
+    public void addLikeQuantityById(Long id, Boolean isPost, Boolean isIncrease) {
+        postStub.addLikeQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(id).setIsPost(isPost).setIsIncrease(isIncrease).build());
     }
 
-    public void addCommentQuantityById(
-            PostServiceOuterClass.GetPostRequest2 request) {
-        postStub.addCommentQuantityById(request);
+    public void addCommentQuantityById(Long id, Boolean isPost, Boolean isIncrease) {
+        postStub.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(id).setIsPost(isPost).setIsIncrease(isIncrease).build());
+    }
+
+    public PostServiceOuterClass.PostResponse getPostById(Long id) {
+        return postStub.getPostById(PostServiceOuterClass.GetPostRequest.newBuilder().setId(id).build());
+    }
+
+    public PostServiceOuterClass.ReelResponse getReelById(Long id) {
+        return postStub.getReelById(PostServiceOuterClass.GetPostRequest.newBuilder().setId(id).build());
     }
 
 }

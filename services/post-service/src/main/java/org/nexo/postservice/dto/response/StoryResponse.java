@@ -29,5 +29,6 @@ public class StoryResponse {
         private LocalDateTime creatAt;
         private Boolean isActive;
         private Boolean isCloseFriend;
+        private Boolean isSeen;
     }
 }

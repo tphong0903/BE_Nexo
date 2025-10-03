@@ -57,7 +57,8 @@ public class UploadFileServiceImpl implements IUploadFileService {
     @Override
     public void savePostMedia(List<MultipartFile> files, Long postId) {
         List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = new ArrayList<>();
-        PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient.findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
+        PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient
+                .findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
         int mediaOrder = postMediaListRequests.getPostsList().size();
         for (int i = 0; i < files.size(); i++) {
             MultipartFile file = files.get(i);
@@ -79,10 +80,9 @@ public class UploadFileServiceImpl implements IUploadFileService {
 
             grpcRequests.add(grpcItem);
         }
-        PostMediaServiceProto.PostMediaListRequest request =
-                PostMediaServiceProto.PostMediaListRequest.newBuilder()
-                        .addAllPosts(grpcRequests)
-                        .build();
+        PostMediaServiceProto.PostMediaListRequest request = PostMediaServiceProto.PostMediaListRequest.newBuilder()
+                .addAllPosts(grpcRequests)
+                .build();
 
         postGrpcClient.savePostMedias(request);
 
@@ -147,7 +147,8 @@ public class UploadFileServiceImpl implements IUploadFileService {
         }
         BlobId blobId = BlobId.of(BUCKET_NAME, fileName);
         BlobInfo blobInfo = BlobInfo.newBuilder(blobId).setContentType("media").build();
-        try (InputStream inputStream = UploadFileServiceImpl.class.getClassLoader().getResourceAsStream(FIREBASE_PRIVATE_KEY)) {
+        try (InputStream inputStream = UploadFileServiceImpl.class.getClassLoader()
+                .getResourceAsStream(FIREBASE_PRIVATE_KEY)) {
             if (inputStream == null) {
                 throw new RuntimeException("Firebase private key is not found. " +
                         "Please check 'app.firebase.file' in application.properties");
@@ -167,7 +168,8 @@ public class UploadFileServiceImpl implements IUploadFileService {
                     "Please set 'app.firebase.file' in application.properties");
         }
         String folderName = "videos/" + UUID.randomUUID();
-        try (InputStream inputStream = UploadFileServiceImpl.class.getClassLoader().getResourceAsStream(FIREBASE_PRIVATE_KEY)) {
+        try (InputStream inputStream = UploadFileServiceImpl.class.getClassLoader()
+                .getResourceAsStream(FIREBASE_PRIVATE_KEY)) {
             if (inputStream == null) {
                 throw new RuntimeException("Firebase private key is not found. " +
                         "Please check 'app.firebase.file' in application.properties");
@@ -235,5 +237,39 @@ public class UploadFileServiceImpl implements IUploadFileService {
             }
         }
         file.delete();
+    }
+
+    @Override
+    public String uploadAvatar(byte[] avatarData, String fileName, String contentType) {
+        try {
+            if (FIREBASE_PRIVATE_KEY == null) {
+                throw new RuntimeException("Firebase private key is not found. " +
+                        "Please set 'app.firebase.file' in application.properties");
+            }
+
+            // Tạo tên file unique cho avatar
+            String uniqueFileName = "avatars/" + UUID.randomUUID() + "_" + fileName;
+            BlobId blobId = BlobId.of(BUCKET_NAME, uniqueFileName);
+            BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
+                    .setContentType(contentType != null ? contentType : "image/jpeg")
+                    .build();
+
+            try (InputStream inputStream = UploadFileServiceImpl.class.getClassLoader()
+                    .getResourceAsStream(FIREBASE_PRIVATE_KEY)) {
+                if (inputStream == null) {
+                    throw new RuntimeException("Firebase private key is not found. " +
+                            "Please check 'app.firebase.file' in application.properties");
+                }
+                Credentials credentials = GoogleCredentials.fromStream(inputStream);
+                Storage storage = StorageOptions.newBuilder().setCredentials(credentials).build().getService();
+                storage.create(blobInfo, avatarData);
+            }
+
+            String DOWNLOAD_URL = "https://firebasestorage.googleapis.com/v0/b/" + BUCKET_NAME + "/o/%s?alt=media";
+            return String.format(DOWNLOAD_URL, URLEncoder.encode(uniqueFileName, StandardCharsets.UTF_8));
+        } catch (Exception e) {
+            log.error("Error uploading avatar: {}", e.getMessage(), e);
+            throw new RuntimeException("Avatar couldn't upload, Something went wrong: " + e.getMessage());
+        }
     }
 }

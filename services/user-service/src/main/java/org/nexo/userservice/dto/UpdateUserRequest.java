@@ -17,4 +17,6 @@ public class UpdateUserRequest {
     @Size(max = 500, message = "Bio must not exceed 500 characters")
     private String bio;
 
+    private Boolean isPrivate;
+
 }

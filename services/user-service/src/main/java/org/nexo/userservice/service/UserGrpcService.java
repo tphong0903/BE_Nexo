@@ -206,7 +206,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
         try {
             Long userId = request.getUserId();
-            Set<FolloweeDTO> followees = followService.getFolloweesByUserId(userId);
+            Set<FolloweeDTO> followees = followService.getFollowersByUserId(userId);
 
             UserServiceProto.GetUserFolloweesResponse.Builder responseBuilder = UserServiceProto.GetUserFolloweesResponse
                     .newBuilder()

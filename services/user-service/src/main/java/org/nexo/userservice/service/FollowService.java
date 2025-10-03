@@ -6,23 +6,23 @@ import java.util.List;
 import java.util.Set;
 
 public interface FollowService {
-    void addFollow(String accessToken, Long followingId);
+    void addFollow(String accessToken, String username);
 
-    void acceptFollowRequest(String accessToken, Long followerId);
+    void acceptFollowRequest(String accessToken, String username);
 
-    void rejectFollowRequest(String accessToken, Long followerId);
+    void rejectFollowRequest(String accessToken, String username);
 
-    void removeFollow(String accessToken, Long followingId);
+    void removeFollow(String accessToken, String username);
 
-    void toggleCloseFriend(String accessToken, Long followingId);
+    void toggleCloseFriend(String accessToken, String username);
 
-    Set<FolloweeDTO> getFollowees(Long accessToken);
+    Set<FolloweeDTO> getFollowers(String username);
 
-    Set<FolloweeDTO> getFollowings(Long accessToken);
+    Set<FolloweeDTO> getFollowings(String username);
 
     Set<FolloweeDTO> getFollowRequests(String accessToken);
 
-    Set<FolloweeDTO> getFolloweesByUserId(Long userId);
+    Set<FolloweeDTO> getFollowersByUserId(Long userId);
 
     Set<FolloweeDTO> getFollowingsByUserId(Long userId);
 

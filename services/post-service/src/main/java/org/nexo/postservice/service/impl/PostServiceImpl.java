@@ -6,6 +6,7 @@ import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.UserTagDTO;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
+import org.nexo.postservice.dto.response.ReelResponseDTO;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.PostMediaModel;
 import org.nexo.postservice.model.PostModel;
@@ -153,34 +154,40 @@ public class PostServiceImpl implements IPostService {
     @Override
     public PageModelResponse getAllPostOfUser(Long id, int page, int limit) {
         String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        Page<PostModel> listPost = null;
-        List<PostResponseDTO> postResponseList = new ArrayList<>();
+        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Page<PostModel> listPost = Page.empty();
 
         Sort sort = Sort.by("createAt").descending();
         Pageable pageable = PageRequest.of(page, limit, sort);
         boolean isAllow = false;
-        if (id == response.getUserId()) {
+        if (id.equals(currentUser.getUserId())) {
             isAllow = true;
             listPost = postRepository.findByUserId(id, pageable);
         } else {
-            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), id);
-            if (!response2.getIsPrivate() || response2.getIsFollow()) {
+            UserServiceProto.CheckFollowResponse followResponse =
+                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
 
+            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
                 listPost = postRepository.findByUserIdAndIsActive(id, true, pageable);
                 isAllow = true;
             }
         }
         if (!isAllow)
-            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Dont allow to get Post", HttpStatus.BAD_REQUEST);
 
-        UserServiceProto.UserDTOResponse response3 = userGrpcClient.getUserDTOById(id);
-        if (!listPost.isEmpty()) {
-            for (PostModel model : listPost) {
-                postResponseList.add(convertToPostResponseDTO(model, response3));
-            }
-        }
-        return PageModelResponse.builder().pageNo(page).pageSize(limit).postResponseDTOList(postResponseList).build();
+        UserServiceProto.UserDTOResponse userInfo = userGrpcClient.getUserDTOById(id);
+
+        List<PostResponseDTO> postResponseList = listPost.getContent().stream()
+                .map(post -> convertToPostResponseDTO(post, userInfo))
+                .toList();
+        return PageModelResponse.<PostResponseDTO>builder()
+                .pageNo(listPost.getNumber())
+                .pageSize(listPost.getSize())
+                .totalElements(listPost.getTotalElements())
+                .totalPages(listPost.getTotalPages())
+                .last(listPost.isLast())
+                .content(postResponseList)
+                .build();
     }
 
     @Override
@@ -188,6 +195,13 @@ public class PostServiceImpl implements IPostService {
         PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
         return convertToPostResponseDTO(model, response);
+    }
+
+    @Override
+    public ReelResponseDTO getReelById(Long id) {
+        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+        return convertToReelResponseDTO(model, response);
     }
 
     @Override
@@ -220,10 +234,27 @@ public class PostServiceImpl implements IPostService {
                 .caption(model.getCaption())
                 .createdAt(model.getCreatedAt())
                 .isActive(model.getIsActive())
-                .quantityLike(99999L)
-                .quantityComment(99999L)
+                .quantityLike(model.getLikeQuantity())
+                .quantityComment(model.getCommentQuantity())
                 .userId(model.getUserId())
                 .mediaUrl(model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
+                .build();
+    }
+
+    ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto) {
+
+        return ReelResponseDTO.builder()
+                .postId(model.getId())
+                .userName(userDto.getUsername())
+                .avatarUrl(userDto.getAvatar())
+                .visibility(model.getVisibility().toString())
+                .caption(model.getCaption())
+                .createdAt(model.getCreatedAt())
+                .isActive(model.getIsActive())
+                .quantityLike(model.getLikeQuantity())
+                .quantityComment(model.getCommentQuantity())
+                .userId(model.getUserId())
+                .mediaUrl(model.getVideoUrl())
                 .build();
     }
 }

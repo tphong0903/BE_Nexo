@@ -3,6 +3,7 @@ package org.nexo.interactionservice.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.interactionservice.dto.request.CommentDto;
+import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.dto.response.ResponseData;
 import org.nexo.interactionservice.service.ICommentService;
 import org.springframework.http.HttpStatus;
@@ -32,4 +33,26 @@ public class CommentController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.deleteComment(id));
     }
 
+    @GetMapping("/post/{postId}")
+    public ResponseData<ListCommentResponse> getCommentOfPost(@PathVariable Long postId,
+                                                              @RequestParam(defaultValue = "0") int pageNo,
+                                                              @RequestParam(defaultValue = "10") int pageSize) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.getCommentOfPost(postId, pageNo, pageSize));
+    }
+
+    @GetMapping("/reel/{postId}")
+    public ResponseData<ListCommentResponse> getCommentOfReel(@PathVariable Long reelId,
+                                                              @RequestParam(defaultValue = "0") int pageNo,
+                                                              @RequestParam(defaultValue = "10") int pageSize) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.getCommentOfReel(reelId, pageNo, pageSize));
+    }
+
+    @GetMapping("/{commentId}/replies")
+    public ResponseData<ListCommentResponse> getReplies(
+            @PathVariable Long commentId,
+            @RequestParam(defaultValue = "0") int pageNo,
+            @RequestParam(defaultValue = "10") int pageSize
+    ) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.getReplies(commentId, pageNo, pageSize));
+    }
 }

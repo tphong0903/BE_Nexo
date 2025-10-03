@@ -3,6 +3,7 @@ package org.nexo.postservice.service;
 import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
+import org.nexo.postservice.dto.response.ReelResponseDTO;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -21,6 +22,8 @@ public interface IPostService {
     PageModelResponse getAllPostOfUser(Long id, int page, int limit);
 
     PostResponseDTO getPostById(Long id);
+
+    ReelResponseDTO getReelById(Long id);
 
     String deleteReel(Long id);
 }

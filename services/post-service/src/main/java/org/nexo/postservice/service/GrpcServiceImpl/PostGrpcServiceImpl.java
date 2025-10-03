@@ -7,6 +7,7 @@ import net.devh.boot.grpc.server.service.GrpcService;
 import org.nexo.grpc.post.PostServiceGrpc;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.postservice.dto.response.PostResponseDTO;
+import org.nexo.postservice.dto.response.ReelResponseDTO;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.PostModel;
 import org.nexo.postservice.model.ReelModel;
@@ -52,6 +53,36 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                                     .toList()
                                     : List.of()
                     )
+                    .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
+                    .setCreatedAt(dto.getCreatedAt() != null
+                            ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                            : 0L)
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("Error in getPostById", e);
+            responseObserver.onError(e);
+        }
+    }
+
+    @Override
+    public void getReelById(PostServiceOuterClass.GetPostRequest request, StreamObserver<PostServiceOuterClass.ReelResponse> responseObserver) {
+        try {
+            Long id = request.getId();
+            ReelResponseDTO dto = postService.getReelById(id);
+            PostServiceOuterClass.ReelResponse response = PostServiceOuterClass.ReelResponse.newBuilder()
+                    .setPostId(dto.getPostId())
+                    .setUserId(dto.getUserId())
+                    .setUserName(dto.getUserName() != null ? dto.getUserName() : "")
+                    .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
+                    .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
+                    .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
+                    .setTag(dto.getTag() != null ? dto.getTag() : "")
+                    .setMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : null)
+                    .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0)
+                    .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0)
                     .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
                     .setCreatedAt(dto.getCreatedAt() != null
                             ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()

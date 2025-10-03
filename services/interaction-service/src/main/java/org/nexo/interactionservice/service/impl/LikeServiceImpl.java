@@ -48,14 +48,14 @@ public class LikeServiceImpl implements ILikeService {
         LikeModel model = likeRepository.findByPostIdAndUserId(id, response.getUserId());
         if (model != null) {
             likeRepository.delete(model);
-            postGrpcClient.addLikeQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(id).setIsPost(true).setIsIncrease(false).build());
+            postGrpcClient.addLikeQuantityById(id, true, false);
         } else {
             model = LikeModel.builder()
                     .postId(id)
                     .userId(response.getUserId())
                     .build();
             likeRepository.save(model);
-            postGrpcClient.addLikeQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(id).setIsPost(true).setIsIncrease(true).build());
+            postGrpcClient.addLikeQuantityById(id, true, true);
         }
         return "Success";
     }
@@ -66,7 +66,7 @@ public class LikeServiceImpl implements ILikeService {
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         LikeModel model = likeRepository.findByPostIdAndUserId(id, response.getUserId());
         if (model != null) {
-            postGrpcClient.addLikeQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(id).setIsPost(false).setIsIncrease(false).build());
+            postGrpcClient.addLikeQuantityById(id, false, false);
             likeRepository.delete(model);
         } else {
             model = LikeModel.builder()
@@ -74,7 +74,7 @@ public class LikeServiceImpl implements ILikeService {
                     .userId(response.getUserId())
                     .build();
             likeRepository.save(model);
-            postGrpcClient.addLikeQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(id).setIsPost(false).setIsIncrease(true).build());
+            postGrpcClient.addLikeQuantityById(id, false, true);
         }
         return "Success";
     }

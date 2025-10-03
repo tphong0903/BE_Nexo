@@ -4,7 +4,8 @@ package org.nexo.grpc.post;
 
 service PostService {
   rpc GetPostById (GetPostRequest) returns (PostResponse);
-  rpc addLikeQuantityById (GetPostRequest2) returns (PostResponse);
+  rpc GetReelById (GetPostRequest) returns (ReelResponse);
+  rpc addLikeQuantityById (GetPostRequest2) returns (PostMessageResponse);
   rpc addCommentQuantityById (GetPostRequest2) returns (PostMessageResponse);
 }
 
@@ -31,6 +32,21 @@ message PostResponse {
   int64 quantityLike = 9;
   int64 quantityComment = 10;
   repeated UserTag listUserTag = 11;
+  bool isActive = 12;
+  int64 createdAt = 13;
+}
+
+message ReelResponse {
+  int64 postId = 1;
+  int64 userId = 2;
+  string userName = 3;
+  string avatarUrl = 4;
+  string caption = 5;
+  string visibility = 6;
+  string tag = 7;
+  string mediaUrl = 8;
+  int64 quantityLike = 9;
+  int64 quantityComment = 10;
   bool isActive = 12;
   int64 createdAt = 13;
 }

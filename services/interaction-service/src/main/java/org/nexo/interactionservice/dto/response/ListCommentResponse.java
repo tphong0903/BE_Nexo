@@ -1,19 +1,21 @@
-package org.nexo.postservice.dto.response;
+package org.nexo.interactionservice.dto.response;
 
 import lombok.*;
 
 import java.util.List;
 
 @Data
-@Getter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PageModelResponse<T> {
+public class ListCommentResponse {
+    private Long postId;
+    private List<CommentResponse> commentResponseList;
+
+
     private int pageNo;
     private int pageSize;
     private long totalElements;
     private int totalPages;
     private boolean last;
-    private List<T> content;
 }

@@ -21,6 +21,8 @@ public interface IPostService {
 
     PageModelResponse getAllPostOfUser(Long id, int page, int limit);
 
+    PageModelResponse getAllReelOfUser(Long id, int page, int limit);
+
     PostResponseDTO getPostById(Long id);
 
     ReelResponseDTO getReelById(Long id);

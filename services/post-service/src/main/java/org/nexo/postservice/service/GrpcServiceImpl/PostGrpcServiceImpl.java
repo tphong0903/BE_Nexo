@@ -1,5 +1,6 @@
 package org.nexo.postservice.service.GrpcServiceImpl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.nexo.postservice.model.ReelModel;
 import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.repository.IReelRepository;
 import org.nexo.postservice.service.IPostService;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 
 import java.time.ZoneId;
@@ -26,6 +28,8 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     private final IPostService postService;
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
+    private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void getPostById(PostServiceOuterClass.GetPostRequest request, StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {
@@ -103,6 +107,15 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();
             Boolean isIncrease = request.getIsIncrease();
+
+            String key = isPost ? "post:likes:" + id : "reel:likes:" + id;
+
+            if (isIncrease) {
+                redisTemplate.opsForValue().increment(key);
+            } else {
+                redisTemplate.opsForValue().decrement(key);
+            }
+
             int count = isIncrease ? 1 : -1;
             if (isPost) {
                 PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
@@ -128,6 +141,14 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();
             Boolean isIncrease = request.getIsIncrease();
+
+            String key = isPost ? "post:comments:" + id : "reel:comments:" + id;
+
+            if (isIncrease) {
+                redisTemplate.opsForValue().increment(key);
+            } else {
+                redisTemplate.opsForValue().decrement(key);
+            }
             int count = isIncrease ? 1 : -1;
             if (isPost) {
                 PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));

@@ -1,6 +1,8 @@
 package org.nexo.postservice.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.UserTagDTO;
@@ -32,12 +34,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import org.nexo.postservice.service.impl.AsyncFileService;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class PostServiceImpl implements IPostService {
     private final AsyncFileService fileServiceClient;
     private final SecurityUtil securityUtil;
@@ -47,6 +52,7 @@ public class PostServiceImpl implements IPostService {
     private final IPostMediaRepository postMediaRepository;
     private final IHashTagService hashTagService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
@@ -80,6 +86,14 @@ public class PostServiceImpl implements IPostService {
                     .build();
         }
         postRepository.save(model);
+        if (postRequestDTO.getPostId() != 0) {
+            String postKey = "post:" + model.getId();
+            String feedKey = "feed:" + model.getUserId();
+
+            redisTemplate.delete(postKey);
+            redisTemplate.opsForZSet().remove(feedKey, model.getId());
+        }
+
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
@@ -148,6 +162,15 @@ public class PostServiceImpl implements IPostService {
         PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
         postRepository.delete(model);
+        String postKey = "post:" + id;
+        String likesKey = "post:likes:" + id;
+        String commentsKey = "post:comments:" + id;
+        String feedKey = "feed:" + model.getUserId();
+
+        redisTemplate.delete(postKey);
+        redisTemplate.delete(likesKey);
+        redisTemplate.delete(commentsKey);
+        redisTemplate.opsForZSet().remove(feedKey, id);
         return "Success";
     }
 
@@ -191,16 +214,128 @@ public class PostServiceImpl implements IPostService {
     }
 
     @Override
+    public PageModelResponse getAllReelOfUser(Long id, int page, int limit) {
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Page<ReelModel> listReel = Page.empty();
+
+        Sort sort = Sort.by("createAt").descending();
+        Pageable pageable = PageRequest.of(page, limit, sort);
+        boolean isAllow = false;
+        if (id.equals(currentUser.getUserId())) {
+            isAllow = true;
+            listReel = reelRepository.findByUserId(id, pageable);
+        } else {
+            UserServiceProto.CheckFollowResponse followResponse =
+                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
+
+            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
+                listReel = reelRepository.findByUserIdAndIsActive(id, true, pageable);
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get Post", HttpStatus.BAD_REQUEST);
+
+        UserServiceProto.UserDTOResponse userInfo = userGrpcClient.getUserDTOById(id);
+
+        List<ReelResponseDTO> reelResponseDTOS = listReel.getContent().stream()
+                .map(reel -> convertToReelResponseDTO(reel, userInfo))
+                .toList();
+        return PageModelResponse.<ReelResponseDTO>builder()
+                .pageNo(listReel.getNumber())
+                .pageSize(listReel.getSize())
+                .totalElements(listReel.getTotalElements())
+                .totalPages(listReel.getTotalPages())
+                .last(listReel.isLast())
+                .content(reelResponseDTOS)
+                .build();
+    }
+
+    @Override
     public PostResponseDTO getPostById(Long id) {
-        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
+        boolean isAllow = false;
+        if (id.equals(currentUser.getUserId())) {
+            isAllow = true;
+        } else {
+            UserServiceProto.CheckFollowResponse followResponse =
+                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
+            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get Post", HttpStatus.BAD_REQUEST);
+
+        String redisKey = "post:" + id;
+        String postJson = (String) redisTemplate.opsForValue().get(redisKey);
+        PostModel model;
+
+        if (!postJson.isEmpty()) {
+            try {
+                model = objectMapper.readValue(postJson, PostModel.class);
+            } catch (Exception e) {
+                throw new CustomException("Error parsing post from cache", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+        } else {
+            model = postRepository.findById(id)
+                    .orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
+
+            try {
+                String json = objectMapper.writeValueAsString(model);
+                redisTemplate.opsForValue().set(redisKey, json, Duration.ofHours(1));
+            } catch (Exception e) {
+                log.error("Failed to cache post {}", id, e);
+            }
+        }
+
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+
         return convertToPostResponseDTO(model, response);
     }
 
     @Override
     public ReelResponseDTO getReelById(Long id) {
-        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
+        boolean isAllow = false;
+        if (id.equals(currentUser.getUserId())) {
+            isAllow = true;
+        } else {
+            UserServiceProto.CheckFollowResponse followResponse =
+                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
+            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get Reel", HttpStatus.BAD_REQUEST);
+
+        String redisKey = "reel:" + id;
+        String postJson = (String) redisTemplate.opsForValue().get(redisKey);
+        ReelModel model;
+
+        if (!postJson.isEmpty()) {
+            try {
+                model = objectMapper.readValue(postJson, ReelModel.class);
+            } catch (Exception e) {
+                throw new CustomException("Error parsing reel from cache", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+        } else {
+            model = reelRepository.findById(id)
+                    .orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+
+            try {
+                String json = objectMapper.writeValueAsString(model);
+                redisTemplate.opsForValue().set(redisKey, json, Duration.ofHours(1));
+            } catch (Exception e) {
+                log.error("Failed to cache post {}", id, e);
+            }
+        }
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+
         return convertToReelResponseDTO(model, response);
     }
 
@@ -209,20 +344,36 @@ public class PostServiceImpl implements IPostService {
         ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
         reelRepository.delete(model);
+
+        String reelKey = "reel:" + id;
+        String likesKey = "reel:likes:" + id;
+        String commentsKey = "reel:comments:" + id;
+        String feedKey = "feed:" + model.getUserId();
+
+        redisTemplate.delete(reelKey);
+        redisTemplate.delete(likesKey);
+        redisTemplate.delete(commentsKey);
+
+        redisTemplate.opsForZSet().remove(feedKey, id);
         return "Success";
     }
 
     PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse userDto) {
-        List<UserTagDTO> userTagDTOList = new ArrayList<>();
-        if (!model.getTag().isEmpty()) {
-            for (String id : model.getTag().split(",")) {
-                UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(Long.parseLong(id));
-                userTagDTOList.add(UserTagDTO.builder()
-                        .userId(response.getId())
-                        .userName(response.getUsername())
-                        .build());
-            }
-        }
+        List<Long> tagIds = Arrays.stream(model.getTag().split(","))
+                .map(Long::parseLong)
+                .toList();
+
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(tagIds);
+
+        List<UserTagDTO> userTagDTOList = users.stream()
+                .map(u -> UserTagDTO.builder()
+                        .userId(u.getId())
+                        .userName(u.getUsername())
+                        .build())
+                .toList();
+
+        Long likes = Long.valueOf((String) redisTemplate.opsForValue().get("post:likes:" + model.getId()));
+        Long comments = Long.valueOf((String) redisTemplate.opsForValue().get("post:comments:" + model.getId()));
 
         return PostResponseDTO.builder()
                 .postId(model.getId())
@@ -234,15 +385,16 @@ public class PostServiceImpl implements IPostService {
                 .caption(model.getCaption())
                 .createdAt(model.getCreatedAt())
                 .isActive(model.getIsActive())
-                .quantityLike(model.getLikeQuantity())
-                .quantityComment(model.getCommentQuantity())
+                .quantityLike(likes)
+                .quantityComment(comments)
                 .userId(model.getUserId())
                 .mediaUrl(model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
                 .build();
     }
 
     ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto) {
-
+        Long likes = Long.valueOf((String) redisTemplate.opsForValue().get("post:likes:" + model.getId()));
+        Long comments = Long.valueOf((String) redisTemplate.opsForValue().get("post:comments:" + model.getId()));
         return ReelResponseDTO.builder()
                 .postId(model.getId())
                 .userName(userDto.getUsername())
@@ -251,8 +403,8 @@ public class PostServiceImpl implements IPostService {
                 .caption(model.getCaption())
                 .createdAt(model.getCreatedAt())
                 .isActive(model.getIsActive())
-                .quantityLike(model.getLikeQuantity())
-                .quantityComment(model.getCommentQuantity())
+                .quantityLike(likes)
+                .quantityComment(comments)
                 .userId(model.getUserId())
                 .mediaUrl(model.getVideoUrl())
                 .build();

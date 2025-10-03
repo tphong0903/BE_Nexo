@@ -5,6 +5,9 @@ import org.nexo.grpc.user.UserServiceGrpc;
 import org.nexo.grpc.user.UserServiceProto;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.stream.Collectors;
+
 @Service
 public class UserGrpcClient {
 
@@ -42,5 +45,15 @@ public class UserGrpcClient {
                 .build();
 
         return userStub.checkFollow(request);
+    }
+
+    public List<UserServiceProto.UserDTOResponse2> getUsersByIds(List<Long> tagIds) {
+        UserServiceProto.GetUsersByIdsRequest request = UserServiceProto.GetUsersByIdsRequest.newBuilder()
+                .addAllUserIds(tagIds)
+                .build();
+
+        UserServiceProto.GetUsersByIdsResponse response = userStub.getUsersByIds(request);
+
+        return response.getUsersList();
     }
 }

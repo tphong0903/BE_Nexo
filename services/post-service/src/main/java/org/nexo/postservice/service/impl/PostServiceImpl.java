@@ -6,6 +6,7 @@ import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.UserTagDTO;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
+import org.nexo.postservice.dto.response.ReelResponseDTO;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.PostMediaModel;
 import org.nexo.postservice.model.PostModel;
@@ -197,6 +198,13 @@ public class PostServiceImpl implements IPostService {
     }
 
     @Override
+    public ReelResponseDTO getReelById(Long id) {
+        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+        return convertToReelResponseDTO(model, response);
+    }
+
+    @Override
     public String deleteReel(Long id) {
         ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
@@ -230,6 +238,23 @@ public class PostServiceImpl implements IPostService {
                 .quantityComment(model.getCommentQuantity())
                 .userId(model.getUserId())
                 .mediaUrl(model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
+                .build();
+    }
+
+    ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto) {
+
+        return ReelResponseDTO.builder()
+                .postId(model.getId())
+                .userName(userDto.getUsername())
+                .avatarUrl(userDto.getAvatar())
+                .visibility(model.getVisibility().toString())
+                .caption(model.getCaption())
+                .createdAt(model.getCreatedAt())
+                .isActive(model.getIsActive())
+                .quantityLike(model.getLikeQuantity())
+                .quantityComment(model.getCommentQuantity())
+                .userId(model.getUserId())
+                .mediaUrl(model.getVideoUrl())
                 .build();
     }
 }

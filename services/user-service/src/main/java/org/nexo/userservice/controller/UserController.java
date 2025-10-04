@@ -1,6 +1,14 @@
 package org.nexo.userservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import jakarta.validation.Valid;
+import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Validator;
+
+import java.util.Set;
+import java.util.stream.Collectors;
+
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.service.UserService;
@@ -23,6 +31,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class UserController {
     private final UserService userService;
+    private final Validator validator;
 
     @GetMapping("/profile/{username}")
     public ResponseData<?> getProfile(@PathVariable String username,
@@ -48,7 +57,7 @@ public class UserController {
     @PutMapping("/profile")
     public ResponseData<?> updateProfile(
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
-            @RequestPart(value = "request", required = false) String requestJson,
+            @Valid @RequestPart(value = "request", required = false) String requestJson,
             @RequestPart(value = "avatarFile", required = false) MultipartFile avatarFile) {
         try {
             String accessToken = authHeader.replace("Bearer ", "").trim();
@@ -57,6 +66,17 @@ public class UserController {
             if (requestJson != null && !requestJson.isEmpty()) {
                 ObjectMapper objectMapper = new ObjectMapper();
                 request = objectMapper.readValue(requestJson, UpdateUserRequest.class);
+
+                Set<ConstraintViolation<UpdateUserRequest>> violations = validator.validate(request);
+                if (!violations.isEmpty()) {
+                    String errorMessages = violations.stream()
+                            .map(ConstraintViolation::getMessage)
+                            .collect(Collectors.joining(", "));
+                    return ResponseData.builder()
+                            .status(400)
+                            .message(errorMessages)
+                            .build();
+                }
             } else {
                 request = new UpdateUserRequest();
             }

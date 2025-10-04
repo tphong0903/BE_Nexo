@@ -41,7 +41,7 @@ public class FollowServiceImpl implements FollowService {
         public Set<FolloweeDTO> getFollowers(String username) {
 
                 UserModel user = userRepository.findActiveByUsername(username)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
                 String key = followsKey(user.getId());
                 Set<String> cached = redis.opsForSet().members(key);
@@ -80,7 +80,7 @@ public class FollowServiceImpl implements FollowService {
 
         public Set<FolloweeDTO> getFollowings(String username) {
                 UserModel user = userRepository.findActiveByUsername(username)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
                 String key = followsKey(user.getId());
                 Set<String> cached = redis.opsForSet().members(key);
@@ -121,7 +121,7 @@ public class FollowServiceImpl implements FollowService {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
                 UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
                 String key = followsKey(user.getId());
                 Set<String> cached = redis.opsForSet().members(key);
@@ -258,9 +258,9 @@ public class FollowServiceImpl implements FollowService {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
                 UserModel followerUser = userRepository.findByKeycloakUserId(keycloakUserId)
-                                .orElseThrow(() -> new RuntimeException("Follower user not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Follower user not found"));
                 UserModel followingUser = userRepository.findActiveByUsername(username)
-                                .orElseThrow(() -> new RuntimeException("Following user not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Following user not found"));
                 Long followerId = followerUser.getId();
                 Long followingId = followingUser.getId();
                 FollowId id = FollowId.builder()
@@ -269,7 +269,7 @@ public class FollowServiceImpl implements FollowService {
                                 .build();
 
                 FollowModel follow = followRepository.findById(id)
-                                .orElseThrow(() -> new RuntimeException("Follow relationship not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Follow relationship not found"));
 
                 follow.setIsCloseFriend(!follow.getIsCloseFriend());
 
@@ -280,7 +280,7 @@ public class FollowServiceImpl implements FollowService {
         @Transactional
         public Set<FolloweeDTO> getFollowersByUserId(Long userId) {
                 UserModel user = userRepository.findById(userId)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
                 String key = followsKey(userId);
                 Set<String> cached = redis.opsForSet().members(key);
@@ -320,7 +320,7 @@ public class FollowServiceImpl implements FollowService {
         @Transactional
         public Set<FolloweeDTO> getFollowingsByUserId(Long userId) {
                 UserModel user = userRepository.findById(userId)
-                                .orElseThrow(() -> new RuntimeException("User not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
                 String key = followsKey(user.getId());
                 Set<String> cached = redis.opsForSet().members(key);

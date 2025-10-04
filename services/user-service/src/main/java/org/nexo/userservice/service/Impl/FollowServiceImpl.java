@@ -12,7 +12,8 @@ import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.FollowService;
 import org.nexo.userservice.util.JwtUtil;
-import org.springframework.boot.autoconfigure.security.SecurityProperties.User;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -38,124 +39,53 @@ public class FollowServiceImpl implements FollowService {
                 return "followers:" + userId;
         }
 
-        public Set<FolloweeDTO> getFollowers(String username) {
-
+        public Page<FolloweeDTO> getFollowers(String username, Pageable pageable) {
                 UserModel user = userRepository.findActiveByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-                String key = followsKey(user.getId());
-                Set<String> cached = redis.opsForSet().members(key);
+                Page<FollowModel> rows = followRepository.findAllByFollowingAndStatus(
+                                user, EStatusFollow.ACTIVE, pageable);
 
-                if (cached != null && !cached.isEmpty()) {
-                        List<FollowModel> rows = followRepository.findAllByFollowingId(user.getId());
-                        return rows.stream()
-                                        .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollower().getId())
-                                                        .userName(f.getFollower().getUsername())
-                                                        .avatar(f.getFollower().getAvatar())
-                                                        .isCloseFriend(f.getIsCloseFriend())
-                                                        .build())
-                                        .collect(Collectors.toSet());
-                }
-
-                List<FollowModel> rows = followRepository.findAllByFollowingId(user.getId());
-                Set<FolloweeDTO> followees = rows.stream()
-                                .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollower().getId())
-                                                .userName(f.getFollower().getUsername())
-                                                .avatar(f.getFollower().getAvatar())
-                                                .isCloseFriend(f.getIsCloseFriend())
-                                                .build())
-                                .collect(Collectors.toSet());
-
-                if (!followees.isEmpty()) {
-                        Set<String> userIds = followees.stream()
-                                        .map(followee -> followee.getUserId().toString())
-                                        .collect(Collectors.toSet());
-                        redis.opsForSet().add(key, userIds.toArray(new String[0]));
-                }
-
-                return followees;
+                return rows.map(f -> FolloweeDTO.builder()
+                                .userId(f.getFollower().getId())
+                                .userName(f.getFollower().getUsername())
+                                .fullName(f.getFollower().getFullName())
+                                .avatar(f.getFollower().getAvatar())
+                                .isCloseFriend(f.getIsCloseFriend())
+                                .build());
         }
 
-        public Set<FolloweeDTO> getFollowings(String username) {
+        public Page<FolloweeDTO> getFollowings(String username, Pageable pageable) {
                 UserModel user = userRepository.findActiveByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-                String key = followsKey(user.getId());
-                Set<String> cached = redis.opsForSet().members(key);
+                Page<FollowModel> rows = followRepository.findAllByFollowerId(user.getId(), pageable);
 
-                if (cached != null && !cached.isEmpty()) {
-                        List<FollowModel> rows = followRepository.findAllByFollowerId(user.getId());
-                        return rows.stream()
-                                        .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollowing().getId())
-                                                        .userName(f.getFollowing().getUsername())
-                                                        .avatar(f.getFollowing().getAvatar())
-                                                        .isCloseFriend(f.getIsCloseFriend())
-                                                        .build())
-                                        .collect(Collectors.toSet());
-                }
-
-                List<FollowModel> rows = followRepository.findAllByFollowerId(user.getId());
-                Set<FolloweeDTO> followings = rows.stream()
-                                .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollowing().getId())
-                                                .userName(f.getFollowing().getUsername())
-                                                .avatar(f.getFollowing().getAvatar())
-                                                .isCloseFriend(f.getIsCloseFriend())
-                                                .build())
-                                .collect(Collectors.toSet());
-
-                if (!followings.isEmpty()) {
-                        Set<String> userIds = followings.stream()
-                                        .map(followee -> followee.getUserId().toString())
-                                        .collect(Collectors.toSet());
-                        redis.opsForSet().add(key, userIds.toArray(new String[0]));
-                }
-
-                return followings;
+                return rows.map(f -> FolloweeDTO.builder()
+                                .userId(f.getFollowing().getId())
+                                .userName(f.getFollowing().getUsername())
+                                .fullName(f.getFollowing().getFullName())
+                                .avatar(f.getFollowing().getAvatar())
+                                .isCloseFriend(f.getIsCloseFriend())
+                                .build());
         }
 
-        public Set<FolloweeDTO> getFollowRequests(String accessToken) {
+        public Page<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable) {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
                 UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-                String key = followsKey(user.getId());
-                Set<String> cached = redis.opsForSet().members(key);
+                Page<FollowModel> rows = followRepository.findAllByFollowingAndStatus(
+                                user, EStatusFollow.PENDING, pageable);
 
-                if (cached != null && !cached.isEmpty()) {
-                        List<FollowModel> rows = followRepository.findAllByFollowingRequest(user);
-                        return rows.stream()
-                                        .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollower().getId())
-                                                        .userName(f.getFollower().getUsername())
-                                                        .avatar(f.getFollower().getAvatar())
-                                                        .isCloseFriend(f.getIsCloseFriend())
-                                                        .build())
-                                        .collect(Collectors.toSet());
-                }
-
-                List<FollowModel> rows = followRepository.findAllByFollowingRequest(user);
-                Set<FolloweeDTO> followees = rows.stream()
-                                .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollower().getId())
-                                                .userName(f.getFollower().getUsername())
-                                                .avatar(f.getFollower().getAvatar())
-                                                .isCloseFriend(f.getIsCloseFriend())
-                                                .build())
-                                .collect(Collectors.toSet());
-
-                if (!followees.isEmpty()) {
-                        Set<String> userIds = followees.stream()
-                                        .map(followee -> followee.getUserId().toString())
-                                        .collect(Collectors.toSet());
-                        redis.opsForSet().add(key, userIds.toArray(new String[0]));
-                }
-
-                return followees;
+                return rows.map(f -> FolloweeDTO.builder()
+                                .userId(f.getFollower().getId())
+                                .userName(f.getFollower().getUsername())
+                                .fullName(f.getFollowing().getFullName())
+                                .avatar(f.getFollower().getAvatar())
+                                .isCloseFriend(f.getIsCloseFriend())
+                                .build());
         }
 
         @Transactional
@@ -368,5 +298,23 @@ public class FollowServiceImpl implements FollowService {
                 UserModel user = userRepository.findById(userId2).orElse(null);
                 list.add(user != null ? user.getIsPrivate() : null);
                 return list;
+        }
+
+        public Page<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable) {
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+
+                UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+                Page<FollowModel> rows = followRepository.findAllByFollowerAndIsCloseFriendAndStatus(
+                                user, true, EStatusFollow.ACTIVE, pageable);
+
+                return rows.map(f -> FolloweeDTO.builder()
+                                .userId(f.getFollowing().getId())
+                                .userName(f.getFollowing().getUsername())
+                                .fullName(f.getFollowing().getFullName())
+                                .avatar(f.getFollowing().getAvatar())
+                                .isCloseFriend(f.getIsCloseFriend())
+                                .build());
         }
 }

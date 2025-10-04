@@ -4,6 +4,8 @@ import org.nexo.userservice.enums.EStatusFollow;
 import org.nexo.userservice.model.FollowId;
 import org.nexo.userservice.model.FollowModel;
 import org.nexo.userservice.model.UserModel;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -22,9 +24,13 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
 
     List<FollowModel> findAllByFollowingAndStatus(UserModel following, EStatusFollow status);
 
+    Page<FollowModel> findAllByFollowingAndStatus(UserModel following, EStatusFollow status, Pageable pageable);
+
     List<FollowModel> findAllByFollowingId(Long id);
 
     List<FollowModel> findAllByFollowerId(Long id);
+
+    Page<FollowModel> findAllByFollowerId(Long id, Pageable pageable);
 
     default List<FollowModel> findAllByFollowing(UserModel following) {
         return findAllByFollowingAndStatus(following, EStatusFollow.ACTIVE);
@@ -35,5 +41,15 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
     }
 
     Optional<FollowModel> findByIdAndStatus(FollowId id, EStatusFollow status);
+
+    List<FollowModel> findAllByFollowerAndIsCloseFriendAndStatus(UserModel follower, Boolean isCloseFriend,
+            EStatusFollow status);
+
+    Page<FollowModel> findAllByFollowerAndIsCloseFriendAndStatus(UserModel follower, Boolean isCloseFriend,
+            EStatusFollow status, Pageable pageable);
+
+    default List<FollowModel> findAllCloseFriendsByFollower(UserModel follower) {
+        return findAllByFollowerAndIsCloseFriendAndStatus(follower, true, EStatusFollow.ACTIVE);
+    }
 
 }

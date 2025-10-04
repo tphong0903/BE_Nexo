@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.transaction.TransactionSystemException;
 import java.util.Date;
 
 @RestControllerAdvice
@@ -41,6 +42,34 @@ public class GlobalExceptionHandler {
         }
         errorResponse.setMessage(message);
 
+        return errorResponse;
+    }
+
+    @ExceptionHandler(TransactionSystemException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleTransactionSystemException(TransactionSystemException e, WebRequest request) {
+        ErrorResponse errorResponse = new ErrorResponse();
+        errorResponse.setTimestamp(new Date());
+        errorResponse.setPath(request.getDescription(false).replace("uri=", ""));
+        errorResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+        errorResponse.setError("Validation Failed");
+
+        // Extract the root cause to get the actual validation message
+        Throwable cause = e.getCause();
+        while (cause != null) {
+            if (cause instanceof jakarta.validation.ConstraintViolationException) {
+                jakarta.validation.ConstraintViolationException cve = (jakarta.validation.ConstraintViolationException) cause;
+                String violations = cve.getConstraintViolations().stream()
+                        .map(violation -> violation.getMessage())
+                        .collect(java.util.stream.Collectors.joining(", "));
+                errorResponse.setMessage(violations);
+                return errorResponse;
+            }
+            cause = cause.getCause();
+        }
+
+        // Fallback message if no ConstraintViolationException found
+        errorResponse.setMessage("Transaction failed due to validation error");
         return errorResponse;
     }
 

@@ -1,6 +1,8 @@
 package org.nexo.userservice.service;
 
 import org.nexo.userservice.dto.FolloweeDTO;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 import java.util.Set;
@@ -16,16 +18,23 @@ public interface FollowService {
 
     void toggleCloseFriend(String accessToken, String username);
 
-    Set<FolloweeDTO> getFollowers(String username);
 
-    Set<FolloweeDTO> getFollowings(String username);
+    Page<FolloweeDTO> getFollowers(String username, Pageable pageable);
 
-    Set<FolloweeDTO> getFollowRequests(String accessToken);
+
+    Page<FolloweeDTO> getFollowings(String username, Pageable pageable);
+
+
+    Page<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable);
 
     Set<FolloweeDTO> getFollowersByUserId(Long userId);
 
     Set<FolloweeDTO> getFollowingsByUserId(Long userId);
 
     List<Boolean> isFollow(Long userId1, Long userId2);
+
+    Set<FolloweeDTO> getCloseFriends(String accessToken);
+
+    Page<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable);
 
 }

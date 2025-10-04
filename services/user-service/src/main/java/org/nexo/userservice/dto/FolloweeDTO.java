@@ -12,6 +12,7 @@ import lombok.NoArgsConstructor;
 public class FolloweeDTO {
     private Long userId;
     private String userName;
+    private String fullName;
     private String avatar;
     private boolean isCloseFriend;
 }

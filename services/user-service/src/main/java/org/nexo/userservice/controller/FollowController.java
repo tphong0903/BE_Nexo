@@ -5,10 +5,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.service.FollowService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.Set;
 
 @RestController
 @RequestMapping
@@ -43,8 +44,10 @@ public class FollowController {
         }
 
         @GetMapping("/followers/{username}")
-        public ResponseData<?> getFollowers(@PathVariable String username) {
-                Set<FolloweeDTO> followers = followService.getFollowers(username);
+        public ResponseData<?> getFollowers(
+                        @PathVariable String username,
+                        @PageableDefault(size = 10, sort = "id.followerId") Pageable pageable) {
+                Page<FolloweeDTO> followers = followService.getFollowers(username, pageable);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followers retrieved successfully")
@@ -53,8 +56,10 @@ public class FollowController {
         }
 
         @GetMapping("/followings/{username}")
-        public ResponseData<?> getFollowings(@PathVariable String username) {
-                Set<FolloweeDTO> followings = followService.getFollowings(username);
+        public ResponseData<?> getFollowings(
+                        @PathVariable String username,
+                        @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
+                Page<FolloweeDTO> followings = followService.getFollowings(username, pageable);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followings retrieved successfully")
@@ -63,9 +68,11 @@ public class FollowController {
         }
 
         @GetMapping("/requests")
-        public ResponseData<?> getRequests(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        public ResponseData<?> getRequests(
+                        @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @PageableDefault(size = 10, sort = "id.followerId") Pageable pageable) {
                 String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-                Set<FolloweeDTO> requests = followService.getFollowRequests(accessToken);
+                Page<FolloweeDTO> requests = followService.getFollowRequests(accessToken, pageable);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Follow requests retrieved successfully")
@@ -104,6 +111,19 @@ public class FollowController {
                                 .status(200)
                                 .message("Close friend status updated successfully")
                                 .data(null)
+                                .build();
+        }
+
+        @GetMapping("/close-friends")
+        public ResponseData<?> getCloseFriends(
+                        @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
+                String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
+                Page<FolloweeDTO> closeFriends = followService.getCloseFriends(accessToken, pageable);
+                return ResponseData.builder()
+                                .status(200)
+                                .message("Close friends retrieved successfully")
+                                .data(closeFriends)
                                 .build();
         }
 }

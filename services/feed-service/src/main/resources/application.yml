@@ -40,7 +40,7 @@ eureka:
 grpc:
   client:
     posts:
-      address: static://localhost:9091
+      address: static://localhost:9094
       negotiation-type: plaintext
     users:
       address: static://localhost:9092

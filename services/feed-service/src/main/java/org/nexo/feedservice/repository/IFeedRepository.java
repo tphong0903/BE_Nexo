@@ -9,6 +9,6 @@ import org.springframework.data.repository.query.Param;
 import java.util.List;
 
 public interface IFeedRepository extends JpaRepository<FeedModel, Long> {
-    @Query("SELECT f.postId FROM FeedModel f WHERE f.userId = :userId ORDER BY f.createdAt DESC")
-    List<Long> findPostIdsByUserId(@Param("userId") Long userId, Pageable pageable);
+    @Query("SELECT f.postId FROM FeedModel f WHERE f.followerId = :followerId ORDER BY f.createdAt DESC")
+    List<Long> findPostIdsByFollowerId(@Param("followerId") Long followerId, Pageable pageable);
 }

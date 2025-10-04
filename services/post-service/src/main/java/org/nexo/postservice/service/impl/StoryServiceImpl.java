@@ -11,14 +11,13 @@ import org.nexo.postservice.repository.IStoryRepository;
 import org.nexo.postservice.repository.IStoryViewRepository;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IStoryService;
-import org.nexo.postservice.util.Enum.SecurityUtil;
+import org.nexo.postservice.util.SecurityUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.nexo.postservice.service.impl.AsyncFileService;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;

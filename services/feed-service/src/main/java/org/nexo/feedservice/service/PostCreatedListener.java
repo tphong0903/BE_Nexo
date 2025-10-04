@@ -29,8 +29,10 @@ public class PostCreatedListener {
     private Mono<Void> handleMessage(String message) {
         try {
             log.info("Raw message (string): '{}'", message);
+
             ObjectMapper mapper = new ObjectMapper();
-            JsonNode node = mapper.readTree(message);
+            String jsonString = mapper.readValue(message, String.class);
+            JsonNode node = mapper.readTree(jsonString);
 
             Long postId = node.get("postId").asLong();
             Long authorId = node.get("authorId").asLong();

@@ -20,7 +20,7 @@ import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
-import org.nexo.postservice.util.Enum.SecurityUtil;
+import org.nexo.postservice.util.SecurityUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,13 +32,12 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
-import org.nexo.postservice.service.impl.AsyncFileService;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 @RequiredArgsConstructor
@@ -81,6 +80,8 @@ public class PostServiceImpl implements IPostService {
                     .userId(postRequestDTO.getUserId())
                     .caption(postRequestDTO.getCaption())
                     .tag(postRequestDTO.getTag())
+                    .commentQuantity(0L)
+                    .likeQuantity(0L)
                     .visibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()))
                     .isActive(true)
                     .build();
@@ -180,7 +181,7 @@ public class PostServiceImpl implements IPostService {
         UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
         Page<PostModel> listPost = Page.empty();
 
-        Sort sort = Sort.by("createAt").descending();
+        Sort sort = Sort.by("createdAt").descending();
         Pageable pageable = PageRequest.of(page, limit, sort);
         boolean isAllow = false;
         if (id.equals(currentUser.getUserId())) {
@@ -269,30 +270,19 @@ public class PostServiceImpl implements IPostService {
         if (!isAllow)
             throw new CustomException("Dont allow to get Post", HttpStatus.BAD_REQUEST);
 
-        String redisKey = "post:" + id;
-        String postJson = (String) redisTemplate.opsForValue().get(redisKey);
-        PostModel model;
-
-        if (!postJson.isEmpty()) {
-            try {
-                model = objectMapper.readValue(postJson, PostModel.class);
-            } catch (Exception e) {
-                throw new CustomException("Error parsing post from cache", HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-        } else {
-            model = postRepository.findById(id)
-                    .orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
-
-            try {
-                String json = objectMapper.writeValueAsString(model);
-                redisTemplate.opsForValue().set(redisKey, json, Duration.ofHours(1));
-            } catch (Exception e) {
-                log.error("Failed to cache post {}", id, e);
-            }
-        }
+        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
 
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
 
+        return convertToPostResponseDTO(model, response);
+    }
+
+    @Override
+    public PostResponseDTO getPostById2(Long id) {
+        PostModel model = postRepository.findById(id).orElse(null);
+        if (model == null)
+            return null;
+        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
         return convertToPostResponseDTO(model, response);
     }
 
@@ -313,29 +303,18 @@ public class PostServiceImpl implements IPostService {
         if (!isAllow)
             throw new CustomException("Dont allow to get Reel", HttpStatus.BAD_REQUEST);
 
-        String redisKey = "reel:" + id;
-        String postJson = (String) redisTemplate.opsForValue().get(redisKey);
-        ReelModel model;
-
-        if (!postJson.isEmpty()) {
-            try {
-                model = objectMapper.readValue(postJson, ReelModel.class);
-            } catch (Exception e) {
-                throw new CustomException("Error parsing reel from cache", HttpStatus.INTERNAL_SERVER_ERROR);
-            }
-        } else {
-            model = reelRepository.findById(id)
-                    .orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
-
-            try {
-                String json = objectMapper.writeValueAsString(model);
-                redisTemplate.opsForValue().set(redisKey, json, Duration.ofHours(1));
-            } catch (Exception e) {
-                log.error("Failed to cache post {}", id, e);
-            }
-        }
+        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
 
+        return convertToReelResponseDTO(model, response);
+    }
+
+    @Override
+    public ReelResponseDTO getReelById2(Long id) {
+        ReelModel model = reelRepository.findById(id).orElse(null);
+        if (model == null)
+            return null;
+        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
         return convertToReelResponseDTO(model, response);
     }
 
@@ -359,9 +338,13 @@ public class PostServiceImpl implements IPostService {
     }
 
     PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse userDto) {
-        List<Long> tagIds = Arrays.stream(model.getTag().split(","))
-                .map(Long::parseLong)
-                .toList();
+        List<Long> tagIds = Optional.ofNullable(model.getTag())
+                .filter(tag -> !tag.isBlank())
+                .map(tag -> Arrays.stream(tag.split(","))
+                        .filter(s -> !s.isBlank())
+                        .map(Long::parseLong)
+                        .toList())
+                .orElse(List.of());
 
         List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(tagIds);
 
@@ -372,8 +355,11 @@ public class PostServiceImpl implements IPostService {
                         .build())
                 .toList();
 
-        Long likes = Long.valueOf((String) redisTemplate.opsForValue().get("post:likes:" + model.getId()));
-        Long comments = Long.valueOf((String) redisTemplate.opsForValue().get("post:comments:" + model.getId()));
+        Object likesStr = redisTemplate.opsForValue().get("post:likes:" + model.getId());
+        Object commentsStr = redisTemplate.opsForValue().get("post:comments:" + model.getId());
+
+        Long likes = likesStr != null ? Long.valueOf(likesStr.toString()) : 0L;
+        Long comments = commentsStr != null ? Long.valueOf(commentsStr.toString()) : 0L;
 
         return PostResponseDTO.builder()
                 .postId(model.getId())
@@ -388,13 +374,16 @@ public class PostServiceImpl implements IPostService {
                 .quantityLike(likes)
                 .quantityComment(comments)
                 .userId(model.getUserId())
-                .mediaUrl(model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
+                .mediaUrl(model.getPostMediaModels() != null ? model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList() : List.of())
                 .build();
     }
 
     ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto) {
-        Long likes = Long.valueOf((String) redisTemplate.opsForValue().get("post:likes:" + model.getId()));
-        Long comments = Long.valueOf((String) redisTemplate.opsForValue().get("post:comments:" + model.getId()));
+        String likesStr = (String) redisTemplate.opsForValue().get("reel:likes:" + model.getId());
+        String commentsStr = (String) redisTemplate.opsForValue().get("reel:comments:" + model.getId());
+
+        Long likes = likesStr != null ? Long.valueOf(likesStr) : 0L;
+        Long comments = commentsStr != null ? Long.valueOf(commentsStr) : 0L;
         return ReelResponseDTO.builder()
                 .postId(model.getId())
                 .userName(userDto.getUsername())

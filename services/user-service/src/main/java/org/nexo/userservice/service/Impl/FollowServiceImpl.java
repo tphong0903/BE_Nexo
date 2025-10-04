@@ -50,9 +50,9 @@ public class FollowServiceImpl implements FollowService {
                         List<FollowModel> rows = followRepository.findAllByFollowingId(user.getId());
                         return rows.stream()
                                         .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollowing().getId())
-                                                        .userName(f.getFollowing().getUsername())
-                                                        .avatar(f.getFollowing().getAvatar())
+                                                        .userId(f.getFollower().getId())
+                                                        .userName(f.getFollower().getUsername())
+                                                        .avatar(f.getFollower().getAvatar())
                                                         .isCloseFriend(f.getIsCloseFriend())
                                                         .build())
                                         .collect(Collectors.toSet());
@@ -61,9 +61,9 @@ public class FollowServiceImpl implements FollowService {
                 List<FollowModel> rows = followRepository.findAllByFollowingId(user.getId());
                 Set<FolloweeDTO> followees = rows.stream()
                                 .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollowing().getId())
-                                                .userName(f.getFollowing().getUsername())
-                                                .avatar(f.getFollowing().getAvatar())
+                                                .userId(f.getFollower().getId())
+                                                .userName(f.getFollower().getUsername())
+                                                .avatar(f.getFollower().getAvatar())
                                                 .isCloseFriend(f.getIsCloseFriend())
                                                 .build())
                                 .collect(Collectors.toSet());
@@ -89,9 +89,9 @@ public class FollowServiceImpl implements FollowService {
                         List<FollowModel> rows = followRepository.findAllByFollowerId(user.getId());
                         return rows.stream()
                                         .map(f -> FolloweeDTO.builder()
-                                                        .userId(f.getFollower().getId())
-                                                        .userName(f.getFollower().getUsername())
-                                                        .avatar(f.getFollower().getAvatar())
+                                                        .userId(f.getFollowing().getId())
+                                                        .userName(f.getFollowing().getUsername())
+                                                        .avatar(f.getFollowing().getAvatar())
                                                         .isCloseFriend(f.getIsCloseFriend())
                                                         .build())
                                         .collect(Collectors.toSet());
@@ -100,9 +100,9 @@ public class FollowServiceImpl implements FollowService {
                 List<FollowModel> rows = followRepository.findAllByFollowerId(user.getId());
                 Set<FolloweeDTO> followings = rows.stream()
                                 .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollower().getId())
-                                                .userName(f.getFollower().getUsername())
-                                                .avatar(f.getFollower().getAvatar())
+                                                .userId(f.getFollowing().getId())
+                                                .userName(f.getFollowing().getUsername())
+                                                .avatar(f.getFollowing().getAvatar())
                                                 .isCloseFriend(f.getIsCloseFriend())
                                                 .build())
                                 .collect(Collectors.toSet());
@@ -233,11 +233,11 @@ public class FollowServiceImpl implements FollowService {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
                 UserModel followerUser = userRepository.findByKeycloakUserId(keycloakUserId)
-                                .orElseThrow(() -> new RuntimeException("Follower user not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Follower user not found"));
 
                 Long followerId = followerUser.getId();
                 UserModel followingUser = userRepository.findActiveByUsername(username)
-                                .orElseThrow(() -> new RuntimeException("Following user not found"));
+                                .orElseThrow(() -> new ResourceNotFoundException("Following user not found"));
 
                 Long followingId = followingUser.getId();
 
@@ -245,6 +245,9 @@ public class FollowServiceImpl implements FollowService {
                                 .followerId(followerId)
                                 .followingId(followingId)
                                 .build();
+                if (!followRepository.existsById(id)) {
+                        throw new ResourceNotFoundException("Follow relationship not found");
+                }
                 followRepository.deleteById(id);
                 redis.opsForSet().remove(followsKey(followerId), followingId.toString());
                 redis.opsForSet().remove(followersKey(followingId), followerId.toString());

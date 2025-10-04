@@ -8,6 +8,7 @@ import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
+import org.nexo.userservice.dto.UserProfileDTOResponse;
 import org.nexo.userservice.model.FollowModel;
 import org.nexo.userservice.model.UserModel;
 
@@ -19,6 +20,8 @@ public interface UserMapper {
     }
 
     UserDTOResponse toUserDTOResponse(UserModel userModel);
+
+    UserProfileDTOResponse toUserProfileDTOResponse(UserModel userModel);
 
     @BeanMapping(nullValuePropertyMappingStrategy = NullValuePropertyMappingStrategy.IGNORE)
     UserModel updateUserModelFromDTO(UpdateUserRequest updateUserRequest, @MappingTarget UserModel userModel);

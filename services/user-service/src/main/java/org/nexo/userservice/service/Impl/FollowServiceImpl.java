@@ -15,9 +15,11 @@ import org.nexo.userservice.util.JwtUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -39,34 +41,87 @@ public class FollowServiceImpl implements FollowService {
                 return "followers:" + userId;
         }
 
-        public Page<FolloweeDTO> getFollowers(String username, Pageable pageable) {
+        public Page<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken) {
                 UserModel user = userRepository.findActiveByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+                Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
+                                .map(UserModel::getId)
+                                .orElse(null);
+                if (user.getIsPrivate()) {
+                        boolean isOwner = currentUserId != null && currentUserId.equals(user.getId());
+                        boolean isFollowedByUser = false;
+
+                        if (!isOwner && currentUserId != null) {
+                                isFollowedByUser = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
+                                                user.getId(), currentUserId, EStatusFollow.ACTIVE);
+                        }
+
+                        if (!isOwner && !isFollowedByUser) {
+                                throw new AccessDeniedException(
+                                                "This account is private. You cannot view their followings.");
+                        }
+                }
+
                 Page<FollowModel> rows = followRepository.findAllByFollowingAndStatus(
                                 user, EStatusFollow.ACTIVE, pageable);
+                Set<Long> followingIds = new HashSet<>();
+                if (currentUserId != null) {
+                        followingIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                        currentUserId, EStatusFollow.ACTIVE);
+                }
 
+                Set<Long> finalFollowingIds = followingIds;
                 return rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollower().getId())
                                 .userName(f.getFollower().getUsername())
                                 .fullName(f.getFollower().getFullName())
                                 .avatar(f.getFollower().getAvatar())
                                 .isCloseFriend(f.getIsCloseFriend())
+                                .isFollowing(finalFollowingIds.contains(f.getFollower().getId()))
                                 .build());
         }
 
-        public Page<FolloweeDTO> getFollowings(String username, Pageable pageable) {
+        public Page<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken) {
                 UserModel user = userRepository.findActiveByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+                if (user.getIsPrivate()) {
+                        throw new ResourceNotFoundException(
+                                        "This account is private. You cannot view their followers.");
+                }
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+                Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
+                                .map(UserModel::getId)
+                                .orElse(null);
+                if (user.getIsPrivate()) {
+                        boolean isOwner = currentUserId != null && currentUserId.equals(user.getId());
+                        boolean isFollowedByUser = false;
 
+                        if (!isOwner && currentUserId != null) {
+                                isFollowedByUser = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
+                                                user.getId(), currentUserId, EStatusFollow.ACTIVE);
+                        }
+
+                        if (!isOwner && !isFollowedByUser) {
+                                throw new AccessDeniedException(
+                                                "This account is private. You cannot view their followings.");
+                        }
+                }
                 Page<FollowModel> rows = followRepository.findAllByFollowerId(user.getId(), pageable);
-
+                Set<Long> followingIds = new HashSet<>();
+                if (currentUserId != null) {
+                        followingIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                        currentUserId, EStatusFollow.ACTIVE);
+                }
+                Set<Long> finalFollowingIds = followingIds;
                 return rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollowing().getId())
                                 .userName(f.getFollowing().getUsername())
                                 .fullName(f.getFollowing().getFullName())
                                 .avatar(f.getFollowing().getAvatar())
                                 .isCloseFriend(f.getIsCloseFriend())
+                                .isFollowing(finalFollowingIds.contains(f.getFollowing().getId()))
                                 .build());
         }
 
@@ -82,9 +137,10 @@ public class FollowServiceImpl implements FollowService {
                 return rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollower().getId())
                                 .userName(f.getFollower().getUsername())
-                                .fullName(f.getFollowing().getFullName())
+                                .fullName(f.getFollower().getFullName())
                                 .avatar(f.getFollower().getAvatar())
                                 .isCloseFriend(f.getIsCloseFriend())
+                                .isFollowing(false)
                                 .build());
         }
 
@@ -300,6 +356,25 @@ public class FollowServiceImpl implements FollowService {
                 return list;
         }
 
+        public Set<FolloweeDTO> getCloseFriends(String accessToken) {
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+
+                UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+                List<FollowModel> rows = followRepository.findAllCloseFriendsByFollower(user);
+                return rows.stream()
+                                .map(f -> FolloweeDTO.builder()
+                                                .userId(f.getFollowing().getId())
+                                                .userName(f.getFollowing().getUsername())
+                                                .fullName(f.getFollowing().getFullName())
+                                                .avatar(f.getFollowing().getAvatar())
+                                                .isCloseFriend(f.getIsCloseFriend())
+                                                .isFollowing(true) // Close friends are always following
+                                                .build())
+                                .collect(Collectors.toSet());
+        }
+
         public Page<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable) {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
@@ -315,6 +390,7 @@ public class FollowServiceImpl implements FollowService {
                                 .fullName(f.getFollowing().getFullName())
                                 .avatar(f.getFollowing().getAvatar())
                                 .isCloseFriend(f.getIsCloseFriend())
+                                .isFollowing(true) // Close friends are always following
                                 .build());
         }
 }

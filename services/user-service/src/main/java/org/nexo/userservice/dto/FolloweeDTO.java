@@ -15,4 +15,5 @@ public class FolloweeDTO {
     private String fullName;
     private String avatar;
     private boolean isCloseFriend;
+    private Boolean isFollowing;
 }

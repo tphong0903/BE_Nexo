@@ -46,8 +46,10 @@ public class FollowController {
         @GetMapping("/followers/{username}")
         public ResponseData<?> getFollowers(
                         @PathVariable String username,
+                        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
                         @PageableDefault(size = 10, sort = "id.followerId") Pageable pageable) {
-                Page<FolloweeDTO> followers = followService.getFollowers(username, pageable);
+                String accessToken = authHeader != null ? authHeader.replace(BEARER_PREFIX, "").trim() : null;
+                Page<FolloweeDTO> followers = followService.getFollowers(username, pageable, accessToken);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followers retrieved successfully")
@@ -58,8 +60,10 @@ public class FollowController {
         @GetMapping("/followings/{username}")
         public ResponseData<?> getFollowings(
                         @PathVariable String username,
+                        @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
                         @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
-                Page<FolloweeDTO> followings = followService.getFollowings(username, pageable);
+                String accessToken = authHeader != null ? authHeader.replace(BEARER_PREFIX, "").trim() : null;
+                Page<FolloweeDTO> followings = followService.getFollowings(username, pageable, accessToken);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followings retrieved successfully")

@@ -18,12 +18,9 @@ public interface FollowService {
 
     void toggleCloseFriend(String accessToken, String username);
 
+    Page<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken);
 
-    Page<FolloweeDTO> getFollowers(String username, Pageable pageable);
-
-
-    Page<FolloweeDTO> getFollowings(String username, Pageable pageable);
-
+    Page<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken);
 
     Page<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable);
 

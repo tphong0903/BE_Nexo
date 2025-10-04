@@ -7,9 +7,12 @@ import org.nexo.userservice.model.UserModel;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
     boolean existsById(FollowId id);
@@ -51,5 +54,14 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
     default List<FollowModel> findAllCloseFriendsByFollower(UserModel follower) {
         return findAllByFollowerAndIsCloseFriendAndStatus(follower, true, EStatusFollow.ACTIVE);
     }
+
+    @Query("SELECT f.following.id FROM FollowModel f " +
+            "WHERE f.follower.id = :followerId AND f.status = :status")
+    Set<Long> findAllFollowingIdsByFollowerIdAndStatus(@Param("followerId") Long followerId,
+            @Param("status") EStatusFollow status);
+
+    boolean existsByFollowerIdAndFollowingIdAndStatus(Long followerId,
+            Long followingId,
+            EStatusFollow status);
 
 }

@@ -2,13 +2,17 @@ package org.nexo.userservice.service.Impl;
 
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
+import org.nexo.userservice.dto.UserProfileDTOResponse;
+import org.nexo.userservice.enums.EStatusFollow;
 import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.nexo.userservice.grpc.UploadFileGrpcClient;
 import org.nexo.userservice.mapper.UserMapper;
 import org.nexo.userservice.model.UserModel;
+import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.UserService;
 import org.nexo.userservice.util.JwtUtil;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -23,13 +27,34 @@ public class UserServiceImp implements UserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
+    private final FollowRepository followRepository;
     private final UserMapper userMapper;
     private final UploadFileGrpcClient uploadFileGrpcClient;
 
-    public UserDTOResponse getUserProfile(String username, String accessToken) {
+    public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
         UserModel user = userRepository.findByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
-        return userMapper.toUserDTOResponse(user);
+        String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+        Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
+                .map(UserModel::getId)
+                .orElse(null);
+        if (Boolean.TRUE.equals(user.getIsPrivate())) {
+            boolean isOwner = currentUserId != null && currentUserId.equals(user.getId());
+            boolean isFollowing = false;
+
+            if (!isOwner && currentUserId != null) {
+                isFollowing = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
+                        currentUserId, user.getId(), EStatusFollow.ACTIVE);
+
+                boolean hasRequestedFollow = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
+                        currentUserId, user.getId(), EStatusFollow.PENDING);
+
+                if (!isFollowing && !hasRequestedFollow) {
+                    throw new AccessDeniedException("This account is private. You cannot view their profile.");
+                }
+            }
+        }
+        return userMapper.toUserProfileDTOResponse(user);
     }
 
     public UserDTOResponse getUserProfileMe(String accessToken) {

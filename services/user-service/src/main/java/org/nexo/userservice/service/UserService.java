@@ -2,11 +2,12 @@ package org.nexo.userservice.service;
 
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
+import org.nexo.userservice.dto.UserProfileDTOResponse;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface UserService {
 
-    UserDTOResponse getUserProfile(String username, String accessToken);
+    UserProfileDTOResponse getUserProfile(String username, String accessToken);
 
     UserDTOResponse getUserProfileMe(String accessToken);
 

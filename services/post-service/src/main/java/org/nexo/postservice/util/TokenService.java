@@ -1,4 +1,4 @@
-package org.nexo.postservice.service.impl;
+package org.nexo.postservice.util;
 
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;

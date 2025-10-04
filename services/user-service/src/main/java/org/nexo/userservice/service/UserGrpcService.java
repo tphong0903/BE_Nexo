@@ -11,6 +11,7 @@ import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.UserRepository;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
@@ -390,6 +391,23 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                 .setIsPrivate(list.get(1))
                 .build();
         responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getUsersByIds(UserServiceProto.GetUsersByIdsRequest request,
+                              StreamObserver<UserServiceProto.GetUsersByIdsResponse> responseObserver) {
+        List<UserServiceProto.UserDTOResponse2> list = new ArrayList<>();
+        for (Long id : request.getUserIdsList()) {
+            var user = userRepository.findById(id).orElse(null);
+            UserServiceProto.UserDTOResponse2 response = UserServiceProto.UserDTOResponse2.newBuilder()
+                    .setId(user.getId())
+                    .setUsername(user.getUsername() != null ? user.getUsername() : "")
+                    .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
+                    .build();
+            list.add(response);
+        }
+        responseObserver.onNext(UserServiceProto.GetUsersByIdsResponse.newBuilder().addAllUsers(list).build());
         responseObserver.onCompleted();
     }
 

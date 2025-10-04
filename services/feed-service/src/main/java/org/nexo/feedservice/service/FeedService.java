@@ -66,12 +66,13 @@ public class FeedService {
                                 .flatMap(postId -> {
                                     log.info("Fetching post details from gRPC for postId={}", postId);
                                     return postGrpcClient.getPostByIdAsync(Long.parseLong(postId));
-                                });
+                                })
+                                .filter(dto -> dto.getPostId() != 0);
                     } else {
                         log.warn("Redis MISS: no posts found for userId={}, fallback to DB", userId);
                         return Mono.fromCallable(() -> {
                                     PageRequest pageRequest = PageRequest.of(page, limit.intValue());
-                                    return feedRepository.findPostIdsByUserId(userId, pageRequest);
+                                    return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMapMany(list -> {
@@ -108,7 +109,7 @@ public class FeedService {
                         log.warn("Redis MISS: no posts found for userId={}, fallback to DB", userId);
                         return Mono.fromCallable(() -> {
                                     PageRequest pageRequest = PageRequest.of(page, limit.intValue());
-                                    return feedRepository.findPostIdsByUserId(userId, pageRequest);
+                                    return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic())
                                 .flatMapMany(list -> {

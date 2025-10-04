@@ -8,15 +8,15 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class LeakyBucketService {
 
-    private final RedisTemplate<String, Long> redisTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     public boolean allowRequest(String key, long bucketCapacity, long leakRateMillis) {
         String countKey = "bucket:" + key + ":count";
         String timeKey = "bucket:" + key + ":time";
 
         Long currentTime = System.currentTimeMillis();
-        Long lastTime = redisTemplate.opsForValue().get(timeKey);
-        Long currentCount = redisTemplate.opsForValue().get(countKey);
+        Long lastTime = (Long) redisTemplate.opsForValue().get(timeKey);
+        Long currentCount = (Long) redisTemplate.opsForValue().get(countKey);
 
         if (currentCount == null) currentCount = 0L;
         if (lastTime == null) lastTime = currentTime;

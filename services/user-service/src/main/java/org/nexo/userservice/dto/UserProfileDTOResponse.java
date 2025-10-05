@@ -10,6 +10,8 @@ public class UserProfileDTOResponse {
     private String avatar;
     private String bio;
     private Boolean isPrivate;
+    private Boolean isFollowing;
+    private Boolean hasRequestedFollow;
     private Long followers;
     private Long following;
 

@@ -23,7 +23,7 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 @RequiredArgsConstructor
 @Slf4j
-public class UserServiceImp implements UserService {
+public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
     private final JwtUtil jwtUtil;
@@ -38,23 +38,29 @@ public class UserServiceImp implements UserService {
         Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
                 .map(UserModel::getId)
                 .orElse(null);
+
+        boolean isFollowing = false;
+        boolean hasRequestedFollow = false;
+        //check owwner profile
+        if (currentUserId != null && !currentUserId.equals(user.getId())) {
+            isFollowing = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
+                    currentUserId, user.getId(), EStatusFollow.ACTIVE);
+
+            hasRequestedFollow = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
+                    currentUserId, user.getId(), EStatusFollow.PENDING);
+        }
+        //check private account
         if (Boolean.TRUE.equals(user.getIsPrivate())) {
             boolean isOwner = currentUserId != null && currentUserId.equals(user.getId());
-            boolean isFollowing = false;
 
-            if (!isOwner && currentUserId != null) {
-                isFollowing = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
-                        currentUserId, user.getId(), EStatusFollow.ACTIVE);
-
-                boolean hasRequestedFollow = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
-                        currentUserId, user.getId(), EStatusFollow.PENDING);
-
-                if (!isFollowing && !hasRequestedFollow) {
-                    throw new AccessDeniedException("This account is private. You cannot view their profile.");
-                }
+            if (!isOwner && !isFollowing && !hasRequestedFollow) {
+                throw new AccessDeniedException("This account is private. You cannot view their profile.");
             }
         }
-        return userMapper.toUserProfileDTOResponse(user);
+        UserProfileDTOResponse dto = userMapper.toUserProfileDTOResponse(user);
+        dto.setIsFollowing(isFollowing);
+        dto.setHasRequestedFollow(hasRequestedFollow);
+        return dto;
     }
 
     public UserDTOResponse getUserProfileMe(String accessToken) {

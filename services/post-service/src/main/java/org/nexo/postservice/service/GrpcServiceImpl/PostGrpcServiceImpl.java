@@ -35,7 +35,13 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     public void getPostById(PostServiceOuterClass.GetPostRequest request, StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {
         try {
             Long id = request.getId();
-            PostResponseDTO dto = postService.getPostById(id);
+            PostResponseDTO dto = postService.getPostById2(id);
+
+            if (dto == null) {
+                responseObserver.onNext(PostServiceOuterClass.PostResponse.newBuilder().build());
+                responseObserver.onCompleted();
+                return;
+            }
             PostServiceOuterClass.PostResponse response = PostServiceOuterClass.PostResponse.newBuilder()
                     .setPostId(dto.getPostId())
                     .setUserId(dto.getUserId())
@@ -75,7 +81,13 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     public void getReelById(PostServiceOuterClass.GetPostRequest request, StreamObserver<PostServiceOuterClass.ReelResponse> responseObserver) {
         try {
             Long id = request.getId();
-            ReelResponseDTO dto = postService.getReelById(id);
+            ReelResponseDTO dto = postService.getReelById2(id);
+
+            if (dto == null) {
+                responseObserver.onNext(PostServiceOuterClass.ReelResponse.newBuilder().build());
+                responseObserver.onCompleted();
+                return;
+            }
             PostServiceOuterClass.ReelResponse response = PostServiceOuterClass.ReelResponse.newBuilder()
                     .setPostId(dto.getPostId())
                     .setUserId(dto.getUserId())

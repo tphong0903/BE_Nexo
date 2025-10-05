@@ -25,7 +25,11 @@ public interface IPostService {
 
     PostResponseDTO getPostById(Long id);
 
+    PostResponseDTO getPostById2(Long id);
+
     ReelResponseDTO getReelById(Long id);
+
+    ReelResponseDTO getReelById2(Long id);
 
     String deleteReel(Long id);
 }

@@ -11,7 +11,7 @@ import reactor.core.publisher.Mono;
 import java.util.List;
 
 @Component
-public class UserKeyResolver {
+public class UserKeyResolver2 {
     @Autowired
     private JwtUtil jwtUtil;
 

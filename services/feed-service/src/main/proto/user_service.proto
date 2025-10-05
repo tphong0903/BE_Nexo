@@ -11,8 +11,23 @@ service UserService {
   rpc UpdateAccountStatus(UpdateAccountStatusRequest) returns (UpdateAccountStatusResponse);
   rpc GetUserFollowees(GetUserFolloweesRequest) returns (GetUserFolloweesResponse);
   rpc GetUserDto(KeycloakId) returns (UserDto);
+  rpc GetUserFollowings(GetUserFollowingsRequest) returns (GetUserFollowingsResponse);
+  rpc GetUserDtoById(GetUserDtoByIdRequest) returns (UserDTOResponse);
+  rpc CheckFollow(CheckMutualFollowRequest) returns (CheckFollowResponse);
+  rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
+}
+message GetUsersByIdsRequest {
+  repeated int64 userIds = 1;
+}
+message GetUsersByIdsResponse {
+  repeated UserDTOResponse2 users = 1;
 }
 
+message UserDTOResponse2 {
+  int64 id = 1;
+  string username = 2;
+  string avatar = 3;
+}
 message CreateUserRequest {
   string keycloak_user_id = 1;
   string email = 2;
@@ -67,9 +82,41 @@ message GetUserFolloweesResponse {
   repeated FolloweeInfo followees = 3;
 }
 
+message GetUserFollowingsRequest {
+  int64 user_id = 1;
+}
+
+message GetUserFollowingsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated FolloweeInfo followings = 3;
+}
+
 message FolloweeInfo {
   int64 user_id = 1;
   string user_name = 2;
   string avatar = 3;
   bool is_close_friend = 4;
+}
+
+message UserDTOResponse {
+  int64 id = 1;
+  string username = 2;
+  string full_name = 3;
+  string avatar = 4;
+  string bio = 5;
+  string created_at = 7;
+}
+
+message GetUserDtoByIdRequest {
+  int64 user_id = 1;
+}
+
+message CheckMutualFollowRequest {
+  int64 user_id_1 = 1;
+  int64 user_id_2 = 2;
+}
+message CheckFollowResponse {
+  bool is_private = 1;
+  bool is_follow = 2;
 }

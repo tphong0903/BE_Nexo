@@ -56,24 +56,31 @@ public class FollowServiceImpl implements FollowService {
 
                         if (!isOwner && currentUserId != null) {
                                 isFollowedByUser = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
-                                                user.getId(), currentUserId, EStatusFollow.ACTIVE);
+                                                currentUserId, user.getId(), EStatusFollow.ACTIVE);
+
                         }
 
                         if (!isOwner && !isFollowedByUser) {
                                 throw new AccessDeniedException(
-                                                "This account is private. You cannot view their followings.");
+                                                "This account is private. You cannot view their followers.");
                         }
                 }
 
                 Page<FollowModel> rows = followRepository.findAllByFollowingAndStatus(
                                 user, EStatusFollow.ACTIVE, pageable);
                 Set<Long> followingIds = new HashSet<>();
+                Set<Long> requestedIds = new HashSet<>();
+
                 if (currentUserId != null) {
                         followingIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
                                         currentUserId, EStatusFollow.ACTIVE);
+                        requestedIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                        currentUserId, EStatusFollow.PENDING);
                 }
 
                 Set<Long> finalFollowingIds = followingIds;
+                Set<Long> finalRequestedIds = requestedIds;
+
                 Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollower().getId())
                                 .userName(f.getFollower().getUsername())
@@ -81,6 +88,7 @@ public class FollowServiceImpl implements FollowService {
                                 .avatar(f.getFollower().getAvatar())
                                 .isCloseFriend(f.getIsCloseFriend())
                                 .isFollowing(finalFollowingIds.contains(f.getFollower().getId()))
+                                .hasRequestedFollow(finalRequestedIds.contains(f.getFollower().getId()))
                                 .build());
 
                 return PageModelResponse.<FolloweeDTO>builder()
@@ -95,10 +103,6 @@ public class FollowServiceImpl implements FollowService {
         public PageModelResponse<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken) {
                 UserModel user = userRepository.findActiveByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-                if (user.getIsPrivate()) {
-                        throw new ResourceNotFoundException(
-                                        "This account is private. You cannot view their followers.");
-                }
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
                 Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
                                 .map(UserModel::getId)
@@ -109,7 +113,8 @@ public class FollowServiceImpl implements FollowService {
 
                         if (!isOwner && currentUserId != null) {
                                 isFollowedByUser = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
-                                                user.getId(), currentUserId, EStatusFollow.ACTIVE);
+                                                currentUserId, user.getId(), EStatusFollow.ACTIVE);
+
                         }
 
                         if (!isOwner && !isFollowedByUser) {
@@ -119,11 +124,16 @@ public class FollowServiceImpl implements FollowService {
                 }
                 Page<FollowModel> rows = followRepository.findAllByFollowerId(user.getId(), pageable);
                 Set<Long> followingIds = new HashSet<>();
+                Set<Long> requestedIds = new HashSet<>();
+
                 if (currentUserId != null) {
                         followingIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
                                         currentUserId, EStatusFollow.ACTIVE);
+                        requestedIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                        currentUserId, EStatusFollow.PENDING);
                 }
                 Set<Long> finalFollowingIds = followingIds;
+                Set<Long> finalRequestedIds = requestedIds;
                 Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollowing().getId())
                                 .userName(f.getFollowing().getUsername())
@@ -131,6 +141,8 @@ public class FollowServiceImpl implements FollowService {
                                 .avatar(f.getFollowing().getAvatar())
                                 .isCloseFriend(f.getIsCloseFriend())
                                 .isFollowing(finalFollowingIds.contains(f.getFollowing().getId()))
+                                .hasRequestedFollow(finalRequestedIds.contains(f.getFollowing().getId()))
+
                                 .build());
 
                 return PageModelResponse.<FolloweeDTO>builder()
@@ -407,6 +419,7 @@ public class FollowServiceImpl implements FollowService {
                                 .totalPages(followeeDTOPage.getTotalPages())
                                 .build();
         }
+
         public PageModelResponse<FolloweeDTO> getMutualFollowers(String accessToken, Pageable pageable) {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 

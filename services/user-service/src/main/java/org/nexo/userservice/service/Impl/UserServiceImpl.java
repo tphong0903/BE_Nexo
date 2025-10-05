@@ -41,7 +41,7 @@ public class UserServiceImpl implements UserService {
 
         boolean isFollowing = false;
         boolean hasRequestedFollow = false;
-        //check owwner profile
+        // check owwner profile
         if (currentUserId != null && !currentUserId.equals(user.getId())) {
             isFollowing = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
                     currentUserId, user.getId(), EStatusFollow.ACTIVE);
@@ -82,6 +82,20 @@ public class UserServiceImpl implements UserService {
         UserModel updatedUser = userMapper.updateUserModelFromDTO(request, user);
         userRepository.save(updatedUser);
         return userMapper.toUserDTOResponse(updatedUser);
+    }
+
+    @Transactional
+    public void deleteAvatar(String accessToken) {
+        String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+
+        if (user.isDefaultAvatar()) {
+            throw new ResourceNotFoundException("Cannot delete default avatar. Avatar is already set to default.");
+        }
+        user.setAvatar(UserModel.DEFAULT_AVATAR_URL);
+        userRepository.save(user);
+        log.info("Avatar deleted for user: {}, reset to default", user.getUsername());
     }
 
 }

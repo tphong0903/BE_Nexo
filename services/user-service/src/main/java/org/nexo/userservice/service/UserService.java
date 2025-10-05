@@ -12,4 +12,6 @@ public interface UserService {
     UserDTOResponse getUserProfileMe(String accessToken);
 
     UserDTOResponse updateUser(String accessToken, UpdateUserRequest request, MultipartFile avatarFile);
+
+    void deleteAvatar(String accessToken);
 }

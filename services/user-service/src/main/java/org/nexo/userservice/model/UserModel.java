@@ -23,6 +23,8 @@ import java.util.List;
 @EntityListeners(AuditingEntityListener.class)
 public class UserModel {
 
+    public static final String DEFAULT_AVATAR_URL = "https://www.wins.org/wp-content/themes/psBella/assets/img/fallbacks/user-avatar.jpg";
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -42,7 +44,7 @@ public class UserModel {
 
     @Column(name = "avatar_url", length = 1024)
     @Builder.Default
-    private String avatar = "https://www.wins.org/wp-content/themes/psBella/assets/img/fallbacks/user-avatar.jpg";
+    private String avatar = DEFAULT_AVATAR_URL;
 
     @Column(name = "bio")
     private String bio;
@@ -73,5 +75,9 @@ public class UserModel {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserActivityLogModel> activityLogs;
+
+    public boolean isDefaultAvatar() {
+        return DEFAULT_AVATAR_URL.equals(this.avatar);
+    }
 
 }

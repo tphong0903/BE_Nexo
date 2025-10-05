@@ -13,6 +13,7 @@ import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.service.UserService;
 import org.springframework.http.HttpHeaders;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -93,5 +94,16 @@ public class UserController {
                     .message("Error updating profile: " + e.getMessage())
                     .build();
         }
+    }
+
+    @DeleteMapping("/profile/avatar")
+    public ResponseData<?> deleteAvatar(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        String accessToken = authHeader.replace("Bearer ", "").trim();
+        userService.deleteAvatar(accessToken);
+        return ResponseData.builder()
+                .status(200)
+                .message("Avatar deleted successfully and reset to default")
+                .data(null)
+                .build();
     }
 }

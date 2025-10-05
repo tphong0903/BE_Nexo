@@ -3,15 +3,19 @@ package org.nexo.interactionservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.interactionservice.dto.MessageDTO;
 import org.nexo.interactionservice.exception.CustomException;
+import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.model.LikeCommentModel;
 import org.nexo.interactionservice.model.LikeModel;
 import org.nexo.interactionservice.repository.ICommentRepository;
 import org.nexo.interactionservice.repository.ILikeCommentRepository;
 import org.nexo.interactionservice.repository.ILikeRepository;
 import org.nexo.interactionservice.service.ILikeService;
+import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -23,6 +27,7 @@ public class LikeServiceImpl implements ILikeService {
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final PostGrpcClient postGrpcClient;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Override
     public String saveLikeComment(Long id) {
@@ -32,11 +37,20 @@ public class LikeServiceImpl implements ILikeService {
         if (likeCommentModel != null) {
             likeCommentRepository.delete(likeCommentModel);
         } else {
+            CommentModel commentModel = commentRepository.findById(id).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
             LikeCommentModel model = LikeCommentModel.builder()
-                    .commentModel(commentRepository.findById(id).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST)))
+                    .commentModel(commentModel)
                     .userId(response.getUserId())
                     .build();
             likeCommentRepository.save(model);
+
+            MessageDTO messageDTO = MessageDTO.builder()
+                    .actorId(response.getUserId())
+                    .recipientId(commentModel.getUserId())
+                    .notificationType(String.valueOf(ENotificationType.LIKE_COMMENT))
+                    .targetUrl("")
+                    .build();
+            kafkaTemplate.send("notification", messageDTO);
         }
         return "Success";
     }
@@ -56,6 +70,14 @@ public class LikeServiceImpl implements ILikeService {
                     .build();
             likeRepository.save(model);
             postGrpcClient.addLikeQuantityById(id, true, true);
+            PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
+            MessageDTO messageDTO = MessageDTO.builder()
+                    .actorId(response.getUserId())
+                    .recipientId(postResponse.getUserId())
+                    .notificationType(String.valueOf(ENotificationType.LIKE_POST))
+                    .targetUrl("")
+                    .build();
+            kafkaTemplate.send("notification", messageDTO);
         }
         return "Success";
     }
@@ -75,6 +97,14 @@ public class LikeServiceImpl implements ILikeService {
                     .build();
             likeRepository.save(model);
             postGrpcClient.addLikeQuantityById(id, false, true);
+            PostServiceOuterClass.ReelResponse reelResponse = postGrpcClient.getReelById(id);
+            MessageDTO messageDTO = MessageDTO.builder()
+                    .actorId(response.getUserId())
+                    .recipientId(reelResponse.getUserId())
+                    .notificationType(String.valueOf(ENotificationType.LIKE_REEL))
+                    .targetUrl("")
+                    .build();
+            kafkaTemplate.send("notification", messageDTO);
         }
         return "Success";
     }

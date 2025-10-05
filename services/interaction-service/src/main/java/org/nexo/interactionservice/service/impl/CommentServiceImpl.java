@@ -3,6 +3,7 @@ package org.nexo.interactionservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.interactionservice.dto.MessageDTO;
 import org.nexo.interactionservice.dto.request.CommentDto;
 import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.exception.CustomException;
@@ -11,12 +12,14 @@ import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.repository.ICommentRepository;
 import org.nexo.interactionservice.service.ICommentMentionService;
 import org.nexo.interactionservice.service.ICommentService;
+import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -28,6 +31,7 @@ public class CommentServiceImpl implements ICommentService {
     private final UserGrpcClient userGrpcClient;
     private final PostGrpcClient postGrpcClient;
     private final CommentMapper commentMapper;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     @Override
     public String saveComment(CommentDto a) {
@@ -61,11 +65,27 @@ public class CommentServiceImpl implements ICommentService {
         commentRepository.save(model);
         a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
         if (isAdd) {
+            String notificationType = "";
+            Long id = 0L;
+            String url = "";
             if (model.getPostId() != 0) {
                 postGrpcClient.addCommentQuantityById(model.getPostId(), true, true);
+                notificationType = String.valueOf(ENotificationType.COMMENT_POST);
+                id = postGrpcClient.getPostById(model.getPostId()).getUserId();
+                url = "/posts/" + model.getPostId();
             } else {
                 postGrpcClient.addCommentQuantityById(model.getReelId(), false, true);
+                notificationType = String.valueOf(ENotificationType.COMMENT_REEL);
+                id = postGrpcClient.getReelById(model.getReelId()).getUserId();
+                url = "/reels/" + model.getPostId();
             }
+            MessageDTO messageDTO = MessageDTO.builder()
+                    .actorId(response.getUserId())
+                    .recipientId(id)
+                    .notificationType(notificationType)
+                    .targetUrl(url)
+                    .build();
+            kafkaTemplate.send("notification", messageDTO);
         }
 
         return "Success";

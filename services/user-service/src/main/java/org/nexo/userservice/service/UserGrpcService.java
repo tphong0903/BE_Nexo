@@ -400,12 +400,14 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
         List<UserServiceProto.UserDTOResponse2> list = new ArrayList<>();
         for (Long id : request.getUserIdsList()) {
             var user = userRepository.findById(id).orElse(null);
-            UserServiceProto.UserDTOResponse2 response = UserServiceProto.UserDTOResponse2.newBuilder()
-                    .setId(user.getId())
-                    .setUsername(user.getUsername() != null ? user.getUsername() : "")
-                    .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
-                    .build();
-            list.add(response);
+            if (user != null) {
+                UserServiceProto.UserDTOResponse2 response = UserServiceProto.UserDTOResponse2.newBuilder()
+                        .setId(user.getId())
+                        .setUsername(user.getUsername() != null ? user.getUsername() : "")
+                        .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
+                        .build();
+                list.add(response);
+            }
         }
         responseObserver.onNext(UserServiceProto.GetUsersByIdsResponse.newBuilder().addAllUsers(list).build());
         responseObserver.onCompleted();

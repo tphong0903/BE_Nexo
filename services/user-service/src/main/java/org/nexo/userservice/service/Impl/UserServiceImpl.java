@@ -49,14 +49,6 @@ public class UserServiceImpl implements UserService {
             hasRequestedFollow = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
                     currentUserId, user.getId(), EStatusFollow.PENDING);
         }
-        //check private account
-        if (Boolean.TRUE.equals(user.getIsPrivate())) {
-            boolean isOwner = currentUserId != null && currentUserId.equals(user.getId());
-
-            if (!isOwner && !isFollowing && !hasRequestedFollow) {
-                throw new AccessDeniedException("This account is private. You cannot view their profile.");
-            }
-        }
         UserProfileDTOResponse dto = userMapper.toUserProfileDTOResponse(user);
         dto.setIsFollowing(isFollowing);
         dto.setHasRequestedFollow(hasRequestedFollow);

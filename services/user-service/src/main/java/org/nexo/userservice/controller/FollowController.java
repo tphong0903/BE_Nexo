@@ -3,9 +3,9 @@ package org.nexo.userservice.controller;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.userservice.dto.FolloweeDTO;
+import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.service.FollowService;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
@@ -49,7 +49,7 @@ public class FollowController {
                         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
                         @PageableDefault(size = 10, sort = "id.followerId") Pageable pageable) {
                 String accessToken = authHeader != null ? authHeader.replace(BEARER_PREFIX, "").trim() : null;
-                Page<FolloweeDTO> followers = followService.getFollowers(username, pageable, accessToken);
+                PageModelResponse<FolloweeDTO> followers = followService.getFollowers(username, pageable, accessToken);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followers retrieved successfully")
@@ -63,7 +63,8 @@ public class FollowController {
                         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
                         @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
                 String accessToken = authHeader != null ? authHeader.replace(BEARER_PREFIX, "").trim() : null;
-                Page<FolloweeDTO> followings = followService.getFollowings(username, pageable, accessToken);
+                PageModelResponse<FolloweeDTO> followings = followService.getFollowings(username, pageable,
+                                accessToken);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followings retrieved successfully")
@@ -76,7 +77,7 @@ public class FollowController {
                         @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
                         @PageableDefault(size = 10, sort = "id.followerId") Pageable pageable) {
                 String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-                Page<FolloweeDTO> requests = followService.getFollowRequests(accessToken, pageable);
+                PageModelResponse<FolloweeDTO> requests = followService.getFollowRequests(accessToken, pageable);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Follow requests retrieved successfully")
@@ -123,11 +124,23 @@ public class FollowController {
                         @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
                         @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
                 String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-                Page<FolloweeDTO> closeFriends = followService.getCloseFriends(accessToken, pageable);
+                PageModelResponse<FolloweeDTO> closeFriends = followService.getCloseFriends(accessToken, pageable);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Close friends retrieved successfully")
                                 .data(closeFriends)
+                                .build();
+        }
+        @GetMapping("/mutuals")
+        public ResponseData<?> getMutualFollowers(
+                        @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
+                String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
+                PageModelResponse<FolloweeDTO> mutualFollowers = followService.getMutualFollowers(accessToken, pageable);
+                return ResponseData.builder()
+                                .status(200)
+                                .message("Mutual followers retrieved successfully")
+                                .data(mutualFollowers)
                                 .build();
         }
 }

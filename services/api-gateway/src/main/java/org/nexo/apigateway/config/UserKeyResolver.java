@@ -15,7 +15,6 @@ public class UserKeyResolver {
     @Autowired
     private JwtUtil jwtUtil;
 
-    @Bean
     KeyResolver userKeyResolver(JwtUtil jwtUtil) {
         return exchange -> {
             List<String> authHeaders = exchange.getRequest()

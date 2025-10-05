@@ -3,6 +3,7 @@ package org.nexo.userservice.service.Impl;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.nexo.userservice.dto.FolloweeDTO;
+import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.enums.EStatusFollow;
 import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.nexo.userservice.model.FollowId;
@@ -41,7 +42,7 @@ public class FollowServiceImpl implements FollowService {
                 return "followers:" + userId;
         }
 
-        public Page<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken) {
+        public PageModelResponse<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken) {
                 UserModel user = userRepository.findActiveByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -73,7 +74,7 @@ public class FollowServiceImpl implements FollowService {
                 }
 
                 Set<Long> finalFollowingIds = followingIds;
-                return rows.map(f -> FolloweeDTO.builder()
+                Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollower().getId())
                                 .userName(f.getFollower().getUsername())
                                 .fullName(f.getFollower().getFullName())
@@ -81,9 +82,17 @@ public class FollowServiceImpl implements FollowService {
                                 .isCloseFriend(f.getIsCloseFriend())
                                 .isFollowing(finalFollowingIds.contains(f.getFollower().getId()))
                                 .build());
+
+                return PageModelResponse.<FolloweeDTO>builder()
+                                .content(followeeDTOPage.getContent())
+                                .pageNo(followeeDTOPage.getNumber())
+                                .pageSize(followeeDTOPage.getSize())
+                                .totalElements(followeeDTOPage.getTotalElements())
+                                .totalPages(followeeDTOPage.getTotalPages())
+                                .build();
         }
 
-        public Page<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken) {
+        public PageModelResponse<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken) {
                 UserModel user = userRepository.findActiveByUsername(username)
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
                 if (user.getIsPrivate()) {
@@ -115,7 +124,7 @@ public class FollowServiceImpl implements FollowService {
                                         currentUserId, EStatusFollow.ACTIVE);
                 }
                 Set<Long> finalFollowingIds = followingIds;
-                return rows.map(f -> FolloweeDTO.builder()
+                Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollowing().getId())
                                 .userName(f.getFollowing().getUsername())
                                 .fullName(f.getFollowing().getFullName())
@@ -123,9 +132,17 @@ public class FollowServiceImpl implements FollowService {
                                 .isCloseFriend(f.getIsCloseFriend())
                                 .isFollowing(finalFollowingIds.contains(f.getFollowing().getId()))
                                 .build());
+
+                return PageModelResponse.<FolloweeDTO>builder()
+                                .content(followeeDTOPage.getContent())
+                                .pageNo(followeeDTOPage.getNumber())
+                                .pageSize(followeeDTOPage.getSize())
+                                .totalElements(followeeDTOPage.getTotalElements())
+                                .totalPages(followeeDTOPage.getTotalPages())
+                                .build();
         }
 
-        public Page<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable) {
+        public PageModelResponse<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable) {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
                 UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
@@ -134,7 +151,7 @@ public class FollowServiceImpl implements FollowService {
                 Page<FollowModel> rows = followRepository.findAllByFollowingAndStatus(
                                 user, EStatusFollow.PENDING, pageable);
 
-                return rows.map(f -> FolloweeDTO.builder()
+                Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollower().getId())
                                 .userName(f.getFollower().getUsername())
                                 .fullName(f.getFollower().getFullName())
@@ -142,6 +159,14 @@ public class FollowServiceImpl implements FollowService {
                                 .isCloseFriend(f.getIsCloseFriend())
                                 .isFollowing(false)
                                 .build());
+
+                return PageModelResponse.<FolloweeDTO>builder()
+                                .content(followeeDTOPage.getContent())
+                                .pageNo(followeeDTOPage.getNumber())
+                                .pageSize(followeeDTOPage.getSize())
+                                .totalElements(followeeDTOPage.getTotalElements())
+                                .totalPages(followeeDTOPage.getTotalPages())
+                                .build();
         }
 
         @Transactional
@@ -356,26 +381,7 @@ public class FollowServiceImpl implements FollowService {
                 return list;
         }
 
-        public Set<FolloweeDTO> getCloseFriends(String accessToken) {
-                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
-
-                UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
-                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
-
-                List<FollowModel> rows = followRepository.findAllCloseFriendsByFollower(user);
-                return rows.stream()
-                                .map(f -> FolloweeDTO.builder()
-                                                .userId(f.getFollowing().getId())
-                                                .userName(f.getFollowing().getUsername())
-                                                .fullName(f.getFollowing().getFullName())
-                                                .avatar(f.getFollowing().getAvatar())
-                                                .isCloseFriend(f.getIsCloseFriend())
-                                                .isFollowing(true) // Close friends are always following
-                                                .build())
-                                .collect(Collectors.toSet());
-        }
-
-        public Page<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable) {
+        public PageModelResponse<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable) {
                 String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
                 UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
@@ -384,13 +390,46 @@ public class FollowServiceImpl implements FollowService {
                 Page<FollowModel> rows = followRepository.findAllByFollowerAndIsCloseFriendAndStatus(
                                 user, true, EStatusFollow.ACTIVE, pageable);
 
-                return rows.map(f -> FolloweeDTO.builder()
+                Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                                 .userId(f.getFollowing().getId())
                                 .userName(f.getFollowing().getUsername())
                                 .fullName(f.getFollowing().getFullName())
                                 .avatar(f.getFollowing().getAvatar())
                                 .isCloseFriend(f.getIsCloseFriend())
-                                .isFollowing(true) // Close friends are always following
+                                .isFollowing(true)
                                 .build());
+
+                return PageModelResponse.<FolloweeDTO>builder()
+                                .content(followeeDTOPage.getContent())
+                                .pageNo(followeeDTOPage.getNumber())
+                                .pageSize(followeeDTOPage.getSize())
+                                .totalElements(followeeDTOPage.getTotalElements())
+                                .totalPages(followeeDTOPage.getTotalPages())
+                                .build();
+        }
+        public PageModelResponse<FolloweeDTO> getMutualFollowers(String accessToken, Pageable pageable) {
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+
+                UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+
+                Page<FollowModel> rows = followRepository.findMutualFollowers(user.getId(), pageable);
+
+                Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
+                                .userId(f.getFollowing().getId())
+                                .userName(f.getFollowing().getUsername())
+                                .fullName(f.getFollowing().getFullName())
+                                .avatar(f.getFollowing().getAvatar())
+                                .isCloseFriend(f.getIsCloseFriend())
+                                .isFollowing(true)
+                                .build());
+
+                return PageModelResponse.<FolloweeDTO>builder()
+                                .content(followeeDTOPage.getContent())
+                                .pageNo(followeeDTOPage.getNumber())
+                                .pageSize(followeeDTOPage.getSize())
+                                .totalElements(followeeDTOPage.getTotalElements())
+                                .totalPages(followeeDTOPage.getTotalPages())
+                                .build();
         }
 }

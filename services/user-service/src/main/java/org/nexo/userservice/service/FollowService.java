@@ -1,6 +1,7 @@
 package org.nexo.userservice.service;
 
 import org.nexo.userservice.dto.FolloweeDTO;
+import org.nexo.userservice.dto.PageModelResponse;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -18,11 +19,11 @@ public interface FollowService {
 
     void toggleCloseFriend(String accessToken, String username);
 
-    Page<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken);
+    PageModelResponse<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken);
 
-    Page<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken);
+    PageModelResponse<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken);
 
-    Page<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable);
+    PageModelResponse<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable);
 
     Set<FolloweeDTO> getFollowersByUserId(Long userId);
 
@@ -30,8 +31,9 @@ public interface FollowService {
 
     List<Boolean> isFollow(Long userId1, Long userId2);
 
-    Set<FolloweeDTO> getCloseFriends(String accessToken);
+    PageModelResponse<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable);
 
-    Page<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable);
+    PageModelResponse<FolloweeDTO> getMutualFollowers(String accessToken, Pageable pageable);
+
 
 }

@@ -1,4 +1,187 @@
 services:
+  api-gateway:
+    container_name: api-gateway
+    build: ./services/api-gateway
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      - eureka-server
+      - redis
+    networks:
+      - nexo-network
+
+  auth-service:
+    container_name: auth-service
+    build: ./services/auth-service
+    ports:
+      - "8081:8081"
+    restart: unless-stopped
+    environment:
+      KEYCLOAK_SERVERURL: http://keycloak:8080
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GRPC_CLIENT_USER-SERVICE_ADDRESS: static://user-service:9092
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+    depends_on:
+      - eureka-server
+      - redis
+      - keycloak
+      - user-service
+    networks:
+      - nexo-network
+  user-service:
+    container_name: user-service
+    build: ./services/user-service
+    ports:
+      - "8085:8085"
+      - "9092:9092"
+    restart: unless-stopped
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      GRPC_SERVER_PORT: 9092
+      GRPC_CLIENT_UPLOAD-FILE-SERVICE_ADDRESS: static://upload-file-service:9093
+    depends_on:
+      - user-db
+      - redis
+      - keycloak
+      - eureka-server
+    networks:
+      - nexo-network
+  post-service:
+    container_name: post-service
+    build: ./services/post-service
+    ports:
+      - "8087:8087"
+      - "9094:9094"
+    environment:
+      SERVER_PORT: 8087
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      GRPC_SERVER_PORT: 9094
+      GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
+    depends_on:
+      - eureka-server
+      - user-db
+      - redis
+      - keycloak
+      - user-service
+    restart: unless-stopped
+    networks:
+      - nexo-network
+
+  upload-file-service:
+    container_name: upload-file-service
+    build: ./services/upload-file-service
+    ports:
+      - "8086:8086"
+      - "9093:9093"
+    environment:
+      SERVER_PORT: 8086
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      GRPC_SERVER_PORT: 9093
+      GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
+    depends_on:
+      - eureka-server
+      - keycloak
+      - post-service
+    restart: unless-stopped
+    networks:
+      - nexo-network
+
+  eureka-server:
+    container_name: eureka-server
+    build: ./services/eureka-server
+    ports:
+      - "8761:8761"
+    restart: unless-stopped
+    networks:
+      - nexo-network
+
+  feed-service:
+    container_name: feed-service
+    build: ./services/feed-service
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8084
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
+      GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
+    depends_on:
+      - eureka-server
+      - user-db
+      - redis
+      - keycloak
+      - post-service
+      - user-service
+    networks:
+      - nexo-network
+
+  interaction-service:
+    container_name: interaction-service
+    build: ./services/interaction-service
+    ports:
+      - "8083:8083"
+      - "9095:9095"
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8083
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
+      SPRING_KAFKA_PRODUCER_KEY-SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
+      SPRING_KAFKA_PRODUCER_VALUE-SERIALIZER: org.springframework.kafka.support.serializer.JsonSerializer
+      SPRING_KAFKA_PRODUCER_ACKS: all
+      SPRING_KAFKA_PRODUCER_PROPERTIES_ENABLE_IDEMPOTENCE: true
+      SPRING_KAFKA_PRODUCER_PROPERTIES_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION: 5
+      GRPC_SERVER_PORT: 9095
+      GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
+      GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
+    depends_on:
+      - eureka-server
+      - user-db
+      - redis
+      - keycloak
+      - kafka
+      - user-service
+      - post-service
+    networks:
+      - nexo-network
+
   postgres:
     image: postgres:15
     environment:
@@ -9,6 +192,8 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - nexo-network
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.0
@@ -27,11 +212,15 @@ services:
       - "9090:8080"
     depends_on:
       - postgres
+    networks:
+      - nexo-network
 
   redis:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    networks:
+      - nexo-network
   user-db:
     container_name: user-db
     image: postgres:15-alpine
@@ -54,6 +243,8 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - nexo-network
 
   kafka:
     image: confluentinc/cp-kafka:7.6.1
@@ -70,6 +261,8 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - nexo-network
 
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
@@ -82,6 +275,8 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - nexo-network
 
 networks:
   nexo-network:

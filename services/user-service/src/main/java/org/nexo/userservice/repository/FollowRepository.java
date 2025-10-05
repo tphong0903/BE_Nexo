@@ -64,4 +64,14 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
             Long followingId,
             EStatusFollow status);
 
+    @Query("SELECT f FROM FollowModel f " +
+            "WHERE f.follower.id = :userId " +
+            "AND f.status = 'ACTIVE' " +
+            "AND EXISTS (" +
+            "   SELECT 1 FROM FollowModel f2 " +
+            "   WHERE f2.follower.id = f.following.id " +
+            "   AND f2.following.id = :userId " +
+            "   AND f2.status = 'ACTIVE'" +
+            ")")
+    Page<FollowModel> findMutualFollowers(@Param("userId") Long userId, Pageable pageable);
 }

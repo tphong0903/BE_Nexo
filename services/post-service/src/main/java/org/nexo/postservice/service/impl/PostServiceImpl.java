@@ -61,7 +61,6 @@ public class PostServiceImpl implements IPostService {
         if (!response.getSuccess()) {
             throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
         }
-
         PostModel model;
         if (postRequestDTO.getPostId() != 0) {
             List<PostMediaModel> postMediaModelList = postMediaRepository.findAllByPostModel_Id(postRequestDTO.getPostId());
@@ -102,7 +101,6 @@ public class PostServiceImpl implements IPostService {
         }
         if (postRequestDTO.getPostId() == 0) {
             String event = "{ \"postId\": " + model.getId() + ", \"authorId\": " + postRequestDTO.getUserId() + ", \"createdAt\": " + Instant.now().toEpochMilli() + " }";
-
             redisTemplate.convertAndSend("post-created", event);
         }
         hashTagService.findAndAddHashTagFromCaption(model);

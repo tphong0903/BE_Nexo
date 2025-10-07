@@ -12,16 +12,15 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 @Configuration
 public class RedisConfig {
 
-    @Value("${spring.data.redis.host:localhost}")
-    private String redisHost;
-
-    @Value("${spring.data.redis.port:6379}")
-    private int redisPort;
+//    @Value("${spring.data.redis.host:localhost}")
+//    private String redisHost;
+//
+//    @Value("${spring.data.redis.port:6379}")
+//    private int redisPort;
 
     @Bean
     public LettuceConnectionFactory redisConnectionFactory() {
-        RedisStandaloneConfiguration config = new RedisStandaloneConfiguration(redisHost, redisPort);
-        return new LettuceConnectionFactory(config);
+        return new LettuceConnectionFactory();
     }
 
     @Bean

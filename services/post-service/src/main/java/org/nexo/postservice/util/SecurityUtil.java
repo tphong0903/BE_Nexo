@@ -18,7 +18,7 @@ public class SecurityUtil {
         UserServiceProto.UserDto user = userClient.getUserByKeycloakId(sub);
 
         if (user.getUserId() != id)
-            throw new CustomException("Stop Joke", HttpStatus.BAD_REQUEST);
+            throw new CustomException("You are not Owner", HttpStatus.BAD_REQUEST);
     }
 
     public String getKeyloakId() {

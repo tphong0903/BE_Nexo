@@ -1,57 +1,57 @@
 syntax = "proto3";
 
-package org.nexo.grpc.post;
+option java_package = "org.nexo.uploadfile.grpc";
+option java_outer_classname = "PostMediaServiceProto";
 
-service PostService {
-  rpc GetPostById (GetPostRequest) returns (PostResponse);
-  rpc GetReelById (GetPostRequest) returns (ReelResponse);
-  rpc addLikeQuantityById (GetPostRequest2) returns (PostMessageResponse);
-  rpc addCommentQuantityById (GetPostRequest2) returns (PostMessageResponse);
+service PostMediaGrpcService {
+  rpc SavePostMedias(PostMediaListRequest) returns (PostMediaResponse);
+  rpc SaveReelMedias(ReelDto) returns (PostMediaResponse);
+  rpc SaveStoryMedias(StoryDto) returns (PostMediaResponse);
+  rpc findPostMediasOfPost(PostId) returns (PostMediaListRequest);
+  rpc deletePostMedia(PostId) returns (PostMediaResponse);
+  rpc uploadAvatar(AvatarUploadRequest) returns (AvatarUploadResponse);
 }
 
-message GetPostRequest {
-  int64 id = 1;
+message PostMediaRequestDTO {
+  int64 postMediaId = 1;
+  int64 postID = 2;
+  int32 mediaOrder = 3;
+  string mediaUrl = 4;
+  string mediaType = 5;
 }
-message GetPostRequest2 {
-  int64 id = 1;
-  bool  isPost = 2;
-  bool  isIncrease = 3;
+
+message PostMediaListRequest {
+  repeated PostMediaRequestDTO posts = 1;
 }
-message PostMessageResponse {
-  string message = 1;
+
+message PostMediaResponse {
+  bool success = 1;
+  string message = 2;
 }
-message PostResponse {
+
+message PostId {
   int64 postId = 1;
-  int64 userId = 2;
-  string userName = 3;
-  string avatarUrl = 4;
-  string caption = 5;
-  string visibility = 6;
-  string tag = 7;
-  repeated string mediaUrl = 8;
-  int64 quantityLike = 9;
-  int64 quantityComment = 10;
-  repeated UserTag listUserTag = 11;
-  bool isActive = 12;
-  int64 createdAt = 13;
 }
 
-message ReelResponse {
+message ReelDto{
   int64 postId = 1;
-  int64 userId = 2;
-  string userName = 3;
-  string avatarUrl = 4;
-  string caption = 5;
-  string visibility = 6;
-  string tag = 7;
-  string mediaUrl = 8;
-  int64 quantityLike = 9;
-  int64 quantityComment = 10;
-  bool isActive = 12;
-  int64 createdAt = 13;
+  string mediaUrl = 2;
 }
 
-message UserTag {
-  int64 userId = 1;
-  string userName = 2;
+message StoryDto{
+  int64 storyId = 1;
+  string mediaUrl = 2;
+  string mediaType = 3;
+}
+
+message AvatarUploadRequest {
+  bytes avatarData = 1;
+  string fileName = 2;
+  string contentType = 3;
+}
+
+message AvatarUploadResponse {
+  bool success = 1;
+  string message = 2;
+  string avatarUrl = 3;
 }

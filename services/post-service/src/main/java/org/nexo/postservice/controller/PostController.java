@@ -30,10 +30,8 @@ public class PostController {
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
 
-
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
     }
-
 
     @PutMapping
     public ResponseData<String> updatePost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,

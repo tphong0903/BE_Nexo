@@ -63,8 +63,9 @@ public class CommentServiceImpl implements ICommentService {
             model.setParentComment(commentRepository.findById(a.getParentId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST)));
         }
         commentRepository.save(model);
-        a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
+
         if (isAdd) {
+            a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
             String notificationType = "";
             Long id = 0L;
             String url = "";

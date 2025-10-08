@@ -2,13 +2,14 @@ package org.nexo.uploadfileservice.service;
 
 import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 
 public interface IUploadFileService {
 
     String upload(MultipartFile multipartFile);
 
-    void savePostMedia(List<MultipartFile> files, Long postId);
+    void savePostMedia(List<MultipartFile> files, Long postId) throws IOException, InterruptedException;
 
     void saveReelMedia(List<MultipartFile> files, Long postId);
 

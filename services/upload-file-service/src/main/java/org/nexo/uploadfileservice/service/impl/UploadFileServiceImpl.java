@@ -55,7 +55,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
     }
 
     @Override
-    public void savePostMedia(List<MultipartFile> files, Long postId) {
+    public void savePostMedia(List<MultipartFile> files, Long postId) throws IOException, InterruptedException {
         List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = new ArrayList<>();
         PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient
                 .findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
@@ -63,19 +63,24 @@ public class UploadFileServiceImpl implements IUploadFileService {
         for (int i = 0; i < files.size(); i++) {
             MultipartFile file = files.get(i);
             String contentType = file.getContentType();
-
+            String mediaUrl = "";
             String mediaType;
             if (contentType.startsWith("image")) {
                 mediaType = "PICTURE";
+                mediaUrl = upload(file);
             } else {
                 mediaType = "VIDEO";
+                File tempFile = File.createTempFile("video", ".mp4");
+                file.transferTo(tempFile);
+                File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
+                mediaUrl = uploadHlsToFirebase(hlsFolder);
             }
 
             PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
                     .setPostID(postId)
                     .setMediaType(mediaType)
                     .setMediaOrder(mediaOrder++)
-                    .setMediaUrl(upload(file))
+                    .setMediaUrl(mediaUrl)
                     .build();
 
             grpcRequests.add(grpcItem);

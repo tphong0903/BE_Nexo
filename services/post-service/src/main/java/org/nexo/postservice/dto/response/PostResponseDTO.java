@@ -25,4 +25,5 @@ public class PostResponseDTO {
     private List<UserTagDTO> listUserTag;
     private Boolean isActive;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

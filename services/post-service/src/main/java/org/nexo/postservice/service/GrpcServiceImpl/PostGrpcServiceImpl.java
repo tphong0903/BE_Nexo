@@ -67,6 +67,9 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                     .setCreatedAt(dto.getCreatedAt() != null
                             ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                             : 0L)
+                    .setUpdateAt(dto.getUpdatedAt() != null
+                            ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                            : 0L)
                     .build();
 
             responseObserver.onNext(response);
@@ -102,6 +105,9 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                     .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
                     .setCreatedAt(dto.getCreatedAt() != null
                             ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                            : 0L)
+                    .setUpdateAt(dto.getUpdatedAt() != null
+                            ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
                             : 0L)
                     .build();
 

@@ -30,6 +30,7 @@ public class FeedService {
     public Mono<Void> handleNewPost(Long authorId, Long postId, Long createdAt) {
         List<UserServiceProto.FolloweeInfo> listFriend = userClient.getUserFollowees(authorId).getFolloweesList();
         List<FeedModel> feedModelList = new ArrayList<>();
+        feedModelList.add(FeedModel.builder().followerId(authorId).postId(postId).userId(authorId).build());
         for (UserServiceProto.FolloweeInfo model : listFriend) {
             feedModelList.add(FeedModel.builder().followerId(model.getUserId()).postId(postId).userId(authorId).build());
         }

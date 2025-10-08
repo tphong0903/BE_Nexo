@@ -2,6 +2,7 @@ package org.nexo.uploadfileservice.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.uploadfileservice.service.IHlsService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -12,6 +13,9 @@ import java.io.InputStreamReader;
 @Service
 @Slf4j
 public class HlsServiceImpl implements IHlsService {
+    @Value("${hls.ffmpeg.path}")
+    private String ffmpegPath;
+
     @Override
     public File convertToHls(File inputFile, String outputDir) throws IOException, InterruptedException {
         File outDir = new File(outputDir);
@@ -41,10 +45,8 @@ public class HlsServiceImpl implements IHlsService {
 //        } else {
 //            cmd = new String[]{"bash", "-c", command};
 //        }
-        String ffmpegPath = "D:\\App_1\\ffmage\\ffmpeg-8.0-full_build\\ffmpeg-8.0-full_build\\bin\\ffmpeg.exe";
         String inputFilePath = inputFile.getAbsolutePath();
         File outputM3u8File = new File(outDir, "index.m3u8");
-        String outputM3u8Path = outputM3u8File.getAbsolutePath();
         String segmentPattern = new File(outDir, "segment_%03d.ts").getAbsolutePath();
 
         String[] cmd = {
@@ -60,7 +62,7 @@ public class HlsServiceImpl implements IHlsService {
                 "-hls_time", "6",
                 "-hls_list_size", "0",
                 "-hls_segment_filename", segmentPattern,
-                outputM3u8Path
+                outputM3u8File.getAbsolutePath()
         };
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);

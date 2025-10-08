@@ -44,11 +44,12 @@ public class LikeServiceImpl implements ILikeService {
                     .build();
             likeCommentRepository.save(model);
 
+            String targetUrl = commentModel.getPostId() != null ? "/posts/" + commentModel.getPostId() : "/reels/" + commentModel.getReelId();
             MessageDTO messageDTO = MessageDTO.builder()
                     .actorId(response.getUserId())
                     .recipientId(commentModel.getUserId())
                     .notificationType(String.valueOf(ENotificationType.LIKE_COMMENT))
-                    .targetUrl("")
+                    .targetUrl(targetUrl)
                     .build();
             kafkaTemplate.send("notification", messageDTO);
         }
@@ -75,7 +76,7 @@ public class LikeServiceImpl implements ILikeService {
                     .actorId(response.getUserId())
                     .recipientId(postResponse.getUserId())
                     .notificationType(String.valueOf(ENotificationType.LIKE_POST))
-                    .targetUrl("")
+                    .targetUrl("/posts/" + id)
                     .build();
             kafkaTemplate.send("notification", messageDTO);
         }
@@ -102,7 +103,7 @@ public class LikeServiceImpl implements ILikeService {
                     .actorId(response.getUserId())
                     .recipientId(reelResponse.getUserId())
                     .notificationType(String.valueOf(ENotificationType.LIKE_REEL))
-                    .targetUrl("")
+                    .targetUrl("/reels/" + id)
                     .build();
             kafkaTemplate.send("notification", messageDTO);
         }

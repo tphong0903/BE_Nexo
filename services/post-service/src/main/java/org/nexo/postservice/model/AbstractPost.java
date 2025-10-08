@@ -33,6 +33,7 @@ public abstract class AbstractPost implements Serializable {
     @UpdateTimestamp
     protected LocalDateTime updatedAt;
     protected Long userId;
+    @Column(length = 2000)
     protected String caption;
     @Enumerated(EnumType.STRING)
     protected EVisibilityPost visibility;

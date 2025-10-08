@@ -32,3 +32,8 @@ app:
   firebase:
     file: serviceAccountKey.json
     bucket: savefileimage.appspot.com
+
+hls:
+  ffmpeg:
+    path: D:/App_1/ffmage/ffmpeg-8.0-full_build/bin/ffmpeg.exe
+

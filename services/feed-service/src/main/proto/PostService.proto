@@ -34,6 +34,7 @@ message PostResponse {
   repeated UserTag listUserTag = 11;
   bool isActive = 12;
   int64 createdAt = 13;
+  int64 updateAt = 14;
 }
 
 message ReelResponse {
@@ -49,6 +50,7 @@ message ReelResponse {
   int64 quantityComment = 10;
   bool isActive = 12;
   int64 createdAt = 13;
+  int64 updateAt = 14;
 }
 
 message UserTag {

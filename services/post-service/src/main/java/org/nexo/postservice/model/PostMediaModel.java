@@ -13,13 +13,13 @@ import org.nexo.postservice.util.Enum.EMediaType;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-public class PostMediaModel extends AbstractEntity<Long>{
+public class PostMediaModel extends AbstractEntity<Long> {
     private String mediaUrl;
     private Integer mediaOrder;
     @Enumerated(EnumType.STRING)
     private EMediaType mediaType;
 
-    @ManyToOne
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id")
     @JsonIgnore
     private PostModel postModel;

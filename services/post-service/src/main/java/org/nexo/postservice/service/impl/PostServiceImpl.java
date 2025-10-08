@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.postservice.dto.MessageDTO;
 import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.UserTagDTO;
 import org.nexo.postservice.dto.response.PageModelResponse;
@@ -19,6 +20,7 @@ import org.nexo.postservice.repository.IReelRepository;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
+import org.nexo.postservice.util.Enum.ENotificationType;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
 import org.nexo.postservice.util.SecurityUtil;
 import org.springframework.data.domain.Page;
@@ -27,6 +29,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -51,7 +54,8 @@ public class PostServiceImpl implements IPostService {
     private final IPostMediaRepository postMediaRepository;
     private final IHashTagService hashTagService;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final ObjectMapper objectMapper;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
 
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
@@ -62,6 +66,8 @@ public class PostServiceImpl implements IPostService {
             throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
         }
         PostModel model;
+
+        String oldTag = "";
         if (postRequestDTO.getPostId() != 0) {
             List<PostMediaModel> postMediaModelList = postMediaRepository.findAllByPostModel_Id(postRequestDTO.getPostId());
             for (PostMediaModel postMediaModel : postMediaModelList) {
@@ -70,6 +76,7 @@ public class PostServiceImpl implements IPostService {
             }
             model = postRepository.findById(postRequestDTO.getPostId())
                     .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
+            oldTag = model.getTag();
             model.setCaption(postRequestDTO.getCaption());
             model.setTag(postRequestDTO.getTag());
             model.setVisibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()));
@@ -84,6 +91,7 @@ public class PostServiceImpl implements IPostService {
                     .visibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()))
                     .isActive(true)
                     .build();
+
         }
         postRepository.save(model);
         if (postRequestDTO.getPostId() != 0) {
@@ -104,6 +112,7 @@ public class PostServiceImpl implements IPostService {
             redisTemplate.convertAndSend("post-created", event);
         }
         hashTagService.findAndAddHashTagFromCaption(model);
+        tagUserIntoPost(oldTag, postRequestDTO.getTag(), postRequestDTO.getUserId(), model.getId());
         return "Success";
     }
 
@@ -339,7 +348,7 @@ public class PostServiceImpl implements IPostService {
         List<Long> tagIds = Optional.ofNullable(model.getTag())
                 .filter(tag -> !tag.isBlank())
                 .map(tag -> Arrays.stream(tag.split(","))
-                        .filter(s -> !s.isBlank())
+                        .filter(s -> !s.isBlank() && Long.parseLong(s) != model.getUserId())
                         .map(Long::parseLong)
                         .toList())
                 .orElse(List.of());
@@ -373,6 +382,7 @@ public class PostServiceImpl implements IPostService {
                 .quantityComment(comments)
                 .userId(model.getUserId())
                 .mediaUrl(model.getPostMediaModels() != null ? model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList() : List.of())
+                .updatedAt(model.getUpdatedAt())
                 .build();
     }
 
@@ -394,6 +404,38 @@ public class PostServiceImpl implements IPostService {
                 .quantityComment(comments)
                 .userId(model.getUserId())
                 .mediaUrl(model.getVideoUrl())
+                .updatedAt(model.getUpdatedAt())
                 .build();
+    }
+
+    public void tagUserIntoPost(String oldTag, String users, Long currentUserId, Long postId) {
+        List<Long> oldTagIds = Optional.ofNullable(oldTag)
+                .filter(tag -> !tag.isBlank())
+                .map(tag -> Arrays.stream(tag.split(","))
+                        .filter(s -> !s.isBlank() && Long.parseLong(s) != currentUserId)
+                        .map(Long::parseLong)
+                        .toList())
+                .orElse(List.of());
+
+        List<Long> tagIds = Optional.ofNullable(users)
+                .filter(tag -> !tag.isBlank())
+                .map(tag -> Arrays.stream(tag.split(","))
+                        .filter(s -> !s.isBlank() && Long.parseLong(s) != currentUserId)
+                        .map(Long::parseLong)
+                        .toList())
+                .orElse(List.of());
+
+
+        for (Long id : tagIds) {
+            if (!oldTagIds.contains(id)) {
+                MessageDTO messageDTO = MessageDTO.builder()
+                        .actorId(currentUserId)
+                        .recipientId(id)
+                        .notificationType(String.valueOf(ENotificationType.TAG))
+                        .targetUrl("/posts/" + postId)
+                        .build();
+                kafkaTemplate.send("notification", messageDTO);
+            }
+        }
     }
 }

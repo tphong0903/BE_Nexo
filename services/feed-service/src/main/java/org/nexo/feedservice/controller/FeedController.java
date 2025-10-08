@@ -6,6 +6,7 @@ import org.nexo.feedservice.service.FeedService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 @RestController
 @RequestMapping("/")
@@ -14,16 +15,16 @@ public class FeedController {
     private final FeedService feedService;
 
     @GetMapping(value = "/posts/{userId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Flux<PostResponseDTO> getFeedOfPosts(@PathVariable Long userId,
-                                                @RequestParam(defaultValue = "0") int page,
-                                                @RequestParam(defaultValue = "20") Long limit) {
-        return feedService.getLatestFeed(userId, page, limit);
+    public Mono<?> getFeedOfPosts(@PathVariable Long userId,
+                                  @RequestParam(defaultValue = "0") int pageNo,
+                                  @RequestParam(defaultValue = "20") Long pageSize) {
+        return feedService.getLatestFeed(userId, pageNo, pageSize);
     }
 
     @GetMapping(value = "/reels/{userId}", produces = MediaType.APPLICATION_JSON_VALUE)
-    public Flux<PostResponseDTO> getFeedOfReels(@PathVariable Long userId,
-                                                @RequestParam(defaultValue = "0") int page,
-                                                @RequestParam(defaultValue = "20") Long limit) {
-        return feedService.getLatestReelsFeed(userId, page, limit);
+    public Flux<?> getFeedOfReels(@PathVariable Long userId,
+                                  @RequestParam(defaultValue = "0") int pageNo,
+                                  @RequestParam(defaultValue = "20") Long pageSize) {
+        return feedService.getLatestReelsFeed(userId, pageNo, pageSize);
     }
 }

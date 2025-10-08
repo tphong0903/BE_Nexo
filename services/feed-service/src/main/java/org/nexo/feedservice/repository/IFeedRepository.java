@@ -11,4 +11,7 @@ import java.util.List;
 public interface IFeedRepository extends JpaRepository<FeedModel, Long> {
     @Query("SELECT f.postId FROM FeedModel f WHERE f.followerId = :followerId ORDER BY f.createdAt DESC")
     List<Long> findPostIdsByFollowerId(@Param("followerId") Long followerId, Pageable pageable);
+
+    long countPostsByFollowerId(Long userId);
+
 }

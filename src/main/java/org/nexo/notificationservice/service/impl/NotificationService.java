@@ -96,6 +96,7 @@ public class NotificationService implements INotificationService {
 
             case COMMENT_POST -> actor.getUsername() + " đã bình luận vào bài viết của bạn";
             case COMMENT_REEL -> actor.getUsername() + " đã bình luận vào reel của bạn";
+            case COMMENT_MENTION -> actor.getUsername() + " đã nhắc đến bạn trong một bình luận";
 
             case FOLLOW -> actor.getUsername() + " đã theo dõi bạn";
             case TAG -> actor.getUsername() + " đã gắn thẻ bạn trong một bài viết";
@@ -106,7 +107,7 @@ public class NotificationService implements INotificationService {
 
         notificationRepository.save(NotificationModel.builder()
                 .notificationType(ENotificationType.valueOf(messageDTO.getNotificationType()))
-                .targetUrl("Chua lam")
+                .targetUrl(messageDTO.getTargetUrl())
                 .isRead(false)
                 .actorId(actor.getId())
                 .recipientId(recipient.getId())

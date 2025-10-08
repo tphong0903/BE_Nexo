@@ -47,11 +47,11 @@ spring:
                 - Path=/api/feeds/**
               filters:
                 - StripPrefix=2
-                - name: RequestRateLimiter
-                  args:
-                    redis-rate-limiter.replenishRate: 20
-                    redis-rate-limiter.burstCapacity: 20
-                    redis-rate-limiter.key-resolver: "#{@userKeyResolver}"
+            #                - name: RequestRateLimiter
+            #                  args:
+            #                    redis-rate-limiter.replenishRate: 20
+            #                    redis-rate-limiter.burstCapacity: 20
+            #                    redis-rate-limiter.key-resolver: "#{@userKeyResolver}"
 
             - id: auth-serviceD
               uri: lb://auth

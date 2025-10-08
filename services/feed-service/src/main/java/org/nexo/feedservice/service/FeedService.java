@@ -2,6 +2,7 @@ package org.nexo.feedservice.service;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.nexo.feedservice.dto.PageModelResponse;
 import org.nexo.feedservice.dto.PostResponseDTO;
 import org.nexo.feedservice.model.FeedModel;
 import org.nexo.feedservice.repository.IFeedRepository;
@@ -16,6 +17,7 @@ import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -28,12 +30,16 @@ public class FeedService {
     private final IFeedRepository feedRepository;
 
     public Mono<Void> handleNewPost(Long authorId, Long postId, Long createdAt) {
-        List<UserServiceProto.FolloweeInfo> listFriend = userClient.getUserFollowees(authorId).getFolloweesList();
+        List<UserServiceProto.FolloweeInfo> listFriend = new ArrayList<>(
+                userClient.getUserFollowees(authorId).getFolloweesList()
+        );
         List<FeedModel> feedModelList = new ArrayList<>();
         feedModelList.add(FeedModel.builder().followerId(authorId).postId(postId).userId(authorId).build());
         for (UserServiceProto.FolloweeInfo model : listFriend) {
             feedModelList.add(FeedModel.builder().followerId(model.getUserId()).postId(postId).userId(authorId).build());
         }
+        feedModelList.add(FeedModel.builder().followerId(authorId).postId(postId).userId(authorId).build());
+        listFriend.add(UserServiceProto.FolloweeInfo.newBuilder().setUserId(authorId).setUserName("").setAvatar("").build());
         feedRepository.saveAll(feedModelList);
         return Flux.fromIterable(listFriend)
                 .flatMap(followeeInfo -> {
@@ -50,43 +56,72 @@ public class FeedService {
                 .then();
     }
 
-    public Flux<PostResponseDTO> getLatestFeed(Long userId, int page, Long limit) {
+    public Mono<PageModelResponse<PostResponseDTO>> getLatestFeed(Long userId, int page, Long limit) {
         Long start = page * limit;
         Long end = start + limit - 1;
         String key = "feed:" + userId;
+
         log.info("Fetching feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
                 userId, page, limit, key, start, end);
+
         return reactiveRedisTemplate.opsForZSet()
                 .reverseRange(key, Range.closed(start, end))
                 .collectList()
-                .publishOn(Schedulers.boundedElastic())
-                .flatMapMany(posts -> {
-                    if (!posts.isEmpty()) {
-                        log.info("Redis HIT: found {} posts for userId={}", posts.size(), userId);
-                        return Flux.fromIterable(posts)
-                                .flatMap(postId -> {
-                                    log.info("Fetching post details from gRPC for postId={}", postId);
-                                    return postGrpcClient.getPostByIdAsync(Long.parseLong(postId));
-                                })
-                                .filter(dto -> dto.getPostId() != 0);
+                .flatMap(redisPosts -> {
+                    int redisCount = redisPosts.size();
+                    log.info("Redis returned {} posts", redisCount);
+
+                    if (redisCount >= limit) {
+                        // Redis đủ -> dùng Redis
+                        return Flux.fromIterable(redisPosts)
+                                .flatMap(postId -> postGrpcClient.getPostByIdAsync(Long.parseLong(postId)))
+                                .filter(dto -> dto.getPostId() != 0)
+                                .collectList()
+                                .flatMap(content -> Mono.fromCallable(() -> {
+                                            long totalElements = feedRepository.countPostsByFollowerId(userId);
+                                            int totalPages = (int) Math.ceil((double) totalElements / limit);
+                                            return PageModelResponse.<PostResponseDTO>builder()
+                                                    .pageNo(page)
+                                                    .pageSize(limit.intValue())
+                                                    .totalElements(totalElements)
+                                                    .totalPages(totalPages)
+                                                    .last(page + 1 >= totalPages)
+                                                    .content(content)
+                                                    .build();
+                                        }).subscribeOn(Schedulers.boundedElastic())
+                                );
                     } else {
-                        log.warn("Redis MISS: no posts found for userId={}, fallback to DB", userId);
+                        log.warn("Redis MISS or not enough posts ({} < {}), fallback to DB", redisCount, limit);
+
                         return Mono.fromCallable(() -> {
                                     PageRequest pageRequest = PageRequest.of(page, limit.intValue());
                                     return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany(list -> {
-                                    log.info("Fetched {} posts from DB for userId={}", list.size(), userId);
-                                    return Flux.fromIterable(list)
-                                            .flatMap(postId -> {
-                                                log.debug("Fetching post details from gRPC for postId={}", postId);
-                                                return postGrpcClient.getPostByIdAsync(postId);
-                                            });
-                                });
+                                .flatMapMany(dbPostIds -> {
+                                    log.info("Fetched {} posts from DB for userId={}", dbPostIds.size(), userId);
+                                    return Flux.fromIterable(dbPostIds)
+                                            .flatMap(postId -> postGrpcClient.getPostByIdAsync(postId));
+                                })
+                                .filter(dto -> dto.getPostId() != 0)
+                                .collectList()
+                                .flatMap(content -> Mono.fromCallable(() -> {
+                                            long totalElements = feedRepository.countPostsByFollowerId(userId);
+                                            int totalPages = (int) Math.ceil((double) totalElements / limit);
+                                            return PageModelResponse.<PostResponseDTO>builder()
+                                                    .pageNo(page)
+                                                    .pageSize(limit.intValue())
+                                                    .totalElements(totalElements)
+                                                    .totalPages(totalPages)
+                                                    .last(page + 1 >= totalPages)
+                                                    .content(content)
+                                                    .build();
+                                        }).subscribeOn(Schedulers.boundedElastic())
+                                );
                     }
                 });
     }
+
 
     public Flux<PostResponseDTO> getLatestReelsFeed(Long userId, int page, Long limit) {
         Long start = page * limit;

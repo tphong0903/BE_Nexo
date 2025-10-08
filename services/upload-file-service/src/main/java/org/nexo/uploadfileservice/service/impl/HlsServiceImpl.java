@@ -45,8 +45,10 @@ public class HlsServiceImpl implements IHlsService {
 //        } else {
 //            cmd = new String[]{"bash", "-c", command};
 //        }
+        String ffmpegPath2 = "D:\\App_1\\ffmage\\ffmpeg-8.0-full_build\\ffmpeg-8.0-full_build\\bin\\ffmpeg.exe";
         String inputFilePath = inputFile.getAbsolutePath();
         File outputM3u8File = new File(outDir, "index.m3u8");
+        String outputM3u8Path = outputM3u8File.getAbsolutePath();
         String segmentPattern = new File(outDir, "segment_%03d.ts").getAbsolutePath();
 
         String[] cmd = {
@@ -62,7 +64,7 @@ public class HlsServiceImpl implements IHlsService {
                 "-hls_time", "6",
                 "-hls_list_size", "0",
                 "-hls_segment_filename", segmentPattern,
-                outputM3u8File.getAbsolutePath()
+                outputM3u8Path
         };
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);

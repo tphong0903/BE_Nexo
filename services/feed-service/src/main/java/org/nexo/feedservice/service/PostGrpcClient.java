@@ -69,6 +69,9 @@ public class PostGrpcClient {
                                 .atZone(ZoneId.systemDefault())
                                 .toLocalDateTime()
                 )
+                .updatedAt(Instant.ofEpochMilli(response.getUpdateAt())
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime())
                 .build();
     }
 }

@@ -1,7 +1,7 @@
 package org.nexo.feedservice.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.nexo.feedservice.dto.PostResponseDTO;
+import org.nexo.feedservice.dto.ResponseData;
 import org.nexo.feedservice.service.FeedService;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;

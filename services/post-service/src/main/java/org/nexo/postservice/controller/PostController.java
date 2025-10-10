@@ -39,32 +39,32 @@ public class PostController {
 
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
+        return new ResponseData<>(200, "Success", postService.savePost(postRequestDTO, files));
     }
 
     @PatchMapping("/{id}")
     public ResponseData<String> inactivePost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactivePost(id));
+        return new ResponseData<>(200, "Success", postService.inactivePost(id));
     }
 
     @DeleteMapping("/{id}")
     public ResponseData<String> deletePost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
+        return new ResponseData<>(200, "Success", postService.deletePost(id));
     }
 
 
     @GetMapping
     public ResponseData<String> test() {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test Post Service");
+        return new ResponseData<>(200, "Success", "Test Post Service");
     }
 
     @GetMapping("/users/{id}")
     public ResponseData<?> getAllPostOfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.getAllPostOfUser(id, pageNo, pageSize));
+        return new ResponseData<>(200, "Success", postService.getAllPostOfUser(id, pageNo, pageSize));
     }
 
     @GetMapping("/{id}")
     public ResponseData<?> getPost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.getPostById(id));
+        return new ResponseData<>(200, "Success", postService.getPostById(id));
     }
 }

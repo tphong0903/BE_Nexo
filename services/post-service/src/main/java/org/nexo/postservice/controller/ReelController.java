@@ -36,26 +36,26 @@ public class ReelController {
                                            @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.saveReel(postRequestDTO, files));
+        return new ResponseData<>(200, "Success", postService.saveReel(postRequestDTO, files));
     }
 
     @PatchMapping("/{id}")
     public ResponseData<String> inactiveReel(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactiveReel(id));
+        return new ResponseData<>(200, "Success", postService.inactiveReel(id));
     }
 
     @DeleteMapping("/{id}")
     public ResponseData<String> deletePost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deleteReel(id));
+        return new ResponseData<>(200, "Success", postService.deleteReel(id));
     }
 
     @GetMapping("/users/{id}")
     public ResponseData<?> getAllReelfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.getAllReelOfUser(id, pageNo, pageSize));
+        return new ResponseData<>(200, "Success", postService.getAllReelOfUser(id, pageNo, pageSize));
     }
 
     @GetMapping("/{id}")
     public ResponseData<?> getPost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.getReelById(id));
+        return new ResponseData<>(200, "Success", postService.getReelById(id));
     }
 }

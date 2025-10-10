@@ -26,8 +26,9 @@ import java.util.List;
 @RequiredArgsConstructor
 public class PostMediaController {
     private final IPostMediaService postMediaService;
+
     @PostMapping("/")
-    public ResponseData<String> addProduct(List<PostMediaDTO> postMediaDTOList) {
+    public ResponseData<String> addPostMedia(List<PostMediaDTO> postMediaDTOList) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postMediaService.savePostMedia(postMediaDTOList));
     }
 }

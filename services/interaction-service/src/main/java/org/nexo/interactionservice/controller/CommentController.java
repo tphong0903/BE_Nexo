@@ -27,26 +27,26 @@ public class CommentController {
 
     @PutMapping
     public ResponseData<String> updateComment(@RequestBody CommentDto dto) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.saveComment(dto));
+        return new ResponseData<>(200, "Success", commentService.saveComment(dto));
     }
 
     @DeleteMapping("/{id}")
     public ResponseData<String> deleteComment(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.deleteComment(id));
+        return new ResponseData<>(200, "Success", commentService.deleteComment(id));
     }
 
     @GetMapping("/post/{postId}")
     public ResponseData<ListCommentResponse> getCommentOfPost(@PathVariable Long postId,
                                                               @RequestParam(defaultValue = "0") int pageNo,
                                                               @RequestParam(defaultValue = "10") int pageSize) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.getCommentOfPost(postId, pageNo, pageSize));
+        return new ResponseData<>(200, "Success", commentService.getCommentOfPost(postId, pageNo, pageSize));
     }
 
-    @GetMapping("/reel/{postId}")
+    @GetMapping("/reel/{reelId}")
     public ResponseData<ListCommentResponse> getCommentOfReel(@PathVariable Long reelId,
                                                               @RequestParam(defaultValue = "0") int pageNo,
                                                               @RequestParam(defaultValue = "10") int pageSize) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.getCommentOfReel(reelId, pageNo, pageSize));
+        return new ResponseData<>(200, "Success", commentService.getCommentOfReel(reelId, pageNo, pageSize));
     }
 
     @GetMapping("/{commentId}/replies")
@@ -55,6 +55,6 @@ public class CommentController {
             @RequestParam(defaultValue = "0") int pageNo,
             @RequestParam(defaultValue = "10") int pageSize
     ) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", commentService.getReplies(commentId, pageNo, pageSize));
+        return new ResponseData<>(200, "Success", commentService.getReplies(commentId, pageNo, pageSize));
     }
 }

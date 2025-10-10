@@ -38,32 +38,32 @@ public class StoryController {
                                             @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
         ObjectMapper objectMapper = new ObjectMapper();
         StoryRequestDto postRequestDTO = objectMapper.readValue(postRequestDTOJson, StoryRequestDto.class);
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.saveStory(postRequestDTO, files));
+        return new ResponseData<>(200, "Success", storyService.saveStory(postRequestDTO, files));
     }
 
     @DeleteMapping("/{id}")
     public ResponseData<String> deleteStory(@PathVariable Long id, @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
         String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.deleteStory(id));
+        return new ResponseData<>(200, "Success", storyService.deleteStory(id));
     }
 
     @PutMapping("/{id}")
     public ResponseData<String> archiveStory(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.archiveStory(id));
+        return new ResponseData<>(200, "Success", storyService.archiveStory(id));
     }
 
     @PostMapping("/view/{id}")
     public ResponseData<String> viewStory(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.viewStory(id));
+        return new ResponseData<>(200, "Success", storyService.viewStory(id));
     }
 
     @GetMapping("/view/{id}")
     public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getAllStoryOfFriend(id));
+        return new ResponseData<>(200, "Success", storyService.getAllStoryOfFriend(id));
     }
 
     @GetMapping("/{id}")
     public ResponseData<?> getStoriesOfUser(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.getStoriesOfUser(id));
+        return new ResponseData<>(200, "Success", storyService.getStoriesOfUser(id));
     }
 }

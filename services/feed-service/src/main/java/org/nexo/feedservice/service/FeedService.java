@@ -4,9 +4,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.feedservice.dto.PageModelResponse;
 import org.nexo.feedservice.dto.PostResponseDTO;
+import org.nexo.feedservice.dto.ResponseData;
 import org.nexo.feedservice.model.FeedModel;
 import org.nexo.feedservice.repository.IFeedRepository;
 import org.nexo.grpc.user.UserServiceProto;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Range;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
@@ -17,7 +19,6 @@ import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -56,7 +57,7 @@ public class FeedService {
                 .then();
     }
 
-    public Mono<PageModelResponse<PostResponseDTO>> getLatestFeed(Long userId, int page, Long limit) {
+    public Mono<ResponseData<?>> getLatestFeed(Long userId, int page, Long limit) {
         Long start = page * limit;
         Long end = start + limit - 1;
         String key = "feed:" + userId;
@@ -72,15 +73,16 @@ public class FeedService {
                     log.info("Redis returned {} posts", redisCount);
 
                     if (redisCount >= limit) {
-                        // Redis đủ -> dùng Redis
                         return Flux.fromIterable(redisPosts)
                                 .flatMap(postId -> postGrpcClient.getPostByIdAsync(Long.parseLong(postId)))
                                 .filter(dto -> dto.getPostId() != 0)
                                 .collectList()
                                 .flatMap(content -> Mono.fromCallable(() -> {
-                                            long totalElements = feedRepository.countPostsByFollowerId(userId);
-                                            int totalPages = (int) Math.ceil((double) totalElements / limit);
-                                            return PageModelResponse.<PostResponseDTO>builder()
+                                            PageRequest pageRequest = PageRequest.of(page, limit.intValue());
+                                            Page<Long> pageResult = feedRepository.findPostIdsByFollowerId(userId, pageRequest);
+                                            long totalElements = pageResult.getTotalElements();
+                                            int totalPages = pageResult.getTotalPages();
+                                            PageModelResponse<PostResponseDTO> pageModelResponse = PageModelResponse.<PostResponseDTO>builder()
                                                     .pageNo(page)
                                                     .pageSize(limit.intValue())
                                                     .totalElements(totalElements)
@@ -88,33 +90,44 @@ public class FeedService {
                                                     .last(page + 1 >= totalPages)
                                                     .content(content)
                                                     .build();
+
+                                            return ResponseData.builder()
+                                                    .status(200)
+                                                    .message("Followings retrieved successfully")
+                                                    .data(pageModelResponse)
+                                                    .build();
                                         }).subscribeOn(Schedulers.boundedElastic())
                                 );
                     } else {
                         log.warn("Redis MISS or not enough posts ({} < {}), fallback to DB", redisCount, limit);
-
                         return Mono.fromCallable(() -> {
                                     PageRequest pageRequest = PageRequest.of(page, limit.intValue());
                                     return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany(dbPostIds -> {
+                                .flatMapMany(pageResult -> {
+                                    List<Long> dbPostIds = pageResult.getContent();
                                     log.info("Fetched {} posts from DB for userId={}", dbPostIds.size(), userId);
                                     return Flux.fromIterable(dbPostIds)
-                                            .flatMap(postId -> postGrpcClient.getPostByIdAsync(postId));
+                                            .flatMap(postGrpcClient::getPostByIdAsync);
                                 })
                                 .filter(dto -> dto.getPostId() != 0)
                                 .collectList()
                                 .flatMap(content -> Mono.fromCallable(() -> {
                                             long totalElements = feedRepository.countPostsByFollowerId(userId);
                                             int totalPages = (int) Math.ceil((double) totalElements / limit);
-                                            return PageModelResponse.<PostResponseDTO>builder()
+                                            PageModelResponse<PostResponseDTO> pageModelResponse = PageModelResponse.<PostResponseDTO>builder()
                                                     .pageNo(page)
                                                     .pageSize(limit.intValue())
                                                     .totalElements(totalElements)
                                                     .totalPages(totalPages)
                                                     .last(page + 1 >= totalPages)
                                                     .content(content)
+                                                    .build();
+                                            return ResponseData.builder()
+                                                    .status(200)
+                                                    .message("Followings retrieved successfully")
+                                                    .data(pageModelResponse)
                                                     .build();
                                         }).subscribeOn(Schedulers.boundedElastic())
                                 );
@@ -148,7 +161,8 @@ public class FeedService {
                                     return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany(list -> {
+                                .flatMapMany(pageResult -> {
+                                    List<Long> list = pageResult.getContent();
                                     log.info("Fetched {} posts from DB for userId={}", list.size(), userId);
                                     return Flux.fromIterable(list)
                                             .flatMap(postId -> {

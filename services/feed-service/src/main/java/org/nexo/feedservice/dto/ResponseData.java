@@ -1,4 +1,4 @@
-package org.nexo.postservice.dto.response;
+package org.nexo.feedservice.dto;
 
 
 import com.fasterxml.jackson.annotation.JsonInclude;

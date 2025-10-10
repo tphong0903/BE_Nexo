@@ -46,7 +46,7 @@ import java.util.Optional;
 @RequiredArgsConstructor
 @Slf4j
 public class PostServiceImpl implements IPostService {
-    private final AsyncFileService fileServiceClient;
+    private final FileService fileServiceClient;
     private final SecurityUtil securityUtil;
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;

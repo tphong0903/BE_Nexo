@@ -1,6 +1,7 @@
 package org.nexo.postservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.dto.response.StoryResponse;
@@ -12,7 +13,9 @@ import org.nexo.postservice.repository.IStoryViewRepository;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IStoryService;
 import org.nexo.postservice.util.SecurityUtil;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -23,15 +26,18 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class StoryServiceImpl implements IStoryService {
-    private final AsyncFileService fileServiceClient;
+    private final FileService fileServiceClient;
     private final IStoryRepository storyRepository;
     private final IStoryViewRepository storyViewRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public String saveStory(StoryRequestDto dto, List<MultipartFile> files) {
@@ -57,6 +63,11 @@ public class StoryServiceImpl implements IStoryService {
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
             fileServiceClient.saveStoryMedia(files, model.getId(), token);
         }
+
+        String redisKey = "story:expire:" + model.getId();
+        redisTemplate.opsForValue().set(redisKey, model.getId().toString(), 24, TimeUnit.HOURS);
+
+
         return "Success";
     }
 
@@ -183,4 +194,19 @@ public class StoryServiceImpl implements IStoryService {
                 .build();
     }
 
+    @KafkaListener(topics = "story-deletion-topic", groupId = "story-deleter-group")
+    public void consumeStoryDeletion(String storyId) {
+        log.info("Received story ID from Kafka to delete: " + storyId);
+        try {
+            Long id = Long.parseLong(storyId.replaceAll("^\"|\"$", ""));
+            StoryModel storyModel = storyRepository.findById(id).orElse(null);
+            if (storyModel != null) {
+                storyModel.setIsActive(false);
+                storyRepository.save(storyModel);
+                log.info("Successfully deleted story with ID: " + id);
+            }
+        } catch (NumberFormatException e) {
+            log.error("Invalid story ID received: " + storyId);
+        }
+    }
 }

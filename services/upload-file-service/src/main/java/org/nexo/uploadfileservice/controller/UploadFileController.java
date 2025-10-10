@@ -12,6 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 @RestController
 @RequiredArgsConstructor
@@ -21,7 +22,7 @@ public class UploadFileController {
     private final IUploadFileService uploadFileService;
 
     @PostMapping(value = "/post/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<String> uploadMedia(@RequestPart("files") List<MultipartFile> files, @RequestPart("postId") String postId) throws IOException, InterruptedException {
+    public ResponseEntity<String> uploadMedia(@RequestPart("files") List<MultipartFile> files, @RequestPart("postId") String postId) throws IOException, InterruptedException, ExecutionException {
         if (files != null && !files.isEmpty() && postId != null && !postId.isEmpty()) {
             log.info("Add File");
             uploadFileService.savePostMedia(files, Long.valueOf(postId));

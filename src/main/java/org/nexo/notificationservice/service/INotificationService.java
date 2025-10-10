@@ -11,4 +11,6 @@ public interface INotificationService {
     String readNotification(Long id);
 
     String readAllNotification();
+
+    void readNotificationGroup(String targetUrl, String notificationType);
 }

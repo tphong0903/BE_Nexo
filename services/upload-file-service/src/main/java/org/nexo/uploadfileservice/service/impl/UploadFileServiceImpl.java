@@ -24,6 +24,10 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 @Service
 @RequiredArgsConstructor
@@ -55,43 +59,64 @@ public class UploadFileServiceImpl implements IUploadFileService {
     }
 
     @Override
-    public void savePostMedia(List<MultipartFile> files, Long postId) throws IOException, InterruptedException {
-        List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = new ArrayList<>();
+    public void savePostMedia(List<MultipartFile> files, Long postId) throws InterruptedException, ExecutionException {
+        List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = Collections.synchronizedList(new ArrayList<>());
+
         PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient
                 .findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
-        int mediaOrder = postMediaListRequests.getPostsList().size();
+        int mediaOrderStart = postMediaListRequests.getPostsList().size();
+
+        ExecutorService executor = Executors.newFixedThreadPool(Math.min(files.size(), 8));
+
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+
         for (int i = 0; i < files.size(); i++) {
-            MultipartFile file = files.get(i);
-            String contentType = file.getContentType();
-            String mediaUrl = "";
-            String mediaType;
-            if (contentType.startsWith("image")) {
-                mediaType = "PICTURE";
-                mediaUrl = upload(file);
-            } else {
-                mediaType = "VIDEO";
-                File tempFile = File.createTempFile("video", ".mp4");
-                file.transferTo(tempFile);
-                File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
-                mediaUrl = uploadHlsToFirebase(hlsFolder);
-            }
+            final int index = i;
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                try {
+                    MultipartFile file = files.get(index);
+                    String contentType = file.getContentType();
+                    String mediaUrl = "";
+                    String mediaType;
 
-            PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
-                    .setPostID(postId)
-                    .setMediaType(mediaType)
-                    .setMediaOrder(mediaOrder++)
-                    .setMediaUrl(mediaUrl)
-                    .build();
+                    if (contentType.startsWith("image")) {
+                        mediaType = "PICTURE";
+                        mediaUrl = upload(file);
+                    } else {
+                        mediaType = "VIDEO";
+                        File tempFile = File.createTempFile("video", ".mp4");
+                        file.transferTo(tempFile);
+                        File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
+                        mediaUrl = uploadHlsToFirebase(hlsFolder);
+                    }
 
-            grpcRequests.add(grpcItem);
+                    PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
+                            .setPostID(postId)
+                            .setMediaType(mediaType)
+                            .setMediaOrder(mediaOrderStart + index)
+                            .setMediaUrl(mediaUrl)
+                            .build();
+
+                    grpcRequests.add(grpcItem);
+
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }, executor);
+
+            futures.add(future);
         }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
+
+        executor.shutdown();
+
         PostMediaServiceProto.PostMediaListRequest request = PostMediaServiceProto.PostMediaListRequest.newBuilder()
                 .addAllPosts(grpcRequests)
                 .build();
-
         postGrpcClient.savePostMedias(request);
-
     }
+
 
     @Override
     public void saveReelMedia(List<MultipartFile> files, Long postId) {

@@ -4,12 +4,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.concurrent.ExecutionException;
 
 public interface IUploadFileService {
 
     String upload(MultipartFile multipartFile);
 
-    void savePostMedia(List<MultipartFile> files, Long postId) throws IOException, InterruptedException;
+    void savePostMedia(List<MultipartFile> files, Long postId) throws IOException, InterruptedException, ExecutionException;
 
     void saveReelMedia(List<MultipartFile> files, Long postId);
 

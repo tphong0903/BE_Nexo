@@ -11,6 +11,7 @@ import org.nexo.grpc.user.UserServiceProto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Range;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.ReactiveRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -63,6 +64,7 @@ public class FeedService {
 
         log.info("Fetching feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
                 userId, page, limit, key, start, end);
+        PageRequest pageRequest = PageRequest.of(page, limit.intValue());
 
         return reactiveRedisTemplate.opsForZSet()
                 .reverseRange(key, Range.closed(start, end))
@@ -75,9 +77,9 @@ public class FeedService {
                         return Flux.fromIterable(redisPosts)
                                 .flatMap(postId -> postGrpcClient.getPostByIdAsync(Long.parseLong(postId)))
                                 .filter(dto -> dto.getPostId() != 0)
+                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                                 .collectList()
                                 .flatMap(content -> Mono.fromCallable(() -> {
-                                            PageRequest pageRequest = PageRequest.of(page, limit.intValue());
                                             Page<Long> pageResult = feedRepository.findPostIdsByFollowerId(userId, pageRequest);
                                             long totalElements = pageResult.getTotalElements();
                                             int totalPages = pageResult.getTotalPages();
@@ -100,7 +102,6 @@ public class FeedService {
                     } else {
                         log.warn("Redis MISS or not enough posts ({} < {}), fallback to DB", redisCount, limit);
                         return Mono.fromCallable(() -> {
-                                    PageRequest pageRequest = PageRequest.of(page, limit.intValue());
                                     return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
                                 })
                                 .subscribeOn(Schedulers.boundedElastic())
@@ -111,6 +112,7 @@ public class FeedService {
                                             .flatMap(postGrpcClient::getPostByIdAsync);
                                 })
                                 .filter(dto -> dto.getPostId() != 0)
+                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
                                 .collectList()
                                 .flatMap(content -> Mono.fromCallable(() -> {
                                             long totalElements = feedRepository.countPostsByFollowerId(userId);

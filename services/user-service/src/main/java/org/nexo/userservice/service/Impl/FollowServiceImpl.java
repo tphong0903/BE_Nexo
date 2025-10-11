@@ -237,6 +237,8 @@ public class FollowServiceImpl implements FollowService {
 
                 if (Boolean.TRUE.equals(followingUser.getIsPrivate())) {
                         follow.setStatus(EStatusFollow.PENDING);
+                        followRepository.save(follow);
+                        return;
                 }
 
                 followRepository.save(follow);
@@ -261,6 +263,9 @@ public class FollowServiceImpl implements FollowService {
                                 .orElseThrow(() -> new ResourceNotFoundException("Follow request not found"));
                 follow.setStatus(EStatusFollow.ACTIVE);
                 followRepository.save(follow);
+
+                redis.opsForSet().add(followsKey(followerUser.getId()), followingUser.getId().toString());
+                redis.opsForSet().add(followersKey(followingUser.getId()), followerUser.getId().toString());
         }
 
         @Transactional

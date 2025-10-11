@@ -10,9 +10,9 @@ import org.nexo.userservice.mapper.UserMapper;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserRepository;
+import org.nexo.userservice.service.BlockService;
 import org.nexo.userservice.service.UserService;
 import org.nexo.userservice.util.JwtUtil;
-import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -30,6 +30,7 @@ public class UserServiceImpl implements UserService {
     private final FollowRepository followRepository;
     private final UserMapper userMapper;
     private final UploadFileGrpcClient uploadFileGrpcClient;
+    private final BlockService blockService;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
         UserModel user = userRepository.findByUsername(username)
@@ -38,6 +39,16 @@ public class UserServiceImpl implements UserService {
         Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
                 .map(UserModel::getId)
                 .orElse(null);
+        
+        //check block
+        if (currentUserId != null) {
+            boolean hasBlockedTarget = blockService.isBlocked(currentUserId, user.getId());
+            boolean isBlockedByTarget = blockService.isBlocked(user.getId(), currentUserId);
+            
+            if (hasBlockedTarget || isBlockedByTarget) {
+                throw new ResourceNotFoundException("User not found with username: " + username);
+            }
+        }
 
         boolean isFollowing = false;
         boolean hasRequestedFollow = false;

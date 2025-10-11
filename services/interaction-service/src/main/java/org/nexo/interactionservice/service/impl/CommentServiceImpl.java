@@ -129,7 +129,7 @@ public class CommentServiceImpl implements ICommentService {
 
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
-        Page<CommentModel> commentsPage = commentRepository.findByPostId(postId, pageable);
+        Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
         return commentMapper.toListResponse(postId, commentsPage);
 
     }

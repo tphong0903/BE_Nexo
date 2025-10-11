@@ -15,8 +15,11 @@ public class LeakyBucketService {
         String timeKey = "bucket:" + key + ":time";
 
         Long currentTime = System.currentTimeMillis();
-        Long lastTime = (Long) redisTemplate.opsForValue().get(timeKey);
-        Long currentCount = (Long) redisTemplate.opsForValue().get(countKey);
+        Object lastTimeObj = redisTemplate.opsForValue().get(timeKey);
+        Object currentCountObj = redisTemplate.opsForValue().get(countKey);
+
+        Long lastTime = lastTimeObj == null ? null : ((Number) lastTimeObj).longValue();
+        Long currentCount = currentCountObj == null ? null : ((Number) currentCountObj).longValue();
 
         if (currentCount == null) currentCount = 0L;
         if (lastTime == null) lastTime = currentTime;
@@ -27,7 +30,7 @@ public class LeakyBucketService {
         long newCount = Math.max(currentCount - leaked, 0);
 
         if (newCount < bucketCapacity) {
-            redisTemplate.opsForValue().set(countKey, newCount + 1);
+            redisTemplate.opsForValue().set(countKey, newCount + 1L);
             redisTemplate.opsForValue().set(timeKey, currentTime);
             return true;
         } else {

@@ -137,43 +137,43 @@ public class FeedService {
     }
 
 
-    public Flux<PostResponseDTO> getLatestReelsFeed(Long userId, int page, Long limit) {
-        Long start = page * limit;
-        Long end = start + limit - 1;
-        String key = "feed:" + userId;
-        log.info("Fetching feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
-                userId, page, limit, key, start, end);
-        return reactiveRedisTemplate.opsForZSet()
-                .reverseRange(key, Range.closed(start, end))
-                .collectList()
-                .publishOn(Schedulers.boundedElastic())
-                .flatMapMany(posts -> {
-                    if (!posts.isEmpty()) {
-                        log.info("Redis HIT: found {} posts for userId={}", posts.size(), userId);
-                        return Flux.fromIterable(posts)
-                                .flatMap(postId -> {
-                                    log.info("Fetching post details from gRPC for postId={}", postId);
-                                    return postGrpcClient.getPostByIdAsync(Long.parseLong(postId));
-                                });
-                    } else {
-                        log.warn("Redis MISS: no posts found for userId={}, fallback to DB", userId);
-                        return Mono.fromCallable(() -> {
-                                    PageRequest pageRequest = PageRequest.of(page, limit.intValue());
-                                    return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
-                                })
-                                .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany(pageResult -> {
-                                    List<Long> list = pageResult.getContent();
-                                    log.info("Fetched {} posts from DB for userId={}", list.size(), userId);
-                                    return Flux.fromIterable(list)
-                                            .flatMap(postId -> {
-                                                log.debug("Fetching post details from gRPC for postId={}", postId);
-                                                return postGrpcClient.getPostByIdAsync(postId);
-                                            });
-                                });
-                    }
-                });
-
-    }
+//    public Mono<PostResponseDTO> getLatestReelsFeed(Long userId, int page, Long limit) {
+//        Long start = page * limit;
+//        Long end = start + limit - 1;
+//        String key = "feed:" + userId;
+//        log.info("Fetching feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
+//                userId, page, limit, key, start, end);
+//        return reactiveRedisTemplate.opsForZSet()
+//                .reverseRange(key, Range.closed(start, end))
+//                .collectList()
+//                .publishOn(Schedulers.boundedElastic())
+//                .flatMapMany(posts -> {
+//                    if (!posts.isEmpty()) {
+//                        log.info("Redis HIT: found {} posts for userId={}", posts.size(), userId);
+//                        return Mono.fromIterable(posts)
+//                                .flatMap(postId -> {
+//                                    log.info("Fetching post details from gRPC for postId={}", postId);
+//                                    return postGrpcClient.getPostByIdAsync(Long.parseLong(postId));
+//                                });
+//                    } else {
+//                        log.warn("Redis MISS: no posts found for userId={}, fallback to DB", userId);
+//                        return Mono.fromCallable(() -> {
+//                                    PageRequest pageRequest = PageRequest.of(page, limit.intValue());
+//                                    return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
+//                                })
+//                                .subscribeOn(Schedulers.boundedElastic())
+//                                .flatMapMany(pageResult -> {
+//                                    List<Long> list = pageResult.getContent();
+//                                    log.info("Fetched {} posts from DB for userId={}", list.size(), userId);
+//                                    return Flux.fromIterable(list)
+//                                            .flatMap(postId -> {
+//                                                log.debug("Fetching post details from gRPC for postId={}", postId);
+//                                                return postGrpcClient.getPostByIdAsync(postId);
+//                                            });
+//                                });
+//                    }
+//                });
+//
+//    }
 }
 

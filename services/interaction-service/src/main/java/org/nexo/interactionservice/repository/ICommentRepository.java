@@ -10,7 +10,7 @@ import java.util.List;
 
 @Repository
 public interface ICommentRepository extends JpaRepository<CommentModel, Long> {
-    Page<CommentModel> findByPostId(Long postId, Pageable pageable);
+    Page<CommentModel> findByPostIdAndParentComment(Long postId, Pageable pageable, CommentModel commentModel);
 
     Page<CommentModel> findByReelId(Long reelId, Pageable pageable);
 

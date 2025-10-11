@@ -7,6 +7,7 @@ import org.nexo.interactionservice.dto.response.CommentResponse;
 import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.repository.ICommentRepository;
+import org.nexo.interactionservice.repository.ILikeCommentRepository;
 import org.nexo.interactionservice.service.impl.UserGrpcClient;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +25,7 @@ import java.util.stream.Collectors;
 public class CommentMapper {
     private final UserGrpcClient userGrpcClient;
     private final ICommentRepository commentRepository;
+    private final ILikeCommentRepository likeCommentRepository;
 
     public CommentResponse toResponse(CommentModel model, Map<Long, UserServiceProto.UserDTOResponse2> userMap) {
         UserServiceProto.UserDTOResponse2 userDto = userMap.get(model.getUserId());
@@ -36,6 +38,7 @@ public class CommentMapper {
                 .map(reply -> {
                     UserServiceProto.UserDTOResponse replyUser = userGrpcClient.getUserDTOById(reply.getUserId());
                     return CommentResponse.builder()
+                            .id(reply.getId())
                             .userId(reply.getUserId())
                             .userName(replyUser != null ? replyUser.getUsername() : "Unknown")
                             .avatarUrl(replyUser != null ? replyUser.getAvatar() : null)
@@ -43,16 +46,19 @@ public class CommentMapper {
                             .parentId(model.getId())
                             .creatAt(reply.getCreatedAt())
                             .hasMoreReplies(false)
+                            .quantityLike(likeCommentRepository.countByCommentModel_Id(reply.getId()))
                             .build();
                 })
                 .toList();
 
         return CommentResponse.builder()
+                .id(model.getId())
                 .userId(model.getUserId())
                 .userName(userDto.getUsername())
                 .avatarUrl(userDto.getAvatar())
                 .content(model.getContent())
-                .parentId(model.getParentComment().getPostId())
+                .quantityLike(likeCommentRepository.countByCommentModel_Id(model.getId()))
+                .parentId(model.getParentComment() != null ? model.getParentComment().getPostId() : null)
                 .responseChildList(replyResponses)
                 .creatAt(model.getCreatedAt())
                 .hasMoreReplies(repliesPage.getTotalElements() > 2)

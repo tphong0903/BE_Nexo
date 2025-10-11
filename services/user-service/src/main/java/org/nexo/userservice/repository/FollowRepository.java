@@ -74,4 +74,6 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
             "   AND f2.status = 'ACTIVE'" +
             ")")
     Page<FollowModel> findMutualFollowers(@Param("userId") Long userId, Pageable pageable);
+
+    void deleteByFollowerIdAndFollowingId(Long currentUserId, Long targetUserId);
 }

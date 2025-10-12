@@ -47,9 +47,11 @@ public class FollowController {
         public ResponseData<?> getFollowers(
                         @PathVariable String username,
                         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+                        @RequestParam(value = "search", required = false) String search,
                         @PageableDefault(size = 10, sort = "id.followerId") Pageable pageable) {
                 String accessToken = authHeader != null ? authHeader.replace(BEARER_PREFIX, "").trim() : null;
-                PageModelResponse<FolloweeDTO> followers = followService.getFollowers(username, pageable, accessToken);
+                PageModelResponse<FolloweeDTO> followers = followService.getFollowers(username, pageable, accessToken,
+                                search);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followers retrieved successfully")
@@ -61,10 +63,11 @@ public class FollowController {
         public ResponseData<?> getFollowings(
                         @PathVariable String username,
                         @RequestHeader(value = HttpHeaders.AUTHORIZATION, required = false) String authHeader,
+                        @RequestParam(value = "search", required = false) String search,
                         @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
                 String accessToken = authHeader != null ? authHeader.replace(BEARER_PREFIX, "").trim() : null;
                 PageModelResponse<FolloweeDTO> followings = followService.getFollowings(username, pageable,
-                                accessToken);
+                                accessToken, search);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Followings retrieved successfully")
@@ -75,9 +78,11 @@ public class FollowController {
         @GetMapping("/requests")
         public ResponseData<?> getRequests(
                         @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @RequestParam(value = "search", required = false) String search,
                         @PageableDefault(size = 10, sort = "id.followerId") Pageable pageable) {
                 String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-                PageModelResponse<FolloweeDTO> requests = followService.getFollowRequests(accessToken, pageable);
+                PageModelResponse<FolloweeDTO> requests = followService.getFollowRequests(accessToken, pageable,
+                                search);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Follow requests retrieved successfully")
@@ -122,21 +127,26 @@ public class FollowController {
         @GetMapping("/close-friends")
         public ResponseData<?> getCloseFriends(
                         @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @RequestParam(value = "search", required = false) String search,
                         @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
                 String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-                PageModelResponse<FolloweeDTO> closeFriends = followService.getCloseFriends(accessToken, pageable);
+                PageModelResponse<FolloweeDTO> closeFriends = followService.getCloseFriends(accessToken, pageable,
+                                search);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Close friends retrieved successfully")
                                 .data(closeFriends)
                                 .build();
         }
+
         @GetMapping("/mutuals")
         public ResponseData<?> getMutualFollowers(
                         @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @RequestParam(value = "search", required = false) String search,
                         @PageableDefault(size = 10, sort = "id.followingId") Pageable pageable) {
                 String accessToken = authHeader.replace(BEARER_PREFIX, "").trim();
-                PageModelResponse<FolloweeDTO> mutualFollowers = followService.getMutualFollowers(accessToken, pageable);
+                PageModelResponse<FolloweeDTO> mutualFollowers = followService.getMutualFollowers(accessToken, pageable,
+                                search);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Mutual followers retrieved successfully")

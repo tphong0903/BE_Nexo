@@ -147,7 +147,7 @@ public class FollowServiceImpl implements FollowService {
                         }
 
                         if (!isOwner && !isFollowedByUser) {
-                                throw new AccessDeniedException(
+                                throw new ResourceNotFoundException(
                                                 "This account is private. You cannot view their followings.");
                         }
                 }
@@ -155,7 +155,8 @@ public class FollowServiceImpl implements FollowService {
                 if (search != null && !search.trim().isEmpty()) {
                         rows = followRepository.findAllByFollowerIdWithSearch(user.getId(), search.trim(), pageable);
                 } else {
-                        rows = followRepository.findAllByFollowerId(user.getId(), pageable);
+                        rows = followRepository.findAllByFollowerIdAndStatus(user.getId(), EStatusFollow.ACTIVE,
+                                        pageable);
                 }
                 Set<Long> followingIds = new HashSet<>();
                 Set<Long> requestedIds = new HashSet<>();

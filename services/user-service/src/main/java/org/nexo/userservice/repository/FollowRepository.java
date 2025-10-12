@@ -35,6 +35,8 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
 
         Page<FollowModel> findAllByFollowerId(Long id, Pageable pageable);
 
+        Page<FollowModel> findAllByFollowerIdAndStatus(Long id, EStatusFollow status, Pageable pageable);
+
         default List<FollowModel> findAllByFollowing(UserModel following) {
                 return findAllByFollowingAndStatus(following, EStatusFollow.ACTIVE);
         }

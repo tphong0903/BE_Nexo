@@ -58,12 +58,12 @@ public class StoryController {
     }
 
     @GetMapping("/view/{id}")
-    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id) {
-        return new ResponseData<>(200, "Success", storyService.getAllStoryOfFriend(id));
+    public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
+        return new ResponseData<>(200, "Success", storyService.getAllStoryOfFriend(id, pageNo, pageSize));
     }
 
     @GetMapping("/{id}")
-    public ResponseData<?> getStoriesOfUser(@PathVariable Long id) {
-        return new ResponseData<>(200, "Success", storyService.getStoriesOfUser(id));
+    public ResponseData<?> getStoriesOfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
+        return new ResponseData<>(200, "Success", storyService.getStoriesOfUser(id, pageNo, pageSize));
     }
 }

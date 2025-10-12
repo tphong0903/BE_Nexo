@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.StoryRequestDto;
+import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.StoryResponse;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.StoryModel;
@@ -102,7 +103,7 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @Override
-    public List<StoryResponse> getAllStoryOfFriend(Long id) {
+    public PageModelResponse<StoryResponse> getAllStoryOfFriend(Long id, int pageNo, int pageSize) {
         securityUtil.checkOwner(id);
         Long userId = securityUtil.getUserIdFromToken();
         UserServiceProto.GetUserFolloweesResponse response = userGrpcClient.getUserFollowees(userId);
@@ -111,9 +112,8 @@ public class StoryServiceImpl implements IStoryService {
             throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
-        List<UserServiceProto.FolloweeInfo> listFriend = response.getFolloweesList();
         List<StoryResponse> storyResponseList = new ArrayList<>();
-        for (UserServiceProto.FolloweeInfo followeeInfo : listFriend) {
+        for (UserServiceProto.FolloweeInfo followeeInfo : response.getFolloweesList()) {
             Long friendId = followeeInfo.getUserId();
             List<StoryResponse.Story> storyList = new ArrayList<>();
             List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(friendId, true);
@@ -125,21 +125,30 @@ public class StoryServiceImpl implements IStoryService {
             }
 
             if (!storyList.isEmpty()) {
-                StoryResponse storyResponse = StoryResponse.builder()
+                storyResponseList.add(StoryResponse.builder()
                         .userName(followeeInfo.getUserName())
                         .avatarUrl(followeeInfo.getAvatar())
-                        .userId(userId)
+                        .userId(friendId)
                         .storyList(storyList)
-                        .build();
-                storyResponseList.add(storyResponse);
+                        .build());
             }
 
         }
-        return storyResponseList;
+        int start = pageNo * pageSize;
+        int end = Math.min(start + pageSize, storyResponseList.size());
+        List<StoryResponse> pagedList = storyResponseList.subList(start, end);
+
+        return PageModelResponse.<StoryResponse>builder()
+                .content(pagedList)
+                .pageNo(pageNo)
+                .pageSize(pageSize)
+                .totalElements(storyResponseList.size())
+                .totalPages((int) Math.ceil((double) storyResponseList.size() / pageSize))
+                .build();
     }
 
     @Override
-    public List<StoryResponse> getStoriesOfUser(Long id) {
+    public PageModelResponse<StoryResponse> getStoriesOfUser(Long id, int pageNo, int pageSize) {
         String klId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(klId);
         UserServiceProto.UserDTOResponse response4 = userGrpcClient.getUserDTOById(response.getUserId());
@@ -157,20 +166,30 @@ public class StoryServiceImpl implements IStoryService {
         if (!isAllow)
             throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
 
-        List<StoryResponse> storyResponseList = new ArrayList<>();
+
+        List<StoryModel> allStories = storyRepository.findByUserIdAndIsActive(id, true);
+
+        int start = pageNo * pageSize;
+        int end = Math.min(start + pageSize, allStories.size());
+        List<StoryModel> pagedStories = allStories.subList(start, end);
+
         List<StoryResponse.Story> storyList = new ArrayList<>();
-        List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(id, true);
-        listStory1.forEach(model -> storyList.add(toStoryResponse(model, id)));
-        if (!storyList.isEmpty()) {
-            StoryResponse storyResponse = StoryResponse.builder()
-                    .userName(response.getUsername())
-                    .avatarUrl(response4.getAvatar())
-                    .userId(response.getUserId())
-                    .storyList(storyList)
-                    .build();
-            storyResponseList.add(storyResponse);
-        }
-        return storyResponseList;
+        pagedStories.forEach(model -> storyList.add(toStoryResponse(model, id)));
+
+        StoryResponse storyResponse = StoryResponse.builder()
+                .userName(response4.getUsername())
+                .avatarUrl(response4.getAvatar())
+                .userId(id)
+                .storyList(storyList)
+                .build();
+
+        return PageModelResponse.<StoryResponse>builder()
+                .content(List.of(storyResponse))
+                .pageNo(pageNo)
+                .pageSize(pageSize)
+                .totalElements(allStories.size())
+                .totalPages((int) Math.ceil((double) allStories.size() / pageSize))
+                .build();
     }
 
     private StoryResponse.Story toStoryResponse(StoryModel model, Long currentUserId) {
@@ -183,7 +202,7 @@ public class StoryServiceImpl implements IStoryService {
         }
 
         return StoryResponse.Story.builder()
-                .creatAt(model.getCreatedAt())
+                .createdAt(model.getCreatedAt())
                 .storyId(model.getId())
                 .mediaUrl(model.getMediaURL())
                 .mediaType(model.getMediaType().name())

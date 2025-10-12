@@ -6,6 +6,7 @@ import org.nexo.feedservice.dto.ResponseData;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.transaction.TransactionSystemException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -109,4 +110,12 @@ public class GlobalExceptionHandler {
                 .build();
     }
 
+    @ExceptionHandler(CustomException.class)
+    public ResponseEntity<ResponseData<?>> handleCustomException(CustomException ex) {
+        HttpStatus status = ex.getStatus() != null ? ex.getStatus() : HttpStatus.UNPROCESSABLE_ENTITY;
+        ResponseData<?> response = new ResponseData<>(
+                status.value(),
+                ex.getMessage());
+        return ResponseEntity.status(status).body(response);
+    }
 }

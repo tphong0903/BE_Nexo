@@ -26,7 +26,7 @@ public class StoryResponse {
         private String mediaUrl;
         private String mediaType;
         private Boolean isLike;
-        private LocalDateTime creatAt;
+        private LocalDateTime createdAt;
         private Boolean isActive;
         private Boolean isCloseFriend;
         private Boolean isSeen;

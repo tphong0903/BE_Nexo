@@ -9,4 +9,6 @@ public interface ILikeCommentRepository extends JpaRepository<LikeCommentModel, 
     LikeCommentModel findByCommentModelIdAndAndUserId(Long cmtId, Long userId);
 
     Long countByCommentModel_Id(Long id);
+
+
 }

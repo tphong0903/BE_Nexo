@@ -73,8 +73,13 @@ public class StoryController {
         return new ResponseData<>(200, "Success", storyService.getAllStoriesOfUser(id, pageNo, pageSize));
     }
 
-    @PostMapping
+    @PostMapping("/collections")
     public ResponseData<String> saveCollection(@RequestBody @Valid CollectionRequestDto dto) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.saveCollection(dto));
+    }
+
+    @PutMapping("/collections")
+    public ResponseData<String> updateCollection(@RequestBody @Valid CollectionRequestDto dto) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.saveCollection(dto));
     }
 
@@ -84,7 +89,7 @@ public class StoryController {
         return new ResponseData<>(200, "Collection deleted successfully", storyService.deleteCollection(id));
     }
 
-    @GetMapping("/collections/my/{id}")
+    @GetMapping("/collections/{id}")
     public ResponseData<?> getMyCollections(@PathVariable Long id,
                                             @RequestParam(defaultValue = "0") int pageNo,
                                             @RequestParam(defaultValue = "10") int pageSize) {

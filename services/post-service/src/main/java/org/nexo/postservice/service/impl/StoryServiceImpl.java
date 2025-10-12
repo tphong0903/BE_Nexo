@@ -96,41 +96,34 @@ public class StoryServiceImpl implements IStoryService {
     public String saveCollection(CollectionRequestDto dto) {
         Long userId = securityUtil.getUserIdFromToken();
         CollectionModel collectionModel;
-        List<Long> currentIdList = new ArrayList<>();
-        List<Long> newIdList = dto.getStoryList();
+        List<Long> newStoryIds = dto.getStoryList();
+
         if (dto.getId() != 0) {
-            collectionModel = collectionRepository.findById(dto.getId()).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
-            for (CollectionItemModel collectionItemModel : collectionModel.getCollectionItemModelList()) {
-                currentIdList.add(collectionItemModel.getStoryModel().getId());
-            }
+            collectionModel = collectionRepository.findById(dto.getId())
+                    .orElseThrow(() -> new CustomException("Collection not found", HttpStatus.NOT_FOUND));
             securityUtil.checkOwner(collectionModel.getUserId());
         } else {
-            collectionModel = CollectionModel.builder()
-                    .userId(userId)
-                    .build();
+            collectionModel = new CollectionModel();
+            collectionModel.setUserId(userId);
         }
+
         collectionModel.setCollectionName(dto.getCollectionName());
 
-        List<CollectionItemModel> toRemove = collectionModel.getCollectionItemModelList().stream()
-                .filter(item -> !newIdList.contains(item.getStoryModel().getId()))
-                .toList();
+        collectionModel.getCollectionItemModelList().clear();
 
-        collectionModel.getCollectionItemModelList().removeAll(toRemove);
+        if (newStoryIds != null && !newStoryIds.isEmpty()) {
+            List<StoryModel> storiesToAdd = storyRepository.findAllById(newStoryIds);
 
-        List<Long> toAdd = newIdList.stream()
-                .filter(id -> !currentIdList.contains(id))
-                .toList();
+            if (storiesToAdd.size() != newStoryIds.size()) {
+                throw new CustomException("One or more stories could not be found.", HttpStatus.BAD_REQUEST);
+            }
 
-        for (Long storyId : toAdd) {
-            StoryModel story = storyRepository.findById(storyId)
-                    .orElseThrow(() -> new CustomException("Story not found: " + storyId, HttpStatus.BAD_REQUEST));
-
-            CollectionItemModel newItem = CollectionItemModel.builder()
-                    .collectionModel(collectionModel)
-                    .storyModel(story)
-                    .build();
-
-            collectionModel.getCollectionItemModelList().add(newItem);
+            for (StoryModel story : storiesToAdd) {
+                CollectionItemModel newItem = new CollectionItemModel();
+                newItem.setStoryModel(story);
+                newItem.setCollectionModel(collectionModel);
+                collectionModel.getCollectionItemModelList().add(newItem);
+            }
         }
 
         collectionRepository.save(collectionModel);
@@ -155,7 +148,7 @@ public class StoryServiceImpl implements IStoryService {
         if (!isAllow)
             throw new CustomException("Dont allow to get Collection", HttpStatus.BAD_REQUEST);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.ASC, "createdAt"));
 
         Page<CollectionModel> page = collectionRepository.findByUserId(id, pageable);
 
@@ -328,7 +321,7 @@ public class StoryServiceImpl implements IStoryService {
         if (!isAllow)
             throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
         Page<StoryModel> storyPage = storyRepository.findByUserIdAndIsActive(ownerId, true, pageable);
 
         if (storyPage.isEmpty()) {
@@ -367,7 +360,7 @@ public class StoryServiceImpl implements IStoryService {
     public PageModelResponse<StoryResponse> getAllStoriesOfUser(Long id, int pageNo, int pageSize) {
         securityUtil.checkOwner(id);
         UserServiceProto.UserDTOResponse user = userGrpcClient.getUserDTOById(id);
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
 
         Page<StoryModel> storyPage = storyRepository.findByUserId(id, pageable);
 

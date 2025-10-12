@@ -5,9 +5,11 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.OneToMany;
 import lombok.*;
 
+import java.util.ArrayList;
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @Entity
 @Builder
 @NoArgsConstructor
@@ -16,6 +18,7 @@ import java.util.List;
 public class CollectionModel extends AbstractEntity<Long> {
     private String collectionName;
     private Long userId;
-    @OneToMany(mappedBy = "collectionModel", cascade = CascadeType.ALL)
-    private List<CollectionItemModel> collectionItemModelList;
+    @OneToMany(mappedBy = "collectionModel", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CollectionItemModel> collectionItemModelList = new ArrayList<>();
+    ;
 }

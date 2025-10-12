@@ -45,7 +45,8 @@ public class FollowServiceImpl implements FollowService {
         return "followers:" + userId;
     }
 
-    public PageModelResponse<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken) {
+    public PageModelResponse<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken,
+                                                       String search) {
         UserModel user = userRepository.findActiveByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
@@ -78,8 +79,14 @@ public class FollowServiceImpl implements FollowService {
             }
         }
 
-        Page<FollowModel> rows = followRepository.findAllByFollowingAndStatus(
-                user, EStatusFollow.ACTIVE, pageable);
+        Page<FollowModel> rows;
+        if (search != null && !search.trim().isEmpty()) {
+            rows = followRepository.findAllByFollowingAndStatusWithSearch(
+                    user, EStatusFollow.ACTIVE, search.trim(), pageable);
+        } else {
+            rows = followRepository.findAllByFollowingAndStatus(
+                    user, EStatusFollow.ACTIVE, pageable);
+        }
         Set<Long> followingIds = new HashSet<>();
         Set<Long> requestedIds = new HashSet<>();
 
@@ -112,7 +119,8 @@ public class FollowServiceImpl implements FollowService {
                 .build();
     }
 
-    public PageModelResponse<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken) {
+    public PageModelResponse<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken,
+                                                        String search) {
         UserModel user = userRepository.findActiveByUsername(username)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
@@ -139,11 +147,17 @@ public class FollowServiceImpl implements FollowService {
             }
 
             if (!isOwner && !isFollowedByUser) {
-                throw new AccessDeniedException(
+                throw new ResourceNotFoundException(
                         "This account is private. You cannot view their followings.");
             }
         }
-        Page<FollowModel> rows = followRepository.findAllByFollowerId(user.getId(), pageable);
+        Page<FollowModel> rows;
+        if (search != null && !search.trim().isEmpty()) {
+            rows = followRepository.findAllByFollowerIdWithSearch(user.getId(), search.trim(), pageable);
+        } else {
+            rows = followRepository.findAllByFollowerIdAndStatus(user.getId(), EStatusFollow.ACTIVE,
+                    pageable);
+        }
         Set<Long> followingIds = new HashSet<>();
         Set<Long> requestedIds = new HashSet<>();
 
@@ -175,14 +189,20 @@ public class FollowServiceImpl implements FollowService {
                 .build();
     }
 
-    public PageModelResponse<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable) {
+    public PageModelResponse<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable, String search) {
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
         UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Page<FollowModel> rows = followRepository.findAllByFollowingAndStatus(
-                user, EStatusFollow.PENDING, pageable);
+        Page<FollowModel> rows;
+        if (search != null && !search.trim().isEmpty()) {
+            rows = followRepository.findAllByFollowingAndStatusWithSearch(
+                    user, EStatusFollow.PENDING, search.trim(), pageable);
+        } else {
+            rows = followRepository.findAllByFollowingAndStatus(
+                    user, EStatusFollow.PENDING, pageable);
+        }
 
         Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                 .userId(f.getFollower().getId())
@@ -237,6 +257,8 @@ public class FollowServiceImpl implements FollowService {
 
         if (Boolean.TRUE.equals(followingUser.getIsPrivate())) {
             follow.setStatus(EStatusFollow.PENDING);
+            followRepository.save(follow);
+            return;
         }
 
         followRepository.save(follow);
@@ -261,6 +283,9 @@ public class FollowServiceImpl implements FollowService {
                 .orElseThrow(() -> new ResourceNotFoundException("Follow request not found"));
         follow.setStatus(EStatusFollow.ACTIVE);
         followRepository.save(follow);
+
+        redis.opsForSet().add(followsKey(followerUser.getId()), followingUser.getId().toString());
+        redis.opsForSet().add(followersKey(followingUser.getId()), followerUser.getId().toString());
     }
 
     @Transactional
@@ -423,14 +448,20 @@ public class FollowServiceImpl implements FollowService {
         return list;
     }
 
-    public PageModelResponse<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable) {
+    public PageModelResponse<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable, String search) {
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
         UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Page<FollowModel> rows = followRepository.findAllByFollowerAndIsCloseFriendAndStatus(
-                user, true, EStatusFollow.ACTIVE, pageable);
+        Page<FollowModel> rows;
+        if (search != null && !search.trim().isEmpty()) {
+            rows = followRepository.findAllByFollowerAndIsCloseFriendAndStatusWithSearch(
+                    user, true, EStatusFollow.ACTIVE, search.trim(), pageable);
+        } else {
+            rows = followRepository.findAllByFollowerAndIsCloseFriendAndStatus(
+                    user, true, EStatusFollow.ACTIVE, pageable);
+        }
 
         Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                 .userId(f.getFollowing().getId())
@@ -450,13 +481,18 @@ public class FollowServiceImpl implements FollowService {
                 .build();
     }
 
-    public PageModelResponse<FolloweeDTO> getMutualFollowers(String accessToken, Pageable pageable) {
+    public PageModelResponse<FolloweeDTO> getMutualFollowers(String accessToken, Pageable pageable, String search) {
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
 
         UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
 
-        Page<FollowModel> rows = followRepository.findMutualFollowers(user.getId(), pageable);
+        Page<FollowModel> rows;
+        if (search != null && !search.trim().isEmpty()) {
+            rows = followRepository.findMutualFollowersWithSearch(user.getId(), search.trim(), pageable);
+        } else {
+            rows = followRepository.findMutualFollowers(user.getId(), pageable);
+        }
 
         Page<FolloweeDTO> followeeDTOPage = rows.map(f -> FolloweeDTO.builder()
                 .userId(f.getFollowing().getId())

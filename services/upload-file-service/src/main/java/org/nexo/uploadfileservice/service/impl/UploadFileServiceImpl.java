@@ -154,19 +154,28 @@ public class UploadFileServiceImpl implements IUploadFileService {
     public void saveStoryMedia(List<MultipartFile> files, Long postId) {
         for (MultipartFile file : files) {
             String contentType = file.getContentType();
-
+            String mediaUrl = "";
             String mediaType;
-            if (contentType.startsWith("image")) {
-                mediaType = "PICTURE";
-            } else {
-                mediaType = "VIDEO";
+            try {
+                if (contentType.startsWith("image")) {
+                    mediaType = "PICTURE";
+                    mediaUrl = upload(file);
+                } else {
+                    File tempFile = File.createTempFile("video", ".mp4");
+                    file.transferTo(tempFile);
+                    File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
+                    mediaUrl = uploadHlsToFirebase(hlsFolder);
+                    mediaType = "VIDEO";
+                }
+                PostMediaServiceProto.StoryDto grpcItem = PostMediaServiceProto.StoryDto.newBuilder()
+                        .setStoryId(postId)
+                        .setMediaUrl(mediaUrl)
+                        .setMediaType(mediaType)
+                        .build();
+                postGrpcClient.saveStoryMedias(grpcItem);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
-            PostMediaServiceProto.StoryDto grpcItem = PostMediaServiceProto.StoryDto.newBuilder()
-                    .setStoryId(postId)
-                    .setMediaUrl(upload(file))
-                    .setMediaType(mediaType)
-                    .build();
-            postGrpcClient.saveStoryMedias(grpcItem);
         }
     }
 

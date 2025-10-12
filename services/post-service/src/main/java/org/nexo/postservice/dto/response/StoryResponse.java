@@ -24,7 +24,6 @@ public class StoryResponse {
     public static class Story {
         private Long storyId;
         private String mediaUrl;
-        private String mediaType;
         private Boolean isLike;
         private LocalDateTime createdAt;
         private Boolean isActive;

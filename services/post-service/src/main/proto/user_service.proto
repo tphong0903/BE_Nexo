@@ -119,4 +119,5 @@ message CheckMutualFollowRequest {
 message CheckFollowResponse {
   bool is_private = 1;
   bool is_follow = 2;
+  bool is_close_friend = 3;
 }

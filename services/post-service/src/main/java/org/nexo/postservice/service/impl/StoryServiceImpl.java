@@ -14,6 +14,10 @@ import org.nexo.postservice.repository.IStoryViewRepository;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IStoryService;
 import org.nexo.postservice.util.SecurityUtil;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -25,9 +29,11 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -153,9 +159,8 @@ public class StoryServiceImpl implements IStoryService {
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(klId);
         UserServiceProto.UserDTOResponse response4 = userGrpcClient.getUserDTOById(response.getUserId());
 
-
-        Boolean isAllow = false;
-        if (id == response.getUserId()) {
+        boolean isAllow = false;
+        if (id.equals(response.getUserId())) {
             isAllow = true;
         } else {
             UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), id);
@@ -163,14 +168,31 @@ public class StoryServiceImpl implements IStoryService {
                 isAllow = true;
             }
         }
+
         if (!isAllow)
             throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
 
-
         List<StoryModel> allStories = storyRepository.findByUserIdAndIsActive(id, true);
 
+        if (allStories.isEmpty()) {
+            return PageModelResponse.<StoryResponse>builder()
+                    .content(Collections.emptyList())
+                    .pageNo(pageNo)
+                    .pageSize(pageSize)
+                    .totalElements(0)
+                    .totalPages(0)
+                    .build();
+        }
+
+        int totalStories = allStories.size();
+        int totalPages = (int) Math.ceil((double) totalStories / pageSize);
+
+        if (pageNo < 0) pageNo = 0;
+        if (pageNo >= totalPages) pageNo = totalPages - 1;
+
         int start = pageNo * pageSize;
-        int end = Math.min(start + pageSize, allStories.size());
+        int end = Math.min(start + pageSize, totalStories);
+
         List<StoryModel> pagedStories = allStories.subList(start, end);
 
         List<StoryResponse.Story> storyList = new ArrayList<>();
@@ -187,10 +209,40 @@ public class StoryServiceImpl implements IStoryService {
                 .content(List.of(storyResponse))
                 .pageNo(pageNo)
                 .pageSize(pageSize)
-                .totalElements(allStories.size())
-                .totalPages((int) Math.ceil((double) allStories.size() / pageSize))
+                .totalElements(totalStories)
+                .totalPages(totalPages)
                 .build();
     }
+
+
+    @Override
+    public PageModelResponse<StoryResponse> getAllStoriesOfUser(Long id, int pageNo, int pageSize) {
+        securityUtil.checkOwner(id);
+        UserServiceProto.UserDTOResponse user = userGrpcClient.getUserDTOById(id);
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+
+        Page<StoryModel> storyPage = storyRepository.findByUserId(id, pageable);
+
+        List<StoryResponse.Story> storyList = storyPage.getContent().stream()
+                .map(model -> toStoryResponse(model, id))
+                .collect(Collectors.toList());
+
+        StoryResponse storyResponse = StoryResponse.builder()
+                .userId(id)
+                .userName(user.getUsername())
+                .avatarUrl(user.getAvatar())
+                .storyList(storyList)
+                .build();
+
+        return PageModelResponse.<StoryResponse>builder()
+                .content(List.of(storyResponse))
+                .pageNo(pageNo)
+                .pageSize(pageSize)
+                .totalElements(storyPage.getTotalElements())
+                .totalPages(storyPage.getTotalPages())
+                .build();
+    }
+
 
     private StoryResponse.Story toStoryResponse(StoryModel model, Long currentUserId) {
         boolean isLike = false;
@@ -205,7 +257,7 @@ public class StoryServiceImpl implements IStoryService {
                 .createdAt(model.getCreatedAt())
                 .storyId(model.getId())
                 .mediaUrl(model.getMediaURL())
-                .mediaType(model.getMediaType().name())
+//                .mediaType(model.getMediaType().name())
                 .isLike(isLike)
                 .isSeen(isSeen)
                 .isActive(model.getIsActive())

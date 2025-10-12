@@ -19,4 +19,6 @@ public interface IStoryService {
     PageModelResponse<StoryResponse> getAllStoryOfFriend(Long id, int pageNo, int pageSize);
 
     PageModelResponse<StoryResponse> getStoriesOfUser(Long id, int pageNo, int pageSize);
+
+    PageModelResponse<StoryResponse> getAllStoriesOfUser(Long id, int pageNo, int pageSize);
 }

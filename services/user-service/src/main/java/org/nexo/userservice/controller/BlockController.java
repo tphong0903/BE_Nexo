@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import lombok.RequiredArgsConstructor;
@@ -56,9 +57,10 @@ public class BlockController {
     @GetMapping("/blocked-users")
     public ResponseData<?> getBlockedUsers(
             @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+            @RequestParam(value = "search", required = false) String search,
             @PageableDefault(size = 10, sort = "createdAt") Pageable pageable) {
         String accessToken = authHeader.replace("Bearer ", "").trim();
-        PageModelResponse<UserDTOResponse> blockedUsers = blockService.getBlockedUsers(accessToken, pageable);
+        PageModelResponse<UserDTOResponse> blockedUsers = blockService.getBlockedUsers(accessToken, pageable, search);
         return ResponseData.builder()
                 .status(200)
                 .message("Blocked users retrieved successfully")

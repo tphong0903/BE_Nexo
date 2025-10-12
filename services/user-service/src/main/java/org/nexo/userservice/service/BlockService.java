@@ -12,6 +12,6 @@ public interface BlockService {
 
     boolean isBlocked(Long blockerId, Long blockedId);
 
-    PageModelResponse<UserDTOResponse> getBlockedUsers(String accessToken, Pageable pageable);
+    PageModelResponse<UserDTOResponse> getBlockedUsers(String accessToken, Pageable pageable, String search);
 
 }

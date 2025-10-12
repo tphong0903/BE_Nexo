@@ -1,5 +1,6 @@
 package org.nexo.userservice.model;
 
+import org.hibernate.annotations.SQLRestriction;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
@@ -68,11 +69,11 @@ public class UserModel {
     private LocalDateTime createdAt;
 
     @OneToMany(mappedBy = "follower", cascade = CascadeType.ALL, orphanRemoval = true)
+    @SQLRestriction("status = 'ACTIVE'")
     private List<FollowModel> following;
-
     @OneToMany(mappedBy = "following", cascade = CascadeType.ALL, orphanRemoval = true)
+    @SQLRestriction("status = 'ACTIVE'")
     private List<FollowModel> followers;
-
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<UserActivityLogModel> activityLogs;
 

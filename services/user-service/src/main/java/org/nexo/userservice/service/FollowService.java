@@ -19,11 +19,11 @@ public interface FollowService {
 
     void toggleCloseFriend(String accessToken, String username);
 
-    PageModelResponse<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken);
+    PageModelResponse<FolloweeDTO> getFollowers(String username, Pageable pageable, String accessToken, String search);
 
-    PageModelResponse<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken);
+    PageModelResponse<FolloweeDTO> getFollowings(String username, Pageable pageable, String accessToken, String search);
 
-    PageModelResponse<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable);
+    PageModelResponse<FolloweeDTO> getFollowRequests(String accessToken, Pageable pageable, String search);
 
     Set<FolloweeDTO> getFollowersByUserId(Long userId);
 
@@ -31,9 +31,8 @@ public interface FollowService {
 
     List<Boolean> isFollow(Long userId1, Long userId2);
 
-    PageModelResponse<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable);
+    PageModelResponse<FolloweeDTO> getCloseFriends(String accessToken, Pageable pageable, String search);
 
-    PageModelResponse<FolloweeDTO> getMutualFollowers(String accessToken, Pageable pageable);
-
+    PageModelResponse<FolloweeDTO> getMutualFollowers(String accessToken, Pageable pageable, String search);
 
 }

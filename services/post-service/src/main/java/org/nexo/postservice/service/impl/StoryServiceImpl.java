@@ -3,12 +3,16 @@ package org.nexo.postservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.postservice.dto.CollectionRequestDto;
 import org.nexo.postservice.dto.StoryRequestDto;
+import org.nexo.postservice.dto.response.CollectionDetailResponse;
+import org.nexo.postservice.dto.response.CollectionSummaryResponse;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.StoryResponse;
 import org.nexo.postservice.exception.CustomException;
-import org.nexo.postservice.model.StoryModel;
-import org.nexo.postservice.model.StoryViewModel;
+import org.nexo.postservice.model.*;
+import org.nexo.postservice.repository.ICollectionItemRepository;
+import org.nexo.postservice.repository.ICollectionRepository;
 import org.nexo.postservice.repository.IStoryRepository;
 import org.nexo.postservice.repository.IStoryViewRepository;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
@@ -45,6 +49,8 @@ public class StoryServiceImpl implements IStoryService {
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ICollectionRepository collectionRepository;
+    private final ICollectionItemRepository collectionItemRepository;
 
     @Override
     public String saveStory(StoryRequestDto dto, List<MultipartFile> files) {
@@ -87,6 +93,158 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @Override
+    public String saveCollection(CollectionRequestDto dto) {
+        Long userId = securityUtil.getUserIdFromToken();
+        CollectionModel collectionModel;
+        List<Long> currentIdList = new ArrayList<>();
+        List<Long> newIdList = dto.getStoryList();
+        if (dto.getId() != 0) {
+            collectionModel = collectionRepository.findById(dto.getId()).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+            for (CollectionItemModel collectionItemModel : collectionModel.getCollectionItemModelList()) {
+                currentIdList.add(collectionItemModel.getStoryModel().getId());
+            }
+            securityUtil.checkOwner(collectionModel.getUserId());
+        } else {
+            collectionModel = CollectionModel.builder()
+                    .userId(userId)
+                    .build();
+        }
+        collectionModel.setCollectionName(dto.getCollectionName());
+
+        List<CollectionItemModel> toRemove = collectionModel.getCollectionItemModelList().stream()
+                .filter(item -> !newIdList.contains(item.getStoryModel().getId()))
+                .toList();
+
+        collectionModel.getCollectionItemModelList().removeAll(toRemove);
+
+        List<Long> toAdd = newIdList.stream()
+                .filter(id -> !currentIdList.contains(id))
+                .toList();
+
+        for (Long storyId : toAdd) {
+            StoryModel story = storyRepository.findById(storyId)
+                    .orElseThrow(() -> new CustomException("Story not found: " + storyId, HttpStatus.BAD_REQUEST));
+
+            CollectionItemModel newItem = CollectionItemModel.builder()
+                    .collectionModel(collectionModel)
+                    .storyModel(story)
+                    .build();
+
+            collectionModel.getCollectionItemModelList().add(newItem);
+        }
+
+        collectionRepository.save(collectionModel);
+
+        return "Success";
+    }
+
+    @Override
+    public PageModelResponse<CollectionSummaryResponse> getAllCollections(Long id, int pageNo, int pageSize) {
+        Long userId = securityUtil.getUserIdFromToken();
+
+        boolean isAllow = false;
+        if (id.equals(userId)) {
+            isAllow = true;
+        } else {
+            UserServiceProto.CheckFollowResponse followResponse =
+                    userGrpcClient.checkFollow(userId, id);
+            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get Collection", HttpStatus.BAD_REQUEST);
+
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<CollectionModel> page = collectionRepository.findByUserId(id, pageable);
+
+        List<CollectionSummaryResponse> content = page.getContent().stream()
+                .map(collection -> {
+                    String thumbnailUrl = null;
+                    if (!collection.getCollectionItemModelList().isEmpty()) {
+                        thumbnailUrl = collection.getCollectionItemModelList().getFirst().getStoryModel().getMediaURL();
+                    }
+                    return CollectionSummaryResponse.builder()
+                            .id(collection.getId())
+                            .collectionName(collection.getCollectionName())
+                            .mediaUrl(thumbnailUrl)
+                            .createdAt(collection.getCreatedAt())
+                            .build();
+                })
+                .toList();
+        return PageModelResponse.<CollectionSummaryResponse>builder()
+                .content(content)
+                .pageNo(pageNo)
+                .pageSize(pageSize)
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .build();
+    }
+
+    @Override
+    public CollectionDetailResponse getCollectionDetail(Long collectionId) {
+        CollectionModel collectionModel = collectionRepository.findById(collectionId)
+                .orElseThrow(() -> new CustomException("Collection not found", HttpStatus.BAD_REQUEST));
+
+        securityUtil.checkOwner(collectionModel.getUserId());
+        Long currentUserId = collectionModel.getUserId();
+
+        List<StoryResponse.Story> storyList = collectionModel.getCollectionItemModelList().stream()
+                .map(CollectionItemModel::getStoryModel)
+                .map(storyModel -> toStoryResponse(storyModel, currentUserId))
+                .collect(Collectors.toList());
+
+        return CollectionDetailResponse.builder()
+                .id(collectionModel.getId())
+                .collectionName(collectionModel.getCollectionName())
+                .stories(storyList)
+                .build();
+    }
+
+    @Override
+    public CollectionDetailResponse getFriendCollectionDetail(Long collectionId) {
+        Long viewerId = securityUtil.getUserIdFromToken();
+
+        CollectionModel collectionModel = collectionRepository.findById(collectionId)
+                .orElseThrow(() -> new CustomException("Collection not found", HttpStatus.NOT_FOUND));
+
+        Long ownerId = collectionModel.getUserId();
+
+        if (viewerId.equals(ownerId)) {
+            throw new CustomException("Please use the /collections/my/{id} endpoint for your own collections", HttpStatus.BAD_REQUEST);
+        }
+
+        UserServiceProto.CheckFollowResponse followStatus = userGrpcClient.checkFollow(viewerId, ownerId);
+
+        if (followStatus.getIsPrivate() && !followStatus.getIsFollow()) {
+            throw new CustomException("This account is private. Follow them to see their collections.", HttpStatus.FORBIDDEN);
+        }
+
+        boolean isCloseFriendWithOwner = followStatus.getIsCloseFriend();
+
+        List<StoryResponse.Story> storyList = collectionModel.getCollectionItemModelList().stream()
+                .map(CollectionItemModel::getStoryModel)
+                .filter(story -> !story.getIsClosedFriend() || isCloseFriendWithOwner)
+                .map(storyModel -> toStoryResponse(storyModel, viewerId))
+                .collect(Collectors.toList());
+
+        return CollectionDetailResponse.builder()
+                .id(collectionModel.getId())
+                .collectionName(collectionModel.getCollectionName())
+                .stories(storyList)
+                .build();
+    }
+
+    @Override
+    public String deleteCollection(Long id) {
+        CollectionModel collectionModel = collectionRepository.findById(id).orElseThrow(() -> new CustomException("Collection is not exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(collectionModel.getUserId());
+        collectionRepository.delete(collectionModel);
+        return "Success";
+    }
+
+    @Override
     public String archiveStory(Long id) {
         StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
@@ -122,7 +280,7 @@ public class StoryServiceImpl implements IStoryService {
         for (UserServiceProto.FolloweeInfo followeeInfo : response.getFolloweesList()) {
             Long friendId = followeeInfo.getUserId();
             List<StoryResponse.Story> storyList = new ArrayList<>();
-            List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActive(friendId, true);
+            List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActiveAndIsClosedFriend(friendId, true, false);
             listStory1.forEach(model -> storyList.add(toStoryResponse(model, userId)));
 
             if (followeeInfo.getIsCloseFriend()) {
@@ -154,16 +312,14 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @Override
-    public PageModelResponse<StoryResponse> getStoriesOfUser(Long id, int pageNo, int pageSize) {
-        String klId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(klId);
-        UserServiceProto.UserDTOResponse response4 = userGrpcClient.getUserDTOById(response.getUserId());
+    public PageModelResponse<StoryResponse> getStoriesOfUser(Long ownerId, int pageNo, int pageSize) {
+        Long viewerId = securityUtil.getUserIdFromToken();
 
         boolean isAllow = false;
-        if (id.equals(response.getUserId())) {
+        if (ownerId.equals(viewerId)) {
             isAllow = true;
         } else {
-            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), id);
+            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(viewerId, ownerId);
             if (!response2.getIsPrivate() || response2.getIsFollow()) {
                 isAllow = true;
             }
@@ -172,9 +328,10 @@ public class StoryServiceImpl implements IStoryService {
         if (!isAllow)
             throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
 
-        List<StoryModel> allStories = storyRepository.findByUserIdAndIsActive(id, true);
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Page<StoryModel> storyPage = storyRepository.findByUserIdAndIsActive(ownerId, true, pageable);
 
-        if (allStories.isEmpty()) {
+        if (storyPage.isEmpty()) {
             return PageModelResponse.<StoryResponse>builder()
                     .content(Collections.emptyList())
                     .pageNo(pageNo)
@@ -184,33 +341,24 @@ public class StoryServiceImpl implements IStoryService {
                     .build();
         }
 
-        int totalStories = allStories.size();
-        int totalPages = (int) Math.ceil((double) totalStories / pageSize);
-
-        if (pageNo < 0) pageNo = 0;
-        if (pageNo >= totalPages) pageNo = totalPages - 1;
-
-        int start = pageNo * pageSize;
-        int end = Math.min(start + pageSize, totalStories);
-
-        List<StoryModel> pagedStories = allStories.subList(start, end);
-
-        List<StoryResponse.Story> storyList = new ArrayList<>();
-        pagedStories.forEach(model -> storyList.add(toStoryResponse(model, id)));
+        UserServiceProto.UserDTOResponse ownerInfo = userGrpcClient.getUserDTOById(ownerId);
+        List<StoryResponse.Story> storyList = storyPage.getContent().stream()
+                .map(model -> toStoryResponse(model, viewerId))
+                .collect(Collectors.toList());
 
         StoryResponse storyResponse = StoryResponse.builder()
-                .userName(response4.getUsername())
-                .avatarUrl(response4.getAvatar())
-                .userId(id)
+                .userName(ownerInfo.getUsername())
+                .avatarUrl(ownerInfo.getAvatar())
+                .userId(ownerId)
                 .storyList(storyList)
                 .build();
 
         return PageModelResponse.<StoryResponse>builder()
                 .content(List.of(storyResponse))
-                .pageNo(pageNo)
-                .pageSize(pageSize)
-                .totalElements(totalStories)
-                .totalPages(totalPages)
+                .pageNo(storyPage.getNumber())
+                .pageSize(storyPage.getSize())
+                .totalElements(storyPage.getTotalElements())
+                .totalPages(storyPage.getTotalPages())
                 .build();
     }
 

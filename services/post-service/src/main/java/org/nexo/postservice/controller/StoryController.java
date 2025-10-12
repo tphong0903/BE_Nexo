@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.nexo.postservice.dto.CollectionRequestDto;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.dto.response.ResponseData;
 import org.nexo.postservice.service.IStoryService;
@@ -70,5 +71,33 @@ public class StoryController {
     @GetMapping("/all/{id}")
     public ResponseData<?> getAllStoriesOfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
         return new ResponseData<>(200, "Success", storyService.getAllStoriesOfUser(id, pageNo, pageSize));
+    }
+
+    @PostMapping
+    public ResponseData<String> saveCollection(@RequestBody @Valid CollectionRequestDto dto) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", storyService.saveCollection(dto));
+    }
+
+
+    @DeleteMapping("/collections/{id}")
+    public ResponseData<String> deleteCollection(@PathVariable Long id) {
+        return new ResponseData<>(200, "Collection deleted successfully", storyService.deleteCollection(id));
+    }
+
+    @GetMapping("/collections/my/{id}")
+    public ResponseData<?> getMyCollections(@PathVariable Long id,
+                                            @RequestParam(defaultValue = "0") int pageNo,
+                                            @RequestParam(defaultValue = "10") int pageSize) {
+        return new ResponseData<>(200, "Success", storyService.getAllCollections(id, pageNo, pageSize));
+    }
+
+    @GetMapping("/collections/my/detail/{id}")
+    public ResponseData<?> getMyCollectionDetail(@PathVariable Long id) {
+        return new ResponseData<>(200, "Success", storyService.getCollectionDetail(id));
+    }
+
+    @GetMapping("/collections/detail/{id}")
+    public ResponseData<?> getFriendCollectionDetail(@PathVariable Long id) {
+        return new ResponseData<>(200, "Success", storyService.getFriendCollectionDetail(id));
     }
 }

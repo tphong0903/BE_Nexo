@@ -388,8 +388,10 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
         UserServiceProto.CheckFollowResponse response = UserServiceProto.CheckFollowResponse
                 .newBuilder()
                 .setIsFollow(list.get(0))
-                .setIsPrivate(list.get(1) != null ? list.get(1) : false)
+                .setIsPrivate(list.get(1))
+                .setIsCloseFriend(list.get(2))
                 .build();
+
         responseObserver.onNext(response);
         responseObserver.onCompleted();
     }

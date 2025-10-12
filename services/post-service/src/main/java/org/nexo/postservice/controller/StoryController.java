@@ -67,8 +67,8 @@ public class StoryController {
         return new ResponseData<>(200, "Success", storyService.getStoriesOfUser(id, pageNo, pageSize));
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/all/{id}")
     public ResponseData<?> getAllStoriesOfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
-        return new ResponseData<>(200, "Success", storyService.getStoriesOfUser(id, pageNo, pageSize));
+        return new ResponseData<>(200, "Success", storyService.getAllStoriesOfUser(id, pageNo, pageSize));
     }
 }

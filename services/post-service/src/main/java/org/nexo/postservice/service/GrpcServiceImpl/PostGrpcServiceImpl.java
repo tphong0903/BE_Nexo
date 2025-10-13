@@ -98,7 +98,16 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                     .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
                     .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
                     .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
-                    .setTag(dto.getTag() != null ? dto.getTag() : "")
+                    .addAllListUserTag(
+                            dto.getListUserTag() != null
+                                    ? dto.getListUserTag().stream()
+                                    .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
+                                            .setUserId(tag.getUserId())
+                                            .setUserName(tag.getUserName())
+                                            .build())
+                                    .toList()
+                                    : List.of()
+                    )
                     .setMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : null)
                     .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0)
                     .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0)

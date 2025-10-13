@@ -13,14 +13,26 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class PostMediaServiceImp implements IPostMediaService {
     private final IPostMediaRepository postMediaRepository;
     private final IPostRepository postRepository;
+
+    public static PostMediaRequestDTO convertToDTO(PostMediaModel model) {
+        return PostMediaRequestDTO.newBuilder()
+                .setMediaOrder(model.getMediaOrder())
+                .setMediaType(model.getMediaType().toString())
+                .setMediaUrl(model.getMediaUrl())
+                .setPostMediaId(model.getId())
+                .setPostID(model.getId())
+                .build();
+    }
+
     @Override
     public String savePostMedia(List<PostMediaDTO> postMediaDTOs) {
-        for(PostMediaDTO item : postMediaDTOs){
+        for (PostMediaDTO item : postMediaDTOs) {
             PostMediaModel model = PostMediaModel.builder()
                     .mediaOrder(item.getMediaOrder())
                     .mediaType(EMediaType.valueOf(item.getMediaType()))
@@ -40,16 +52,6 @@ public class PostMediaServiceImp implements IPostMediaService {
 
     @Override
     public void deletePostMedia(Long postMediaId) {
-        postMediaRepository.delete(postMediaRepository.findById(postMediaId).orElseThrow(()->new CustomException("Post media is not exist",HttpStatus.BAD_REQUEST)));
-    }
-
-    public static PostMediaRequestDTO convertToDTO(PostMediaModel model){
-        return  PostMediaRequestDTO.newBuilder()
-                .setMediaOrder(model.getMediaOrder())
-                .setMediaType(model.getMediaType().toString())
-                .setMediaUrl(model.getMediaUrl())
-                .setPostMediaId(model.getId())
-                .setPostID(model.getId())
-                .build();
+        postMediaRepository.delete(postMediaRepository.findById(postMediaId).orElseThrow(() -> new CustomException("Post media is not exist", HttpStatus.BAD_REQUEST)));
     }
 }

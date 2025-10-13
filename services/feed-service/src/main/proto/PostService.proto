@@ -44,7 +44,7 @@ message ReelResponse {
   string avatarUrl = 4;
   string caption = 5;
   string visibility = 6;
-  string tag = 7;
+  repeated UserTag listUserTag = 7;
   string mediaUrl = 8;
   int64 quantityLike = 9;
   int64 quantityComment = 10;

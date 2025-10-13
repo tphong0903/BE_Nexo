@@ -15,5 +15,5 @@ public interface IStoryRepository extends JpaRepository<StoryModel, Long> {
     Page<StoryModel> findByUserId(Long userId, Pageable pageable);
 
 
-    List<StoryModel> findByUserIdAndIsActiveAndIsClosedFriend(Long userId, Boolean isActive, Boolean isClosedFriend);
+    List<StoryModel> findAllByUserIdAndIsActiveAndIsClosedFriend(Long userId, Boolean isActive, Boolean isClosedFriend);
 }

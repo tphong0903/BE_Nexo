@@ -250,12 +250,20 @@ public class StoryServiceImpl implements IStoryService {
     @Override
     public String viewStory(Long id) {
         Long userId = securityUtil.getUserIdFromToken();
-        StoryViewModel model = StoryViewModel.builder()
-                .isLike(false)
-                .seenUserId(userId)
-                .storyModel(storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST)))
-                .build();
-        storyViewRepository.save(model);
+        StoryViewModel existingViews = storyViewRepository.findByStoryModel_IdAndSeenUserId(id, userId).orElse(null);
+
+        if (existingViews == null) {
+            StoryModel story = storyRepository.findById(id)
+                    .orElseThrow(() -> new CustomException("Story does not exist", HttpStatus.BAD_REQUEST));
+
+            StoryViewModel model = StoryViewModel.builder()
+                    .isLike(false)
+                    .seenUserId(userId)
+                    .storyModel(story)
+                    .build();
+
+            storyViewRepository.save(model);
+        }
         return "Success";
     }
 
@@ -273,11 +281,11 @@ public class StoryServiceImpl implements IStoryService {
         for (UserServiceProto.FolloweeInfo followeeInfo : response.getFolloweesList()) {
             Long friendId = followeeInfo.getUserId();
             List<StoryResponse.Story> storyList = new ArrayList<>();
-            List<StoryModel> listStory1 = storyRepository.findByUserIdAndIsActiveAndIsClosedFriend(friendId, true, false);
+            List<StoryModel> listStory1 = storyRepository.findAllByUserIdAndIsActiveAndIsClosedFriend(friendId, true, false);
             listStory1.forEach(model -> storyList.add(toStoryResponse(model, userId)));
 
             if (followeeInfo.getIsCloseFriend()) {
-                List<StoryModel> listStory2 = storyRepository.findByUserIdAndIsActiveAndIsClosedFriend(friendId, true, true);
+                List<StoryModel> listStory2 = storyRepository.findAllByUserIdAndIsActiveAndIsClosedFriend(friendId, true, true);
                 listStory2.forEach(model -> storyList.add(toStoryResponse(model, userId)));
             }
 
@@ -333,6 +341,7 @@ public class StoryServiceImpl implements IStoryService {
                     .totalPages(0)
                     .build();
         }
+
 
         UserServiceProto.UserDTOResponse ownerInfo = userGrpcClient.getUserDTOById(ownerId);
         List<StoryResponse.Story> storyList = storyPage.getContent().stream()

@@ -1,10 +1,10 @@
 package org.nexo.postservice.service.impl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.MessageDTO;
+import org.nexo.postservice.dto.MessagePostDTO;
 import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.UserTagDTO;
 import org.nexo.postservice.dto.response.PageModelResponse;
@@ -36,7 +36,6 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.time.Duration;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.List;
@@ -108,8 +107,12 @@ public class PostServiceImpl implements IPostService {
             fileServiceClient.savePostMedia(files, model.getId(), token);
         }
         if (postRequestDTO.getPostId() == 0) {
-            String event = "{ \"postId\": " + model.getId() + ", \"authorId\": " + postRequestDTO.getUserId() + ", \"createdAt\": " + Instant.now().toEpochMilli() + " }";
-            redisTemplate.convertAndSend("post-created", event);
+            MessagePostDTO message = MessagePostDTO.builder()
+                    .postId(model.getId())
+                    .authorId(postRequestDTO.getUserId())
+                    .createdAt(Instant.now().toEpochMilli())
+                    .build();
+            kafkaTemplate.send("post-created", message);
         }
         hashTagService.findAndAddHashTagFromCaption(model);
         tagUserIntoPost(oldTag, postRequestDTO.getTag(), postRequestDTO.getUserId(), model.getId());
@@ -131,6 +134,8 @@ public class PostServiceImpl implements IPostService {
             model = ReelModel.builder()
                     .userId(postRequestDTO.getUserId())
                     .caption(postRequestDTO.getCaption())
+                    .commentQuantity(0L)
+                    .likeQuantity(0L)
                     .visibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()))
                     .isActive(true)
                     .build();
@@ -140,6 +145,14 @@ public class PostServiceImpl implements IPostService {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
             fileServiceClient.saveReelMedia(files, model.getId(), token);
+        }
+        if (postRequestDTO.getPostId() == 0) {
+            MessagePostDTO message = MessagePostDTO.builder()
+                    .postId(model.getId())
+                    .authorId(postRequestDTO.getUserId())
+                    .createdAt(Instant.now().toEpochMilli())
+                    .build();
+            kafkaTemplate.send("reel-created", message);
         }
         hashTagService.findAndAddHashTagFromCaption(model);
         return "Success";

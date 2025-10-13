@@ -4,8 +4,11 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.feedservice.dto.PageModelResponse;
 import org.nexo.feedservice.dto.PostResponseDTO;
+import org.nexo.feedservice.dto.ReelResponseDTO;
 import org.nexo.feedservice.dto.ResponseData;
 import org.nexo.feedservice.model.FeedModel;
+import org.nexo.feedservice.model.FeedReelModel;
+import org.nexo.feedservice.repository.IFeedReelRepository;
 import org.nexo.feedservice.repository.IFeedRepository;
 import org.nexo.grpc.user.UserServiceProto;
 import org.springframework.data.domain.Page;
@@ -30,6 +33,7 @@ public class FeedService {
     private final UserGrpcClient userClient;
     private final PostGrpcClient postGrpcClient;
     private final IFeedRepository feedRepository;
+    private final IFeedReelRepository feedReelRepository;
 
     public Mono<Void> handleNewPost(Long authorId, Long postId, Long createdAt) {
         List<UserServiceProto.FolloweeInfo> listFriend = new ArrayList<>(
@@ -46,6 +50,32 @@ public class FeedService {
                 .flatMap(followeeInfo -> {
                     Long followerId = followeeInfo.getUserId();
                     String key = "feed:" + followerId;
+                    return reactiveRedisTemplate.opsForZSet()
+                            .add(key, postId.toString(), createdAt)
+                            .then(
+                                    reactiveRedisTemplate.opsForZSet()
+                                            .removeRange(key, Range.closed(0L, -51L))
+                            )
+                            .then();
+                })
+                .then();
+    }
+
+    public Mono<Void> handleNewReel(Long authorId, Long postId, Long createdAt) {
+        List<UserServiceProto.FolloweeInfo> listFriend = new ArrayList<>(
+                userClient.getUserFollowees(authorId).getFolloweesList()
+        );
+        List<FeedReelModel> feedModelList = new ArrayList<>();
+        for (UserServiceProto.FolloweeInfo model : listFriend) {
+            feedModelList.add(FeedReelModel.builder().followerId(model.getUserId()).reelId(postId).userId(authorId).build());
+        }
+        feedModelList.add(FeedReelModel.builder().followerId(authorId).reelId(postId).userId(authorId).build());
+        listFriend.add(UserServiceProto.FolloweeInfo.newBuilder().setUserId(authorId).setUserName("").setAvatar("").build());
+        feedReelRepository.saveAll(feedModelList);
+        return Flux.fromIterable(listFriend)
+                .flatMap(followeeInfo -> {
+                    Long followerId = followeeInfo.getUserId();
+                    String key = "feed:reel:" + followerId;
                     return reactiveRedisTemplate.opsForZSet()
                             .add(key, postId.toString(), createdAt)
                             .then(
@@ -137,43 +167,90 @@ public class FeedService {
     }
 
 
-//    public Mono<PostResponseDTO> getLatestReelsFeed(Long userId, int page, Long limit) {
-//        Long start = page * limit;
-//        Long end = start + limit - 1;
-//        String key = "feed:" + userId;
-//        log.info("Fetching feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
-//                userId, page, limit, key, start, end);
-//        return reactiveRedisTemplate.opsForZSet()
-//                .reverseRange(key, Range.closed(start, end))
-//                .collectList()
-//                .publishOn(Schedulers.boundedElastic())
-//                .flatMapMany(posts -> {
-//                    if (!posts.isEmpty()) {
-//                        log.info("Redis HIT: found {} posts for userId={}", posts.size(), userId);
-//                        return Mono.fromIterable(posts)
-//                                .flatMap(postId -> {
-//                                    log.info("Fetching post details from gRPC for postId={}", postId);
-//                                    return postGrpcClient.getPostByIdAsync(Long.parseLong(postId));
-//                                });
-//                    } else {
-//                        log.warn("Redis MISS: no posts found for userId={}, fallback to DB", userId);
-//                        return Mono.fromCallable(() -> {
-//                                    PageRequest pageRequest = PageRequest.of(page, limit.intValue());
-//                                    return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
-//                                })
-//                                .subscribeOn(Schedulers.boundedElastic())
-//                                .flatMapMany(pageResult -> {
-//                                    List<Long> list = pageResult.getContent();
-//                                    log.info("Fetched {} posts from DB for userId={}", list.size(), userId);
-//                                    return Flux.fromIterable(list)
-//                                            .flatMap(postId -> {
-//                                                log.debug("Fetching post details from gRPC for postId={}", postId);
-//                                                return postGrpcClient.getPostByIdAsync(postId);
-//                                            });
-//                                });
-//                    }
-//                });
-//
-//    }
+    public Mono<ResponseData<?>> getLatestReelsFeed(Long userId, int page, Long limit) {
+        Long start = page * limit;
+        Long end = start + limit - 1;
+        String key = "feed:reel:" + userId;
+
+        log.info("Fetching REEL feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
+                userId, page, limit, key, start, end);
+
+        PageRequest pageRequest = PageRequest.of(page, limit.intValue());
+
+        return reactiveRedisTemplate.opsForZSet()
+                .reverseRange(key, Range.closed(start, end))
+                .collectList()
+                .flatMap(redisReels -> {
+                    int redisCount = redisReels.size();
+                    log.info("Redis returned {} reel IDs", redisCount);
+
+                    if (redisCount >= limit) {
+                        return Flux.fromIterable(redisReels)
+                                .flatMap(reelId -> postGrpcClient.getReelByIdAsync(Long.parseLong(reelId)))
+                                .filter(dto -> dto.getReelId() != 0)
+                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                                .collectList()
+                                .flatMap(content -> Mono.fromCallable(() -> {
+                                            Page<Long> pageResult = feedReelRepository.findReelIdsByFollowerId(userId, pageRequest);
+                                            long totalElements = pageResult.getTotalElements();
+                                            int totalPages = pageResult.getTotalPages();
+
+                                            PageModelResponse<ReelResponseDTO> pageModelResponse =
+                                                    PageModelResponse.<ReelResponseDTO>builder()
+                                                            .pageNo(page)
+                                                            .pageSize(limit.intValue())
+                                                            .totalElements(totalElements)
+                                                            .totalPages(totalPages)
+                                                            .last(page + 1 >= totalPages)
+                                                            .content(content)
+                                                            .build();
+
+                                            return ResponseData.builder()
+                                                    .status(200)
+                                                    .message("Reel feed retrieved successfully (from Redis)")
+                                                    .data(pageModelResponse)
+                                                    .build();
+                                        }).subscribeOn(Schedulers.boundedElastic())
+                                );
+                    } else {
+                        log.warn("Redis MISS or insufficient data ({} < {}), fallback to DB", redisCount, limit);
+
+                        return Mono.fromCallable(() -> feedReelRepository.findReelIdsByFollowerId(userId, pageRequest))
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .flatMapMany(pageResult -> {
+                                    List<Long> dbReelIds = pageResult.getContent();
+                                    log.info("Fetched {} reels from DB for userId={}", dbReelIds.size(), userId);
+                                    return Flux.fromIterable(dbReelIds)
+                                            .flatMap(postGrpcClient::getReelByIdAsync);
+                                })
+                                .filter(dto -> dto.getReelId() != 0)
+                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                                .collectList()
+                                .flatMap(content -> Mono.fromCallable(() -> {
+                                            long totalElements = feedReelRepository.countFeedReelModelsByFollowerId(userId);
+                                            int totalPages = (int) Math.ceil((double) totalElements / limit);
+
+                                            PageModelResponse<ReelResponseDTO> pageModelResponse =
+                                                    PageModelResponse.<ReelResponseDTO>builder()
+                                                            .pageNo(page)
+                                                            .pageSize(limit.intValue())
+                                                            .totalElements(totalElements)
+                                                            .totalPages(totalPages)
+                                                            .last(page + 1 >= totalPages)
+                                                            .content(content)
+                                                            .build();
+
+                                            return ResponseData.builder()
+                                                    .status(200)
+                                                    .message("Reel feed retrieved successfully (from DB)")
+                                                    .data(pageModelResponse)
+                                                    .build();
+                                        }).subscribeOn(Schedulers.boundedElastic())
+                                );
+                    }
+                });
+    }
+
+
 }
 

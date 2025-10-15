@@ -58,6 +58,16 @@ public class StoryController {
         return new ResponseData<>(200, "Success", storyService.viewStory(id));
     }
 
+    @PostMapping("/like/{id}")
+    public ResponseData<String> likeStory(@PathVariable Long id) {
+        return new ResponseData<>(200, "Success", storyService.likeStory(id));
+    }
+
+    @GetMapping("/view/detail/{id}")
+    public ResponseData<?> viewDetailStory(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
+        return new ResponseData<>(200, "Success", storyService.viewDetailStory(id, pageNo, pageSize));
+    }
+
     @GetMapping("/view/{id}")
     public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
         return new ResponseData<>(200, "Success", storyService.getAllStoryOfFriend(id, pageNo, pageSize));

@@ -19,9 +19,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-public class ReelModel extends AbstractPost{
+public class ReelModel extends AbstractPost {
     private String videoUrl;
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "reelModel", cascade = CascadeType.ALL)
-    @JsonIgnore
     private List<PostHashTagModel> postHashTagModel;
+
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "reelModel", cascade = CascadeType.ALL)
+    private List<ReportReelModel> reportReelModels;
 }

@@ -5,10 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.CollectionRequestDto;
 import org.nexo.postservice.dto.StoryRequestDto;
-import org.nexo.postservice.dto.response.CollectionDetailResponse;
-import org.nexo.postservice.dto.response.CollectionSummaryResponse;
-import org.nexo.postservice.dto.response.PageModelResponse;
-import org.nexo.postservice.dto.response.StoryResponse;
+import org.nexo.postservice.dto.response.*;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.*;
 import org.nexo.postservice.repository.ICollectionItemRepository;
@@ -89,6 +86,32 @@ public class StoryServiceImpl implements IStoryService {
         StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
         storyRepository.delete(model);
+        return "Success";
+    }
+
+    @Override
+    public String likeStory(Long id) {
+        StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        Long userId = securityUtil.getUserIdFromToken();
+        boolean isAllow = false;
+        if (model.getUserId().equals(userId)) {
+            isAllow = false;
+        } else {
+            UserServiceProto.CheckFollowResponse followResponse =
+                    userGrpcClient.checkFollow(userId, model.getUserId());
+            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to like story", HttpStatus.BAD_REQUEST);
+
+        StoryViewModel storyViewModel = storyViewRepository.findByStoryModel_IdAndSeenUserId(id, userId).orElse(null);
+        if (storyViewModel == null)
+            throw new CustomException("Story View is not exist", HttpStatus.BAD_REQUEST);
+
+        storyViewModel.setIsLike(!storyViewModel.getIsLike());
+        storyViewRepository.save(storyViewModel);
         return "Success";
     }
 
@@ -268,6 +291,39 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @Override
+    public PageModelResponse<ViewDetailStoryResponse> viewDetailStory(Long id, int pageNo, int pageSize) {
+        StoryModel story = storyRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Story does not exist", HttpStatus.BAD_REQUEST));
+        securityUtil.checkOwner(story.getUserId());
+
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.ASC, "createdAt"));
+
+        Page<StoryViewModel> page = storyViewRepository.findByStoryModel_Id(id, pageable);
+
+        List<ViewDetailStoryResponse> viewDetailStoryResponses = new ArrayList<>();
+        for (StoryViewModel storyViewModel : page.getContent()) {
+            UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(storyViewModel.getSeenUserId());
+            viewDetailStoryResponses.add(
+                    ViewDetailStoryResponse.builder()
+                            .avatarUrl(userDTOResponse.getAvatar())
+                            .isLike(storyViewModel.getIsLike())
+                            .userName(userDTOResponse.getUsername())
+                            .createdAt(storyViewModel.getCreatedAt())
+                            .build()
+            );
+        }
+
+        return PageModelResponse.<ViewDetailStoryResponse>builder()
+                .content(viewDetailStoryResponses)
+                .pageNo(pageNo)
+                .pageSize(pageSize)
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .build();
+    }
+
+
+    @Override
     public PageModelResponse<StoryResponse> getAllStoryOfFriend(Long id, int pageNo, int pageSize) {
         securityUtil.checkOwner(id);
         Long userId = securityUtil.getUserIdFromToken();
@@ -412,6 +468,7 @@ public class StoryServiceImpl implements IStoryService {
                 .isSeen(isSeen)
                 .isActive(model.getIsActive())
                 .isCloseFriend(model.getIsClosedFriend())
+                .quantitySeen(Long.parseLong(String.valueOf(model.getViews().size())))
                 .build();
     }
 

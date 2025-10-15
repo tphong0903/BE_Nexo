@@ -93,13 +93,13 @@ public class PostServiceImpl implements IPostService {
 
         }
         postRepository.save(model);
-        if (postRequestDTO.getPostId() != 0) {
-            String postKey = "post:" + model.getId();
-            String feedKey = "feed:" + model.getUserId();
-
-            redisTemplate.delete(postKey);
-            redisTemplate.opsForZSet().remove(feedKey, model.getId());
-        }
+//        if (postRequestDTO.getPostId() != 0) {
+//            String postKey = "post:" + model.getId();
+//            String feedKey = "feed:" + model.getUserId();
+//
+//            redisTemplate.delete(postKey);
+//            redisTemplate.opsForZSet().remove(feedKey, model.getId());
+//        }
 
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
@@ -206,13 +206,13 @@ public class PostServiceImpl implements IPostService {
         boolean isAllow = false;
         if (id.equals(currentUser.getUserId())) {
             isAllow = true;
-            listPost = postRepository.findByUserId(id, pageable);
+            listPost = postRepository.findByUserIdAndIsActive(id, true, pageable);
         } else {
             UserServiceProto.CheckFollowResponse followResponse =
                     userGrpcClient.checkFollow(currentUser.getUserId(), id);
 
             if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                listPost = postRepository.findByUserIdAndIsActive(id, true, pageable);
+                listPost = postRepository.findByUserIdAndIsActiveAndVisibility(id, true, EVisibilityPost.PUBLIC, pageable);
                 isAllow = true;
             }
         }

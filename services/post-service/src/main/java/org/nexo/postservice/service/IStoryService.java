@@ -2,10 +2,7 @@ package org.nexo.postservice.service;
 
 import org.nexo.postservice.dto.CollectionRequestDto;
 import org.nexo.postservice.dto.StoryRequestDto;
-import org.nexo.postservice.dto.response.CollectionDetailResponse;
-import org.nexo.postservice.dto.response.CollectionSummaryResponse;
-import org.nexo.postservice.dto.response.PageModelResponse;
-import org.nexo.postservice.dto.response.StoryResponse;
+import org.nexo.postservice.dto.response.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
@@ -14,6 +11,8 @@ public interface IStoryService {
     String saveStory(StoryRequestDto dto, List<MultipartFile> files);
 
     String deleteStory(Long id);
+
+    String likeStory(Long id);
 
     String saveCollection(CollectionRequestDto dto);
 
@@ -28,6 +27,8 @@ public interface IStoryService {
     String archiveStory(Long id);
 
     String viewStory(Long id);
+
+    PageModelResponse<ViewDetailStoryResponse> viewDetailStory(Long id, int pageNo, int pageSize);
 
     PageModelResponse<StoryResponse> getAllStoryOfFriend(Long id, int pageNo, int pageSize);
 

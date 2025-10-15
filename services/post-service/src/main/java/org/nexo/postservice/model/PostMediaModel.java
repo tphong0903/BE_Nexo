@@ -19,7 +19,6 @@ public class PostMediaModel extends AbstractEntity<Long> {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "post_id")
-    @JsonIgnore
     private PostModel postModel;
 
 }

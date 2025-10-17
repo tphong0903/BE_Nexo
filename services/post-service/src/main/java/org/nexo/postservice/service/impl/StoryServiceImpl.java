@@ -171,16 +171,18 @@ public class StoryServiceImpl implements IStoryService {
         if (!isAllow)
             throw new CustomException("Dont allow to get Collection", HttpStatus.BAD_REQUEST);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.ASC, "createdAt"));
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.DESC, "createdAt"));
 
         Page<CollectionModel> page = collectionRepository.findByUserId(id, pageable);
 
         List<CollectionSummaryResponse> content = page.getContent().stream()
+                .filter(collection -> !collection.getCollectionItemModelList().isEmpty())
                 .map(collection -> {
-                    String thumbnailUrl = null;
-                    if (!collection.getCollectionItemModelList().isEmpty()) {
-                        thumbnailUrl = collection.getCollectionItemModelList().getFirst().getStoryModel().getMediaURL();
-                    }
+                    String thumbnailUrl = collection.getCollectionItemModelList()
+                            .getFirst()
+                            .getStoryModel()
+                            .getMediaURL();
+
                     return CollectionSummaryResponse.builder()
                             .id(collection.getId())
                             .collectionName(collection.getCollectionName())

@@ -92,6 +92,7 @@ public class NotificationService implements INotificationService {
                     .orElse(LocalDateTime.now());
 
             finalDtoList.add(new NotificationDTO(
+                    template.getId(),
                     template.getRecipientId(),
                     template.getNotificationType().name(),
                     template.getTargetUrl(),
@@ -214,8 +215,10 @@ public class NotificationService implements INotificationService {
                 .recipientId(recipient.getId())
                 .message(message)
                 .build());
-
-        messagingTemplate.convertAndSendToUser(String.valueOf(recipient.getId()), "/queue/notifications", message);
+        String destination = "/queue/notifications";
+        log.info("==> [WEBSOCKET] Attempting to send message to user '{}' at destination '{}'. Message: '{}'",
+                recipient.getUsername(), destination, message);
+        messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", message);
 
         log.info("Notification sent to {}: {}", recipient.getUsername(), message);
     }
@@ -242,7 +245,7 @@ public class NotificationService implements INotificationService {
         };
 
         if (size == 1) {
-            return firstActorName + " " + actionText;
+            return " " + actionText;
         } else {
             return firstActorName + " và " + (size - 1) + " người khác " + actionText;
         }

@@ -14,6 +14,7 @@ import java.util.List;
 @AllArgsConstructor
 @NoArgsConstructor
 public class NotificationDTO {
+    private Long id;
     private Long recipientId;
     private String notificationType;
     private String targetUrl;

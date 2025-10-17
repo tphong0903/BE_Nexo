@@ -26,6 +26,11 @@ public class SecurityUtil {
         return tokenService.getKeyloakIdFromContext();
     }
 
+    public String getUserNameFromToken(String jwt) {
+        UserServiceProto.UserDto user = userClient.getUserByKeycloakId(jwt);
+        return user.getUsername();
+    }
+
     public Long getUserIdFromToken() {
         String sub = tokenService.getKeyloakIdFromContext();
         UserServiceProto.UserDto user = userClient.getUserByKeycloakId(sub);

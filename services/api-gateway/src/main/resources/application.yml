@@ -17,6 +17,9 @@ spring:
     gateway:
       server:
         webflux:
+          httpclient:
+            websocket:
+              max-frame-payload-length: 65536
           globalcors:
             cors-configurations:
               "[/**]":
@@ -67,6 +70,19 @@ spring:
                 - Path=/api/interaction/**
               filters:
                 - StripPrefix=2
+
+            - id: notification-service
+              uri: lb://notifications
+              predicates:
+                - Path=/api/notifications/**
+              filters:
+                - StripPrefix=2
+            - id: notification-websocket-route
+              uri: lb://notifications
+              predicates:
+                - Path=/ws/**
+              metadata:
+                websocket: true
 
 
 eureka:

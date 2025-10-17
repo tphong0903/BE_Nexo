@@ -28,4 +28,6 @@ public class StoryModel extends AbstractEntity<Long> {
 
     @OneToMany(mappedBy = "storyModel", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<StoryViewModel> views = new ArrayList<>();
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "storyModel", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CollectionItemModel> collectionItemModelList = new ArrayList<>();
 }

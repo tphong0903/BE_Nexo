@@ -54,18 +54,24 @@ public class HlsServiceImpl implements IHlsService {
         String[] cmd = {
                 "cmd.exe", "/c",
                 ffmpegPath,
+                "-y",
                 "-i", inputFilePath,
                 "-c:v", "libx264",
+                "-preset", "fast",
+                "-crf", "23",
+                "-profile:v", "high",
+                "-level", "4.0",
+                "-pix_fmt", "yuv420p",
                 "-c:a", "aac",
-                "-profile:v", "baseline",
-                "-level", "3.0",
-                "-s", "640x360",
+                "-b:a", "128k",
+                "-threads", "0",
                 "-start_number", "0",
-                "-hls_time", "6",
+                "-hls_time", "8",
                 "-hls_list_size", "0",
                 "-hls_segment_filename", segmentPattern,
                 outputM3u8Path
         };
+
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         Process process = pb.start();

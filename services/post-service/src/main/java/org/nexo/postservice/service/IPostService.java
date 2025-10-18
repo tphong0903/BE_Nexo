@@ -32,4 +32,6 @@ public interface IPostService {
     ReelResponseDTO getReelById2(Long id);
 
     String deleteReel(Long id);
+
+    PageModelResponse getPopularPosts(int page, int size);
 }

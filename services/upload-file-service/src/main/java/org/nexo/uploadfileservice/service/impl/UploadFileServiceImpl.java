@@ -85,8 +85,9 @@ public class UploadFileServiceImpl implements IUploadFileService {
                     } else {
                         mediaType = "VIDEO";
                         File tempFile = File.createTempFile("video", ".mp4");
+                        String hlsOutputDir = tempFile.getParent() + "/hls_" + index + "_" + System.currentTimeMillis();
                         file.transferTo(tempFile);
-                        File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
+                        File hlsFolder = hlsService.convertToHls(tempFile, hlsOutputDir);
                         mediaUrl = uploadHlsToFirebase(hlsFolder);
                     }
 

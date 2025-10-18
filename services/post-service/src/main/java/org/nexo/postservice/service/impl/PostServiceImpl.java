@@ -357,6 +357,30 @@ public class PostServiceImpl implements IPostService {
         return "Success";
     }
 
+    @Override
+    public PageModelResponse<PostResponseDTO> getPopularPosts(int page, int size) {
+        Pageable pageable = PageRequest.of(page, size);
+        Long id = securityUtil.getUserIdFromToken();
+        UserServiceProto.UserDTOResponse currentUser = userGrpcClient.getUserDTOById(id);
+        Page<PostModel> postPage = postRepository.findPopularPublicPostsWithHashtagScore(pageable);
+
+        List<PostResponseDTO> postDTOs = postPage.getContent().stream()
+                .map(post -> {
+                    return convertToPostResponseDTO(post, currentUser);
+                })
+                .toList();
+
+        PageModelResponse<PostResponseDTO> response = new PageModelResponse<>();
+        response.setContent(postDTOs);
+        response.setPageSize(postPage.getNumber());
+        response.setPageSize(postPage.getSize());
+        response.setTotalElements(postPage.getTotalElements());
+        response.setTotalPages(postPage.getTotalPages());
+        response.setLast(postPage.isLast());
+
+        return response;
+    }
+
     PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse userDto) {
         List<Long> tagIds = Optional.ofNullable(model.getTag())
                 .filter(tag -> !tag.isBlank())

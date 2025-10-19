@@ -358,6 +358,16 @@ public class StoryServiceImpl implements IStoryService {
 
         }
         int start = pageNo * pageSize;
+        if (start >= storyResponseList.size()) {
+            return PageModelResponse.<StoryResponse>builder()
+                    .content(List.of())
+                    .pageNo(pageNo)
+                    .pageSize(pageSize)
+                    .totalElements(storyResponseList.size())
+                    .totalPages((int) Math.ceil((double) storyResponseList.size() / pageSize))
+                    .build();
+        }
+
         int end = Math.min(start + pageSize, storyResponseList.size());
         List<StoryResponse> pagedList = storyResponseList.subList(start, end);
 

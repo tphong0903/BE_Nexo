@@ -1,6 +1,5 @@
 package org.nexo.postservice.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.nexo.postservice.util.Enum.EMediaType;

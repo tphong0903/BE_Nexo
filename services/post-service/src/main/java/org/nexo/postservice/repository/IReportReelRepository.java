@@ -1,6 +1,5 @@
 package org.nexo.postservice.repository;
 
-import org.nexo.postservice.model.ReportPostModel;
 import org.nexo.postservice.model.ReportReelModel;
 import org.nexo.postservice.util.Enum.EReportStatus;
 import org.springframework.data.domain.Page;

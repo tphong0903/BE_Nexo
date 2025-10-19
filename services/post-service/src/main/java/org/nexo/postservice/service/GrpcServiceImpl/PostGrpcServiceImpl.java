@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Objects;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -40,6 +41,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             List<PostResponseDTO> postDTOs = postService.getPostsByIds(posts, viewerId);
 
             List<PostServiceOuterClass.PostResponse> responses = postDTOs.stream()
+                    .filter(Objects::nonNull)
                     .map(dto -> {
                         PostServiceOuterClass.PostResponse.Builder builder = PostServiceOuterClass.PostResponse.newBuilder()
                                 .setPostId(dto.getPostId())
@@ -98,6 +100,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             List<ReelResponseDTO> reelDTOs = postService.getReelsByIds(posts, viewerId);
 
             List<PostServiceOuterClass.ReelResponse> responses = reelDTOs.stream()
+                    .filter(Objects::nonNull)
                     .map(dto -> {
                         PostServiceOuterClass.ReelResponse.Builder builder = PostServiceOuterClass.ReelResponse.newBuilder()
                                 .setPostId(dto.getPostId())

@@ -387,7 +387,7 @@ public class StoryServiceImpl implements IStoryService {
         if (!isAllow)
             throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.ASC, "createdAt"));
         Page<StoryModel> storyPage = storyRepository.findByUserIdAndIsActive(ownerId, true, pageable);
 
         if (storyPage.isEmpty()) {

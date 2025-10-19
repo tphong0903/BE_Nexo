@@ -24,6 +24,7 @@ public class PostResponseDTO {
     private Long quantityComment;
     private List<UserTagDTO> listUserTag;
     private Boolean isActive;
+    private Boolean isLike;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }

@@ -55,7 +55,7 @@ public class ReelController {
     }
 
     @GetMapping("/{id}")
-    public ResponseData<?> getPost(@PathVariable Long id) {
+    public ResponseData<?> getReel(@PathVariable Long id) {
         return new ResponseData<>(200, "Success", postService.getReelById(id));
     }
 }

@@ -52,12 +52,6 @@ public class PostController {
         return new ResponseData<>(200, "Success", postService.deletePost(id));
     }
 
-
-    @GetMapping
-    public ResponseData<String> test() {
-        return new ResponseData<>(200, "Success", "Test Post Service");
-    }
-
     @GetMapping("/users/{id}")
     public ResponseData<?> getAllPostOfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
         return new ResponseData<>(200, "Success", postService.getAllPostOfUser(id, pageNo, pageSize));

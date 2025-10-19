@@ -20,6 +20,7 @@ import org.springframework.http.HttpStatus;
 
 import java.time.ZoneId;
 import java.util.List;
+import java.util.Objects;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -30,6 +31,122 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     private final IReelRepository reelRepository;
     private final RedisTemplate<String, Object> redisTemplate;
     private final ObjectMapper objectMapper;
+
+    @Override
+    public void getPostsByIds(PostServiceOuterClass.GetPostsByIdsRequest request, StreamObserver<PostServiceOuterClass.GetPostsByIdsResponse> responseObserver) {
+        try {
+            Long viewerId = request.getUserId();
+            List<Long> posts = request.getPostIdsList();
+
+            List<PostResponseDTO> postDTOs = postService.getPostsByIds(posts, viewerId);
+
+            List<PostServiceOuterClass.PostResponse> responses = postDTOs.stream()
+                    .filter(Objects::nonNull)
+                    .map(dto -> {
+                        PostServiceOuterClass.PostResponse.Builder builder = PostServiceOuterClass.PostResponse.newBuilder()
+                                .setPostId(dto.getPostId())
+                                .setUserId(dto.getUserId())
+                                .setUserName(dto.getUserName())
+                                .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
+                                .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
+                                .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
+                                .setTag(dto.getTag() != null ? dto.getTag() : "")
+                                .addAllMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : List.of())
+                                .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0L)
+                                .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0L)
+                                .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
+                                .setCreatedAt(dto.getCreatedAt() != null
+                                        ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                        : 0L)
+                                .setUpdateAt(dto.getUpdatedAt() != null
+                                        ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                        : 0L)
+                                .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false);
+
+                        if (dto.getListUserTag() != null) {
+                            builder.addAllListUserTag(
+                                    dto.getListUserTag().stream()
+                                            .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
+                                                    .setUserId(tag.getUserId())
+                                                    .setUserName(tag.getUserName())
+                                                    .build())
+                                            .toList()
+                            );
+                        }
+
+                        return builder.build();
+                    })
+                    .toList();
+
+            PostServiceOuterClass.GetPostsByIdsResponse response =
+                    PostServiceOuterClass.GetPostsByIdsResponse.newBuilder()
+                            .addAllPosts(responses)
+                            .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("Error in getPostById", e);
+            responseObserver.onError(e);
+        }
+    }
+
+    @Override
+    public void getReelsByIds(PostServiceOuterClass.GetPostsByIdsRequest request, StreamObserver<PostServiceOuterClass.GetReelsByIdsResponse> responseObserver) {
+        try {
+            Long viewerId = request.getUserId();
+            List<Long> posts = request.getPostIdsList();
+
+            List<ReelResponseDTO> reelDTOs = postService.getReelsByIds(posts, viewerId);
+
+            List<PostServiceOuterClass.ReelResponse> responses = reelDTOs.stream()
+                    .filter(Objects::nonNull)
+                    .map(dto -> {
+                        PostServiceOuterClass.ReelResponse.Builder builder = PostServiceOuterClass.ReelResponse.newBuilder()
+                                .setPostId(dto.getPostId())
+                                .setUserId(dto.getUserId())
+                                .setUserName(dto.getUserName())
+                                .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
+                                .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
+                                .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
+                                .setMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : "")
+                                .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0L)
+                                .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0L)
+                                .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
+                                .setCreatedAt(dto.getCreatedAt() != null
+                                        ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                        : 0L)
+                                .setUpdateAt(dto.getUpdatedAt() != null
+                                        ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                                        : 0L)
+                                .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false);
+
+                        if (dto.getListUserTag() != null) {
+                            builder.addAllListUserTag(
+                                    dto.getListUserTag().stream()
+                                            .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
+                                                    .setUserId(tag.getUserId())
+                                                    .setUserName(tag.getUserName())
+                                                    .build())
+                                            .toList()
+                            );
+                        }
+                        return builder.build();
+                    })
+                    .toList();
+
+            PostServiceOuterClass.GetReelsByIdsResponse response =
+                    PostServiceOuterClass.GetReelsByIdsResponse.newBuilder()
+                            .addAllReels(responses)
+                            .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("Error in getPostById", e);
+            responseObserver.onError(e);
+        }
+    }
 
     @Override
     public void getPostById(PostServiceOuterClass.GetPostRequest request, StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {

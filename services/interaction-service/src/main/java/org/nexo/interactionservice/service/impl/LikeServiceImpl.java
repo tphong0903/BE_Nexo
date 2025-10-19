@@ -87,7 +87,7 @@ public class LikeServiceImpl implements ILikeService {
     public String saveLikeReel(Long id) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        LikeModel model = likeRepository.findByPostIdAndUserId(id, response.getUserId());
+        LikeModel model = likeRepository.findByReelIdAndUserId(id, response.getUserId());
         if (model != null) {
             postGrpcClient.addLikeQuantityById(id, false, false);
             likeRepository.delete(model);

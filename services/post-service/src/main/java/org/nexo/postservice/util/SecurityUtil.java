@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
+import org.nexo.postservice.util.TokenService;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 

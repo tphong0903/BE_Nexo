@@ -94,76 +94,34 @@ public class FeedService {
 
         log.info("Fetching feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
                 userId, page, limit, key, start, end);
-        PageRequest pageRequest = PageRequest.of(page, limit.intValue());
+
+        Mono<Page<Long>> pageResultMono = Mono.fromCallable(() -> {
+            PageRequest pageRequest = PageRequest.of(page, limit.intValue());
+            return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
+        }).subscribeOn(Schedulers.boundedElastic());
 
         return reactiveRedisTemplate.opsForZSet()
                 .reverseRange(key, Range.closed(start, end))
                 .collectList()
-                .flatMap(redisPosts -> {
-                    int redisCount = redisPosts.size();
+                .flatMap(redisPosts -> pageResultMono.flatMap(pageResult -> {
+
+                    List<Long> postIds = redisPosts.stream()
+                            .map(Long::parseLong)
+                            .toList();
+                    int redisCount = postIds.size();
                     log.info("Redis returned {} posts", redisCount);
 
                     if (redisCount >= limit) {
-                        return Flux.fromIterable(redisPosts)
-                                .flatMap(postId -> postGrpcClient.getPostByIdAsync(Long.parseLong(postId)))
-                                .filter(dto -> dto.getPostId() != 0)
-                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                                .collectList()
-                                .flatMap(content -> Mono.fromCallable(() -> {
-                                            Page<Long> pageResult = feedRepository.findPostIdsByFollowerId(userId, pageRequest);
-                                            long totalElements = pageResult.getTotalElements();
-                                            int totalPages = pageResult.getTotalPages();
-                                            PageModelResponse<PostResponseDTO> pageModelResponse = PageModelResponse.<PostResponseDTO>builder()
-                                                    .pageNo(page)
-                                                    .pageSize(limit.intValue())
-                                                    .totalElements(totalElements)
-                                                    .totalPages(totalPages)
-                                                    .last(page + 1 >= totalPages)
-                                                    .content(content)
-                                                    .build();
-
-                                            return ResponseData.builder()
-                                                    .status(200)
-                                                    .message("Followings retrieved successfully")
-                                                    .data(pageModelResponse)
-                                                    .build();
-                                        }).subscribeOn(Schedulers.boundedElastic())
-                                );
+                        return postGrpcClient.getPostsByIdsAsync(postIds, userId)
+                                .flatMap(posts -> buildPostResponse(posts, page, limit, pageResult));
                     } else {
                         log.warn("Redis MISS or not enough posts ({} < {}), fallback to DB", redisCount, limit);
-                        return Mono.fromCallable(() -> {
-                                    return feedRepository.findPostIdsByFollowerId(userId, pageRequest);
-                                })
-                                .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany(pageResult -> {
-                                    List<Long> dbPostIds = pageResult.getContent();
-                                    log.info("Fetched {} posts from DB for userId={}", dbPostIds.size(), userId);
-                                    return Flux.fromIterable(dbPostIds)
-                                            .flatMap(postGrpcClient::getPostByIdAsync);
-                                })
-                                .filter(dto -> dto.getPostId() != 0)
-                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                                .collectList()
-                                .flatMap(content -> Mono.fromCallable(() -> {
-                                            long totalElements = feedRepository.countPostsByFollowerId(userId);
-                                            int totalPages = (int) Math.ceil((double) totalElements / limit);
-                                            PageModelResponse<PostResponseDTO> pageModelResponse = PageModelResponse.<PostResponseDTO>builder()
-                                                    .pageNo(page)
-                                                    .pageSize(limit.intValue())
-                                                    .totalElements(totalElements)
-                                                    .totalPages(totalPages)
-                                                    .last(page + 1 >= totalPages)
-                                                    .content(content)
-                                                    .build();
-                                            return ResponseData.builder()
-                                                    .status(200)
-                                                    .message("Followings retrieved successfully")
-                                                    .data(pageModelResponse)
-                                                    .build();
-                                        }).subscribeOn(Schedulers.boundedElastic())
-                                );
+                        List<Long> dbPostIds = pageResult.getContent();
+                        log.info("Fetched {} posts from DB for userId={}", dbPostIds.size(), userId);
+                        return postGrpcClient.getPostsByIdsAsync(dbPostIds, userId)
+                                .flatMap(posts -> buildPostResponse(posts, page, limit, pageResult));
                     }
-                });
+                }));
     }
 
 
@@ -175,82 +133,79 @@ public class FeedService {
         log.info("Fetching REEL feed for userId={} page={} limit={} -> Redis key={} start={} end={}",
                 userId, page, limit, key, start, end);
 
-        PageRequest pageRequest = PageRequest.of(page, limit.intValue());
+        Mono<Page<Long>> pageResultMono = Mono.fromCallable(() -> {
+            PageRequest pageRequest = PageRequest.of(page, limit.intValue());
+            return feedReelRepository.findReelIdsByFollowerId(userId, pageRequest);
+        }).subscribeOn(Schedulers.boundedElastic());
 
         return reactiveRedisTemplate.opsForZSet()
                 .reverseRange(key, Range.closed(start, end))
                 .collectList()
-                .flatMap(redisReels -> {
+                .flatMap(redisReels -> pageResultMono.flatMap(pageResult -> {
+                    List<Long> reelIds = redisReels.stream()
+                            .map(Long::parseLong)
+                            .toList();
                     int redisCount = redisReels.size();
                     log.info("Redis returned {} reel IDs", redisCount);
 
                     if (redisCount >= limit) {
-                        return Flux.fromIterable(redisReels)
-                                .flatMap(reelId -> postGrpcClient.getReelByIdAsync(Long.parseLong(reelId)))
-                                .filter(dto -> dto.getReelId() != 0)
-                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                                .collectList()
-                                .flatMap(content -> Mono.fromCallable(() -> {
-                                            Page<Long> pageResult = feedReelRepository.findReelIdsByFollowerId(userId, pageRequest);
-                                            long totalElements = pageResult.getTotalElements();
-                                            int totalPages = pageResult.getTotalPages();
-
-                                            PageModelResponse<ReelResponseDTO> pageModelResponse =
-                                                    PageModelResponse.<ReelResponseDTO>builder()
-                                                            .pageNo(page)
-                                                            .pageSize(limit.intValue())
-                                                            .totalElements(totalElements)
-                                                            .totalPages(totalPages)
-                                                            .last(page + 1 >= totalPages)
-                                                            .content(content)
-                                                            .build();
-
-                                            return ResponseData.builder()
-                                                    .status(200)
-                                                    .message("Reel feed retrieved successfully (from Redis)")
-                                                    .data(pageModelResponse)
-                                                    .build();
-                                        }).subscribeOn(Schedulers.boundedElastic())
-                                );
+                        return postGrpcClient.getReelsByIdsAsync(reelIds, userId)
+                                .flatMap(posts -> buildReelResponse(posts, page, limit, pageResult));
                     } else {
                         log.warn("Redis MISS or insufficient data ({} < {}), fallback to DB", redisCount, limit);
-
-                        return Mono.fromCallable(() -> feedReelRepository.findReelIdsByFollowerId(userId, pageRequest))
-                                .subscribeOn(Schedulers.boundedElastic())
-                                .flatMapMany(pageResult -> {
-                                    List<Long> dbReelIds = pageResult.getContent();
-                                    log.info("Fetched {} reels from DB for userId={}", dbReelIds.size(), userId);
-                                    return Flux.fromIterable(dbReelIds)
-                                            .flatMap(postGrpcClient::getReelByIdAsync);
-                                })
-                                .filter(dto -> dto.getReelId() != 0)
-                                .sort((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
-                                .collectList()
-                                .flatMap(content -> Mono.fromCallable(() -> {
-                                            long totalElements = feedReelRepository.countFeedReelModelsByFollowerId(userId);
-                                            int totalPages = (int) Math.ceil((double) totalElements / limit);
-
-                                            PageModelResponse<ReelResponseDTO> pageModelResponse =
-                                                    PageModelResponse.<ReelResponseDTO>builder()
-                                                            .pageNo(page)
-                                                            .pageSize(limit.intValue())
-                                                            .totalElements(totalElements)
-                                                            .totalPages(totalPages)
-                                                            .last(page + 1 >= totalPages)
-                                                            .content(content)
-                                                            .build();
-
-                                            return ResponseData.builder()
-                                                    .status(200)
-                                                    .message("Reel feed retrieved successfully (from DB)")
-                                                    .data(pageModelResponse)
-                                                    .build();
-                                        }).subscribeOn(Schedulers.boundedElastic())
-                                );
+                        List<Long> dbPostIds = pageResult.getContent();
+                        log.info("Fetched {} posts from DB for userId={}", dbPostIds.size(), userId);
+                        return postGrpcClient.getReelsByIdsAsync(dbPostIds, userId)
+                                .flatMap(posts -> buildReelResponse(posts, page, limit, pageResult));
                     }
-                });
+                }));
     }
 
+    private Mono<ResponseData<?>> buildPostResponse(List<PostResponseDTO> posts, int page, Long limit, Page<Long> pageResult) {
+        List<PostResponseDTO> sorted = posts.stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .toList();
+
+        long totalElements = (pageResult != null) ? pageResult.getTotalElements() : sorted.size();
+        int totalPages = (pageResult != null) ? pageResult.getTotalPages() : 1;
+
+        PageModelResponse<PostResponseDTO> pageModelResponse = PageModelResponse.<PostResponseDTO>builder()
+                .pageNo(page)
+                .pageSize(limit.intValue())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(page + 1 >= totalPages)
+                .content(sorted)
+                .build();
+
+        return Mono.just(ResponseData.builder()
+                .status(200)
+                .message("Feed retrieved successfully")
+                .data(pageModelResponse)
+                .build());
+    }
+
+    private Mono<ResponseData<?>> buildReelResponse(List<ReelResponseDTO> posts, int page, Long limit, Page<Long> pageResult) {
+        List<ReelResponseDTO> sorted = posts.stream()
+                .sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt()))
+                .toList();
+        long totalElements = pageResult.getTotalElements();
+        int totalPages = pageResult.getTotalPages();
+        PageModelResponse<ReelResponseDTO> pageModelResponse = PageModelResponse.<ReelResponseDTO>builder()
+                .pageNo(page)
+                .pageSize(limit.intValue())
+                .totalElements(totalElements)
+                .totalPages(totalPages)
+                .last(page + 1 >= totalPages)
+                .content(sorted)
+                .build();
+
+        return Mono.just(ResponseData.builder()
+                .status(200)
+                .message("Feed retrieved successfully")
+                .data(pageModelResponse)
+                .build());
+    }
 
 }
 

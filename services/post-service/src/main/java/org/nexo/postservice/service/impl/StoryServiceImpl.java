@@ -358,6 +358,16 @@ public class StoryServiceImpl implements IStoryService {
 
         }
         int start = pageNo * pageSize;
+        if (start >= storyResponseList.size()) {
+            return PageModelResponse.<StoryResponse>builder()
+                    .content(List.of())
+                    .pageNo(pageNo)
+                    .pageSize(pageSize)
+                    .totalElements(storyResponseList.size())
+                    .totalPages((int) Math.ceil((double) storyResponseList.size() / pageSize))
+                    .build();
+        }
+
         int end = Math.min(start + pageSize, storyResponseList.size());
         List<StoryResponse> pagedList = storyResponseList.subList(start, end);
 
@@ -387,7 +397,7 @@ public class StoryServiceImpl implements IStoryService {
         if (!isAllow)
             throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by(Sort.Direction.ASC, "createdAt"));
         Page<StoryModel> storyPage = storyRepository.findByUserIdAndIsActive(ownerId, true, pageable);
 
         if (storyPage.isEmpty()) {

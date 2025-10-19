@@ -17,6 +17,7 @@ import org.nexo.postservice.model.ReelModel;
 import org.nexo.postservice.repository.IPostMediaRepository;
 import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.repository.IReelRepository;
+import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
@@ -37,9 +38,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -50,6 +49,7 @@ public class PostServiceImpl implements IPostService {
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
     private final UserGrpcClient userGrpcClient;
+    private final InteractionGrpcClient interactionGrpcClient;
     private final IPostMediaRepository postMediaRepository;
     private final IHashTagService hashTagService;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -221,8 +221,16 @@ public class PostServiceImpl implements IPostService {
 
         UserServiceProto.UserDTOResponse userInfo = userGrpcClient.getUserDTOById(id);
 
+
+        List<PostModel> posts = listPost.getContent();
+        List<Long> postIds = posts.stream().map(PostModel::getId).toList();
+        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), postIds);
         List<PostResponseDTO> postResponseList = listPost.getContent().stream()
-                .map(post -> convertToPostResponseDTO(post, userInfo))
+                .map(post -> {
+                            Boolean isLike = likedPostIds.getOrDefault(post.getId(), false);
+                            return convertToPostResponseDTO(post, userInfo, isLike);
+                        }
+                )
                 .toList();
         return PageModelResponse.<PostResponseDTO>builder()
                 .pageNo(listPost.getNumber())
@@ -240,7 +248,7 @@ public class PostServiceImpl implements IPostService {
         UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
         Page<ReelModel> listReel = Page.empty();
 
-        Sort sort = Sort.by("createAt").descending();
+        Sort sort = Sort.by("createdAt").descending();
         Pageable pageable = PageRequest.of(page, limit, sort);
         boolean isAllow = false;
         if (id.equals(currentUser.getUserId())) {
@@ -260,8 +268,14 @@ public class PostServiceImpl implements IPostService {
 
         UserServiceProto.UserDTOResponse userInfo = userGrpcClient.getUserDTOById(id);
 
-        List<ReelResponseDTO> reelResponseDTOS = listReel.getContent().stream()
-                .map(reel -> convertToReelResponseDTO(reel, userInfo))
+        List<ReelModel> reels = listReel.getContent();
+        List<Long> reelIds = reels.stream().map(ReelModel::getId).toList();
+        Map<Long, Boolean> likedReelIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), reelIds);
+        List<ReelResponseDTO> reelResponseDTOS = reels.stream()
+                .map(reel -> {
+                    Boolean isLike = likedReelIds.getOrDefault(reel.getId(), false);
+                    return convertToReelResponseDTO(reel, userInfo, isLike);
+                })
                 .toList();
         return PageModelResponse.<ReelResponseDTO>builder()
                 .pageNo(listReel.getNumber())
@@ -294,7 +308,17 @@ public class PostServiceImpl implements IPostService {
 
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
 
-        return convertToPostResponseDTO(model, response);
+        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), List.of(model.getId()));
+        return convertToPostResponseDTO(model, response, likedPostIds.getOrDefault(model.getId(), false));
+    }
+
+    @Override
+    public PostResponseDTO getPostById3(Long id, Boolean isLike) {
+        PostModel model = postRepository.findById(id).orElse(null);
+        if (model == null)
+            return null;
+        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+        return convertToPostResponseDTO(model, response, isLike);
     }
 
     @Override
@@ -303,7 +327,7 @@ public class PostServiceImpl implements IPostService {
         if (model == null)
             return null;
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
-        return convertToPostResponseDTO(model, response);
+        return convertToPostResponseDTO(model, response, false);
     }
 
     @Override
@@ -325,8 +349,17 @@ public class PostServiceImpl implements IPostService {
 
         ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+        Map<Long, Boolean> likedReelIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), List.of(model.getId()));
+        return convertToReelResponseDTO(model, response, likedReelIds.getOrDefault(model.getId(), false));
+    }
 
-        return convertToReelResponseDTO(model, response);
+    @Override
+    public ReelResponseDTO getReelById3(Long id, Boolean isLike) {
+        ReelModel model = reelRepository.findById(id).orElse(null);
+        if (model == null)
+            return null;
+        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+        return convertToReelResponseDTO(model, response, isLike);
     }
 
     @Override
@@ -335,7 +368,7 @@ public class PostServiceImpl implements IPostService {
         if (model == null)
             return null;
         UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
-        return convertToReelResponseDTO(model, response);
+        return convertToReelResponseDTO(model, response, false);
     }
 
     @Override
@@ -364,9 +397,13 @@ public class PostServiceImpl implements IPostService {
         UserServiceProto.UserDTOResponse currentUser = userGrpcClient.getUserDTOById(id);
         Page<PostModel> postPage = postRepository.findPopularPublicPostsWithHashtagScore(pageable);
 
+        List<PostModel> posts = postPage.getContent();
+        List<Long> postIds = posts.stream().map(PostModel::getId).toList();
+        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getId(), postIds);
         List<PostResponseDTO> postDTOs = postPage.getContent().stream()
                 .map(post -> {
-                    return convertToPostResponseDTO(post, currentUser);
+                    Boolean isLike = likedPostIds.getOrDefault(post.getId(), false);
+                    return convertToPostResponseDTO(post, currentUser, isLike);
                 })
                 .toList();
 
@@ -381,7 +418,27 @@ public class PostServiceImpl implements IPostService {
         return response;
     }
 
-    PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse userDto) {
+    @Override
+    public List<PostResponseDTO> getPostsByIds(List<Long> postIds, Long viewerId) {
+        List<PostResponseDTO> result = new ArrayList<>();
+        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(viewerId, postIds);
+        for (Long id : postIds) {
+            result.add(getPostById3(id, likedPostIds.getOrDefault(id, false)));
+        }
+        return result;
+    }
+
+    @Override
+    public List<ReelResponseDTO> getReelsByIds(List<Long> postIds, Long viewerId) {
+        List<ReelResponseDTO> result = new ArrayList<>();
+        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesReel(viewerId, postIds);
+        for (Long id : postIds) {
+            result.add(getReelById3(id, likedPostIds.getOrDefault(id, false)));
+        }
+        return result;
+    }
+
+    PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse userDto, Boolean isLike) {
         List<Long> tagIds = Optional.ofNullable(model.getTag())
                 .filter(tag -> !tag.isBlank())
                 .map(tag -> Arrays.stream(tag.split(","))
@@ -415,6 +472,7 @@ public class PostServiceImpl implements IPostService {
                 .caption(model.getCaption())
                 .createdAt(model.getCreatedAt())
                 .isActive(model.getIsActive())
+                .isLike(isLike)
                 .quantityLike(likes)
                 .quantityComment(comments)
                 .userId(model.getUserId())
@@ -423,7 +481,7 @@ public class PostServiceImpl implements IPostService {
                 .build();
     }
 
-    ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto) {
+    ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto, Boolean isLike) {
         String likesStr = (String) redisTemplate.opsForValue().get("reel:likes:" + model.getId());
         String commentsStr = (String) redisTemplate.opsForValue().get("reel:comments:" + model.getId());
 
@@ -438,6 +496,7 @@ public class PostServiceImpl implements IPostService {
                 .createdAt(model.getCreatedAt())
                 .isActive(model.getIsActive())
                 .quantityLike(likes)
+                .isLike(isLike)
                 .quantityComment(comments)
                 .userId(model.getUserId())
                 .mediaUrl(model.getVideoUrl())

@@ -19,6 +19,7 @@ public class ReelResponseDTO {
     private String caption;
     private String visibility;
     private String tag;
+    private Boolean isLike;
     private String mediaUrl;
     private Long quantityLike;
     private Long quantityComment;

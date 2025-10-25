@@ -19,7 +19,6 @@ public class FileService {
     }
 
     public void saveReelMedia(List<MultipartFile> files, Long postId, String token) {
-
         fileServiceClient.saveReelMedia(files, String.valueOf(postId), "Bearer " + token);
     }
 

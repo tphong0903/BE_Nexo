@@ -17,11 +17,9 @@ public class ReelResponseDTO {
     private String avatarUrl;
     private String caption;
     private String visibility;
-    private String tag;
     private String mediaUrl;
     private Long quantityLike;
     private Long quantityComment;
-    private List<UserTagDTO> listUserTag;
     private Boolean isActive;
     private Boolean isLike;
     private LocalDateTime createdAt;

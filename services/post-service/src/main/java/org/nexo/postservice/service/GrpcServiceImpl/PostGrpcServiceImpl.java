@@ -103,7 +103,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                     .filter(Objects::nonNull)
                     .map(dto -> {
                         PostServiceOuterClass.ReelResponse.Builder builder = PostServiceOuterClass.ReelResponse.newBuilder()
-                                .setPostId(dto.getPostId())
+                                .setPostId(dto.getReelId())
                                 .setUserId(dto.getUserId())
                                 .setUserName(dto.getUserName())
                                 .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
@@ -121,16 +121,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                                         : 0L)
                                 .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false);
 
-                        if (dto.getListUserTag() != null) {
-                            builder.addAllListUserTag(
-                                    dto.getListUserTag().stream()
-                                            .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
-                                                    .setUserId(tag.getUserId())
-                                                    .setUserName(tag.getUserName())
-                                                    .build())
-                                            .toList()
-                            );
-                        }
+
                         return builder.build();
                     })
                     .toList();
@@ -209,22 +200,12 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                 return;
             }
             PostServiceOuterClass.ReelResponse response = PostServiceOuterClass.ReelResponse.newBuilder()
-                    .setPostId(dto.getPostId())
+                    .setPostId(dto.getReelId())
                     .setUserId(dto.getUserId())
                     .setUserName(dto.getUserName() != null ? dto.getUserName() : "")
                     .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
                     .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
                     .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
-                    .addAllListUserTag(
-                            dto.getListUserTag() != null
-                                    ? dto.getListUserTag().stream()
-                                    .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
-                                            .setUserId(tag.getUserId())
-                                            .setUserName(tag.getUserName())
-                                            .build())
-                                    .toList()
-                                    : List.of()
-                    )
                     .setMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : null)
                     .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0)
                     .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0)

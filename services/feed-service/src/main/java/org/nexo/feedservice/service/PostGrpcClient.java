@@ -172,25 +172,9 @@ public class PostGrpcClient {
                 .avatarUrl(response.getAvatarUrl())
                 .caption(response.getCaption())
                 .visibility(response.getVisibility())
-                .listUserTag(
-                        response.getListUserTagList().stream()
-                                .map(tag -> new UserTagDTO(
-                                        tag.getUserId(),
-                                        tag.getUserName()
-                                ))
-                                .toList()
-                )
                 .mediaUrl(response.getMediaUrl())
                 .quantityLike(response.getQuantityLike())
                 .quantityComment(response.getQuantityComment())
-                .listUserTag(
-                        response.getListUserTagList().stream()
-                                .map(tag -> new UserTagDTO(
-                                        tag.getUserId(),
-                                        tag.getUserName()
-                                ))
-                                .toList()
-                )
                 .isActive(response.getIsActive())
                 .isLike(response.getIsLike())
                 .createdAt(

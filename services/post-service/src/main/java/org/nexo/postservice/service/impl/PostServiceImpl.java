@@ -488,7 +488,7 @@ public class PostServiceImpl implements IPostService {
         Long likes = likesStr != null ? Long.valueOf(likesStr) : 0L;
         Long comments = commentsStr != null ? Long.valueOf(commentsStr) : 0L;
         return ReelResponseDTO.builder()
-                .postId(model.getId())
+                .reelId(model.getId())
                 .userName(userDto.getUsername())
                 .avatarUrl(userDto.getAvatar())
                 .visibility(model.getVisibility().toString())

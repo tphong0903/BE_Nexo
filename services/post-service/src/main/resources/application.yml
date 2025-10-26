@@ -57,7 +57,9 @@ eureka:
 feign:
   client:
     config:
-      default:
+      files:
+        connectTimeout: 10000
+        readTimeout: 60000
         loggerLevel: FULL
   okhttp:
     enabled: true

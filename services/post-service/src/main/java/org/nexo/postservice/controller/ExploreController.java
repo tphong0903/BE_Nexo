@@ -27,7 +27,7 @@ public class ExploreController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", hashTagService.getTrendingHashtags(top));
     }
 
-    @GetMapping("/posts")
+    @GetMapping("")
     public ResponseData<?> getExplorePosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {

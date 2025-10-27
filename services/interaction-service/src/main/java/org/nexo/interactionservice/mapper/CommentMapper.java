@@ -44,7 +44,7 @@ public class CommentMapper {
                             .avatarUrl(replyUser != null ? replyUser.getAvatar() : null)
                             .content(reply.getContent())
                             .parentId(model.getId())
-                            .creatAt(reply.getCreatedAt())
+                            .createdAt(reply.getCreatedAt())
                             .hasMoreReplies(false)
                             .isLike(likeCommentRepository.findByCommentModelIdAndAndUserId(reply.getId(), model.getUserId()) != null)
                             .quantityLike(likeCommentRepository.countByCommentModel_Id(reply.getId()))
@@ -61,7 +61,7 @@ public class CommentMapper {
                 .quantityLike(likeCommentRepository.countByCommentModel_Id(model.getId()))
                 .parentId(model.getParentComment() != null ? model.getParentComment().getPostId() : null)
                 .responseChildList(replyResponses)
-                .creatAt(model.getCreatedAt())
+                .createdAt(model.getCreatedAt())
                 .hasMoreReplies(repliesPage.getTotalElements() > 2)
                 .isLike(likeCommentRepository.findByCommentModelIdAndAndUserId(model.getId(), model.getUserId()) != null)
                 .build();

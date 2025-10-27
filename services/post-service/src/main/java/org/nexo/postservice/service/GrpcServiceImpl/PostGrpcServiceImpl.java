@@ -1,6 +1,7 @@
 package org.nexo.postservice.service.GrpcServiceImpl;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -87,7 +88,11 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Error in getPostById", e);
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT
+                            .withDescription(e.getMessage())
+                            .asRuntimeException()
+            );
         }
     }
 
@@ -135,7 +140,11 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Error in getPostById", e);
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT
+                            .withDescription(e.getMessage())
+                            .asRuntimeException()
+            );
         }
     }
 
@@ -184,7 +193,11 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Error in getPostById", e);
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT
+                            .withDescription(e.getMessage())
+                            .asRuntimeException()
+            );
         }
     }
 
@@ -222,7 +235,11 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Error in getPostById", e);
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT
+                            .withDescription(e.getMessage())
+                            .asRuntimeException()
+            );
         }
     }
 
@@ -243,11 +260,11 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
 
             int count = isIncrease ? 1 : -1;
             if (isPost) {
-                PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
+                PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
                 model.setLikeQuantity(model.getLikeQuantity() + count);
                 postRepository.save(model);
             } else {
-                ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
+                ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
                 model.setLikeQuantity(model.getLikeQuantity() + count);
                 reelRepository.save(model);
             }
@@ -256,7 +273,11 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Error in getPostById", e);
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT
+                            .withDescription(e.getMessage())
+                            .asRuntimeException()
+            );
         }
     }
 
@@ -289,7 +310,11 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onCompleted();
         } catch (Exception e) {
             log.error("Error in getPostById", e);
-            responseObserver.onError(e);
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT
+                            .withDescription(e.getMessage())
+                            .asRuntimeException()
+            );
         }
     }
 }

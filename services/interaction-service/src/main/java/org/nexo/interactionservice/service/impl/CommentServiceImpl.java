@@ -116,7 +116,7 @@ public class CommentServiceImpl implements ICommentService {
         PostServiceOuterClass.PostResponse model = postGrpcClient.getPostById(postId);
 
         boolean isAllow = false;
-        if (postId == response.getUserId()) {
+        if (model.getUserId() == response.getUserId()) {
             isAllow = true;
         } else {
             UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());
@@ -142,7 +142,7 @@ public class CommentServiceImpl implements ICommentService {
         PostServiceOuterClass.ReelResponse model = postGrpcClient.getReelById(reelId);
 
         boolean isAllow = false;
-        if (reelId == response.getUserId()) {
+        if (model.getUserId() == response.getUserId()) {
             isAllow = true;
         } else {
             UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());

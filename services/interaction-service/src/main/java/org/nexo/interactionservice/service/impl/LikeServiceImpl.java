@@ -61,25 +61,30 @@ public class LikeServiceImpl implements ILikeService {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         LikeModel model = likeRepository.findByPostIdAndUserId(id, response.getUserId());
-        if (model != null) {
-            likeRepository.delete(model);
-            postGrpcClient.addLikeQuantityById(id, true, false);
-        } else {
-            model = LikeModel.builder()
-                    .postId(id)
-                    .userId(response.getUserId())
-                    .build();
-            likeRepository.save(model);
-            postGrpcClient.addLikeQuantityById(id, true, true);
-            PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
-            MessageDTO messageDTO = MessageDTO.builder()
-                    .actorId(response.getUserId())
-                    .recipientId(postResponse.getUserId())
-                    .notificationType(String.valueOf(ENotificationType.LIKE_POST))
-                    .targetUrl("/posts/" + id)
-                    .build();
-            kafkaTemplate.send("notification", messageDTO);
+        try {
+            if (model != null) {
+                likeRepository.delete(model);
+                postGrpcClient.addLikeQuantityById(id, true, false);
+            } else {
+                model = LikeModel.builder()
+                        .postId(id)
+                        .userId(response.getUserId())
+                        .build();
+                likeRepository.save(model);
+                postGrpcClient.addLikeQuantityById(id, true, true);
+                PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
+                MessageDTO messageDTO = MessageDTO.builder()
+                        .actorId(response.getUserId())
+                        .recipientId(postResponse.getUserId())
+                        .notificationType(String.valueOf(ENotificationType.LIKE_POST))
+                        .targetUrl("/posts/" + id)
+                        .build();
+                kafkaTemplate.send("notification", messageDTO);
+            }
+        } catch (Exception e) {
+            throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
+
         return "Success";
     }
 
@@ -88,24 +93,28 @@ public class LikeServiceImpl implements ILikeService {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         LikeModel model = likeRepository.findByReelIdAndUserId(id, response.getUserId());
-        if (model != null) {
-            postGrpcClient.addLikeQuantityById(id, false, false);
-            likeRepository.delete(model);
-        } else {
-            model = LikeModel.builder()
-                    .reelId(id)
-                    .userId(response.getUserId())
-                    .build();
-            likeRepository.save(model);
-            postGrpcClient.addLikeQuantityById(id, false, true);
-            PostServiceOuterClass.ReelResponse reelResponse = postGrpcClient.getReelById(id);
-            MessageDTO messageDTO = MessageDTO.builder()
-                    .actorId(response.getUserId())
-                    .recipientId(reelResponse.getUserId())
-                    .notificationType(String.valueOf(ENotificationType.LIKE_REEL))
-                    .targetUrl("/reels/" + id)
-                    .build();
-            kafkaTemplate.send("notification", messageDTO);
+        try {
+            if (model != null) {
+                postGrpcClient.addLikeQuantityById(id, false, false);
+                likeRepository.delete(model);
+            } else {
+                model = LikeModel.builder()
+                        .reelId(id)
+                        .userId(response.getUserId())
+                        .build();
+                likeRepository.save(model);
+                postGrpcClient.addLikeQuantityById(id, false, true);
+                PostServiceOuterClass.ReelResponse reelResponse = postGrpcClient.getReelById(id);
+                MessageDTO messageDTO = MessageDTO.builder()
+                        .actorId(response.getUserId())
+                        .recipientId(reelResponse.getUserId())
+                        .notificationType(String.valueOf(ENotificationType.LIKE_REEL))
+                        .targetUrl("/reels/" + id)
+                        .build();
+                kafkaTemplate.send("notification", messageDTO);
+            }
+        } catch (Exception e) {
+            throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
         return "Success";
     }

@@ -53,7 +53,7 @@ public class CommentServiceImpl implements ICommentService {
                     .build();
         }
 
-        if (a.getPostId() != 0) {
+        if (a.getPostId() != null && a.getPostId() != 0) {
             model.setPostId(a.getPostId());
         } else {
             model.setReelId(a.getReelId());
@@ -69,7 +69,7 @@ public class CommentServiceImpl implements ICommentService {
             String notificationType = "";
             Long id = 0L;
             String url = "";
-            if (model.getPostId() != 0) {
+            if (a.getPostId() != null && a.getPostId() != 0) {
                 postGrpcClient.addCommentQuantityById(model.getPostId(), true, true);
                 notificationType = String.valueOf(ENotificationType.COMMENT_POST);
                 id = postGrpcClient.getPostById(model.getPostId()).getUserId();
@@ -78,7 +78,7 @@ public class CommentServiceImpl implements ICommentService {
                 postGrpcClient.addCommentQuantityById(model.getReelId(), false, true);
                 notificationType = String.valueOf(ENotificationType.COMMENT_REEL);
                 id = postGrpcClient.getReelById(model.getReelId()).getUserId();
-                url = "/reels/" + model.getPostId();
+                url = "/reels/" + model.getReelId();
             }
             MessageDTO messageDTO = MessageDTO.builder()
                     .actorId(response.getUserId())

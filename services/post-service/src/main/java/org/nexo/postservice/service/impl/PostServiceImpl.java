@@ -482,11 +482,11 @@ public class PostServiceImpl implements IPostService {
     }
 
     ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto, Boolean isLike) {
-        String likesStr = (String) redisTemplate.opsForValue().get("reel:likes:" + model.getId());
-        String commentsStr = (String) redisTemplate.opsForValue().get("reel:comments:" + model.getId());
+        Object likesStr = redisTemplate.opsForValue().get("reel:likes:" + model.getId());
+        Object commentsStr = redisTemplate.opsForValue().get("reel:comments:" + model.getId());
 
-        Long likes = likesStr != null ? Long.valueOf(likesStr) : 0L;
-        Long comments = commentsStr != null ? Long.valueOf(commentsStr) : 0L;
+        Long likes = likesStr != null ? Long.valueOf(likesStr.toString()) : 0L;
+        Long comments = commentsStr != null ? Long.valueOf(commentsStr.toString()) : 0L;
         return ReelResponseDTO.builder()
                 .reelId(model.getId())
                 .userName(userDto.getUsername())

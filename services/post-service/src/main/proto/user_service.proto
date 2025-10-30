@@ -15,10 +15,17 @@ service UserService {
   rpc GetUserDtoById(GetUserDtoByIdRequest) returns (UserDTOResponse);
   rpc CheckFollow(CheckMutualFollowRequest) returns (CheckFollowResponse);
   rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
+  rpc GetUserOnlineStatus(GetUserOnlineStatusRequest) returns (GetUserOnlineStatusResponse);
+  rpc CheckMutualFriends(CheckMutualFriendsRequest) returns (CheckMutualFriendsResponse);
+  rpc GetMutualFriends(GetMutualFriendsRequest) returns (GetMutualFriendsResponse);
+
+
 }
+
 message GetUsersByIdsRequest {
   repeated int64 userIds = 1;
 }
+
 message GetUsersByIdsResponse {
   repeated UserDTOResponse2 users = 1;
 }
@@ -27,7 +34,9 @@ message UserDTOResponse2 {
   int64 id = 1;
   string username = 2;
   string avatar = 3;
+  string full_name=4;
 }
+
 message CreateUserRequest {
   string keycloak_user_id = 1;
   string email = 2;
@@ -46,6 +55,7 @@ message UserDto {
 message KeycloakId {
   string keycloak_user_id = 1;
 }
+
 message CreateUserResponse {
   bool success = 1;
   string message = 2;
@@ -116,7 +126,33 @@ message CheckMutualFollowRequest {
   int64 user_id_1 = 1;
   int64 user_id_2 = 2;
 }
+
 message CheckFollowResponse {
   bool is_private = 1;
   bool is_follow = 2;
 }
+
+message GetUserOnlineStatusRequest {
+  int64 user_id = 1;
+}
+
+message GetUserOnlineStatusResponse {
+  bool online_status = 1; 
+}
+message CheckMutualFriendsRequest {
+  int64 user_id1 = 1;
+  int64 user_id2 = 2;
+}
+
+message CheckMutualFriendsResponse {
+  bool are_mutual_friends = 1;
+}
+
+message GetMutualFriendsRequest {
+  int64 user_id = 1;
+}
+
+message GetMutualFriendsResponse {
+  repeated int64 user_ids = 1;
+}
+

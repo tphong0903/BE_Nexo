@@ -99,10 +99,10 @@ public class AuthServiceImpl implements AuthService {
                                         .subscribe();
 
                                 return tokenCacheService.cacheToken(
-                                                loginRequest.getEmail(),
-                                                tokenResponse.getAccessToken(),
-                                                tokenResponse.getRefreshToken(),
-                                                tokenResponse.getExpiresIn())
+                                        loginRequest.getEmail(),
+                                        tokenResponse.getAccessToken(),
+                                        tokenResponse.getRefreshToken(),
+                                        tokenResponse.getExpiresIn())
                                         .thenReturn(tokenResponse);
                             });
                 });
@@ -141,10 +141,10 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return userGrpcClient.createUser(
-                        userId,
-                        registerRequest.getEmail(),
-                        registerRequest.getFullname(),
-                        registerRequest.getUsername())
+                userId,
+                registerRequest.getEmail(),
+                registerRequest.getFullname(),
+                registerRequest.getUsername())
                 .doOnSuccess(grpcResponse -> {
                     if (grpcResponse.getSuccess()) {
                         log.info("User created in user-service successfully: userId={}, userServiceId={}",
@@ -169,8 +169,8 @@ public class AuthServiceImpl implements AuthService {
                             })
                             .subscribe()).subscribe();
                 })
-                .map(grpcResponse -> "User registered successfully!")
-                .onErrorReturn("User registered successfully!");
+                .map(grpcResponse -> userId)
+                .onErrorReturn(userId);
     }
 
     private Mono<String> handleRegistrationError(
@@ -379,7 +379,7 @@ public class AuthServiceImpl implements AuthService {
                         + "/execute-actions-email")
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .bodyValue(new String[]{"UPDATE_PASSWORD"})
+                .bodyValue(new String[] { "UPDATE_PASSWORD" })
                 .retrieve()
                 .bodyToMono(Void.class);
     }

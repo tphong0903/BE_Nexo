@@ -137,6 +137,45 @@ public class LikeServiceImpl implements ILikeService {
     }
 
     @Override
+    public PageModelResponse<FolloweeDTO> getLikeReelDetail(Long id, int pageNo, int pageSize) {
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Page<LikeModel> likePage = likeRepository.findByReelId(id, pageable);
+        List<Long> listLikeUsersId = likePage.getContent().stream()
+                .map(LikeModel::getUserId)
+                .toList();
+
+        List<UserServiceProto.UserDTOResponse3> listUserData =
+                userGrpcClient.getLikeUsersByIds(response.getUserId(), listLikeUsersId);
+
+        List<FolloweeDTO> followeeDTOs = FolloweeMapper.toFolloweeDTOList(listUserData);
+
+
+        boolean hasLiked = likeRepository.existsByPostIdAndUserId(id, response.getUserId());
+        if (hasLiked) {
+            UserServiceProto.UserDTOResponse currentUser =
+                    userGrpcClient.getUserDTOById(response.getUserId());
+
+            FolloweeDTO currentUserDTO = FolloweeMapper.toFolloweeDTO2(currentUser);
+
+            followeeDTOs.removeIf(dto -> dto.getUserId().equals(currentUserDTO.getUserId()));
+
+            followeeDTOs.add(0, currentUserDTO);
+        }
+
+        PageModelResponse<FolloweeDTO> pageResponse = new PageModelResponse<>();
+        pageResponse.setContent(followeeDTOs);
+        pageResponse.setPageNo(likePage.getNumber());
+        pageResponse.setPageSize(likePage.getSize());
+        pageResponse.setTotalElements(likePage.getTotalElements());
+        pageResponse.setTotalPages(likePage.getTotalPages());
+        pageResponse.setLast(likePage.isLast());
+
+        return pageResponse;
+    }
+
+    @Override
     public String saveLikeReel(Long id) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);

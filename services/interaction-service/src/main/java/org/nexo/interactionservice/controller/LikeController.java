@@ -51,7 +51,12 @@ public class LikeController {
     public ResponseData<?> getLikePostDetail(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "10") int pageSize) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.getLikePostDetail(id, pageNo, pageSize));
     }
-    
+
+    @GetMapping("/reel/{id}/detail")
+    public ResponseData<?> getLikeReelDetail(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "10") int pageSize) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.getLikeReelDetail(id, pageNo, pageSize));
+    }
+
     @PostMapping("/reel/{id}")
     public ResponseData<String> saveLikeReel(@PathVariable Long id) {
         Long userId = securityUtil.getUserIdFromToken();

@@ -21,6 +21,6 @@ public interface ILikeRepository extends JpaRepository<LikeModel, Long> {
 
     Page<LikeModel> findByPostId(Long postId, Pageable pageable);
 
-    List<LikeModel> findByReelId(Long reelId, Pageable pageable);
+    Page<LikeModel> findByReelId(Long reelId, Pageable pageable);
 
 }

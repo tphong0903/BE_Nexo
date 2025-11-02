@@ -10,5 +10,7 @@ public interface ILikeService {
 
     PageModelResponse<FolloweeDTO> getLikePostDetail(Long id, int pageNo, int pageSize);
 
+    PageModelResponse<FolloweeDTO> getLikeReelDetail(Long id, int pageNo, int pageSize);
+
     String saveLikeReel(Long id);
 }

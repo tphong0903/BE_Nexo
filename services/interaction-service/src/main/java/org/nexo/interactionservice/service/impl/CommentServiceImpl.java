@@ -98,7 +98,13 @@ public class CommentServiceImpl implements ICommentService {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         CommentModel model = commentRepository.findById(id).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
-        if (response.getUserId() != model.getUserId())
+        Long ownerId = 0L;
+        if (model.getReelId() != 0) {
+            ownerId = postGrpcClient.getReelById(model.getReelId()).getUserId();
+        } else {
+            ownerId = postGrpcClient.getPostById(model.getPostId()).getUserId();
+        }
+        if (response.getUserId() != model.getUserId() || ownerId != response.getUserId())
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
         commentRepository.delete(model);
         if (model.getPostId() != 0) {

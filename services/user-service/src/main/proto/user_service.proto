@@ -15,18 +15,33 @@ service UserService {
   rpc GetUserDtoById(GetUserDtoByIdRequest) returns (UserDTOResponse);
   rpc CheckFollow(CheckMutualFollowRequest) returns (CheckFollowResponse);
   rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
+  rpc GetLikeUsersByIds(GetUsersByIdsRequest2) returns (GetUsersByIdsResponse2);
 }
 message GetUsersByIdsRequest {
   repeated int64 userIds = 1;
 }
+message GetUsersByIdsRequest2 {
+  int64 id = 1;
+  repeated int64 userIds = 2;
+}
 message GetUsersByIdsResponse {
   repeated UserDTOResponse2 users = 1;
+}
+message GetUsersByIdsResponse2 {
+  repeated UserDTOResponse3 users = 1;
 }
 
 message UserDTOResponse2 {
   int64 id = 1;
   string username = 2;
   string avatar = 3;
+}
+message UserDTOResponse3 {
+  int64 id = 1;
+  string username = 2;
+  string avatar = 3;
+  bool isPrivate = 4;
+  int32 isFollow = 5;
 }
 message CreateUserRequest {
   string keycloak_user_id = 1;

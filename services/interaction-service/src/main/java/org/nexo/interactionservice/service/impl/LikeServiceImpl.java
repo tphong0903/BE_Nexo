@@ -4,7 +4,10 @@ import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.interactionservice.dto.MessageDTO;
+import org.nexo.interactionservice.dto.response.FolloweeDTO;
+import org.nexo.interactionservice.dto.response.PageModelResponse;
 import org.nexo.interactionservice.exception.CustomException;
+import org.nexo.interactionservice.mapper.FolloweeMapper;
 import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.model.LikeCommentModel;
 import org.nexo.interactionservice.model.LikeModel;
@@ -14,9 +17,15 @@ import org.nexo.interactionservice.repository.ILikeRepository;
 import org.nexo.interactionservice.service.ILikeService;
 import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -86,6 +95,84 @@ public class LikeServiceImpl implements ILikeService {
         }
 
         return "Success";
+    }
+
+    @Override
+    public PageModelResponse<FolloweeDTO> getLikePostDetail(Long id, int pageNo, int pageSize) {
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Page<LikeModel> likePage = likeRepository.findByPostId(id, pageable);
+        List<Long> listLikeUsersId = likePage.getContent().stream()
+                .map(LikeModel::getUserId)
+                .toList();
+
+        List<UserServiceProto.UserDTOResponse3> listUserData =
+                userGrpcClient.getLikeUsersByIds(response.getUserId(), listLikeUsersId);
+
+        List<FolloweeDTO> followeeDTOs = FolloweeMapper.toFolloweeDTOList(listUserData);
+
+
+        boolean hasLiked = likeRepository.existsByPostIdAndUserId(id, response.getUserId());
+        if (hasLiked) {
+            UserServiceProto.UserDTOResponse currentUser =
+                    userGrpcClient.getUserDTOById(response.getUserId());
+
+            FolloweeDTO currentUserDTO = FolloweeMapper.toFolloweeDTO2(currentUser);
+
+            followeeDTOs.removeIf(dto -> dto.getUserId().equals(currentUserDTO.getUserId()));
+
+            followeeDTOs.add(0, currentUserDTO);
+        }
+
+        PageModelResponse<FolloweeDTO> pageResponse = new PageModelResponse<>();
+        pageResponse.setContent(followeeDTOs);
+        pageResponse.setPageNo(likePage.getNumber());
+        pageResponse.setPageSize(likePage.getSize());
+        pageResponse.setTotalElements(likePage.getTotalElements());
+        pageResponse.setTotalPages(likePage.getTotalPages());
+        pageResponse.setLast(likePage.isLast());
+
+        return pageResponse;
+    }
+
+    @Override
+    public PageModelResponse<FolloweeDTO> getLikeReelDetail(Long id, int pageNo, int pageSize) {
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Page<LikeModel> likePage = likeRepository.findByReelId(id, pageable);
+        List<Long> listLikeUsersId = likePage.getContent().stream()
+                .map(LikeModel::getUserId)
+                .toList();
+
+        List<UserServiceProto.UserDTOResponse3> listUserData =
+                userGrpcClient.getLikeUsersByIds(response.getUserId(), listLikeUsersId);
+
+        List<FolloweeDTO> followeeDTOs = FolloweeMapper.toFolloweeDTOList(listUserData);
+
+
+        boolean hasLiked = likeRepository.existsByPostIdAndUserId(id, response.getUserId());
+        if (hasLiked) {
+            UserServiceProto.UserDTOResponse currentUser =
+                    userGrpcClient.getUserDTOById(response.getUserId());
+
+            FolloweeDTO currentUserDTO = FolloweeMapper.toFolloweeDTO2(currentUser);
+
+            followeeDTOs.removeIf(dto -> dto.getUserId().equals(currentUserDTO.getUserId()));
+
+            followeeDTOs.add(0, currentUserDTO);
+        }
+
+        PageModelResponse<FolloweeDTO> pageResponse = new PageModelResponse<>();
+        pageResponse.setContent(followeeDTOs);
+        pageResponse.setPageNo(likePage.getNumber());
+        pageResponse.setPageSize(likePage.getSize());
+        pageResponse.setTotalElements(likePage.getTotalElements());
+        pageResponse.setTotalPages(likePage.getTotalPages());
+        pageResponse.setLast(likePage.isLast());
+
+        return pageResponse;
     }
 
     @Override

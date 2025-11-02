@@ -131,12 +131,12 @@ public class CommentServiceImpl implements ICommentService {
             }
         }
         if (!isAllow)
-            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Dont allow to get Comment", HttpStatus.BAD_REQUEST);
 
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
         Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
-        return commentMapper.toListResponse(postId, commentsPage);
+        return commentMapper.toListResponse(postId, commentsPage, response.getUserId());
 
     }
 
@@ -162,12 +162,13 @@ public class CommentServiceImpl implements ICommentService {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
         Page<CommentModel> commentsPage = commentRepository.findByReelId(reelId, pageable);
-        return commentMapper.toListResponse(reelId, commentsPage);
+        return commentMapper.toListResponse(reelId, commentsPage, response.getUserId());
     }
 
     @Override
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
-
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
         Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(commentId, pageable);
 
@@ -179,7 +180,7 @@ public class CommentServiceImpl implements ICommentService {
         else
             id = model.getReelId();
 
-        return commentMapper.toListResponse(id, repliesPage);
+        return commentMapper.toListResponse(id, repliesPage, response.getUserId());
     }
 
 

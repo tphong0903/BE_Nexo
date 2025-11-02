@@ -8,7 +8,12 @@ import org.nexo.grpc.user.UserServiceGrpc;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.enums.EAccountStatus;
+import org.nexo.userservice.enums.EStatusFollow;
+import org.nexo.userservice.exception.ResourceNotFoundException;
+import org.nexo.userservice.model.FollowId;
+import org.nexo.userservice.model.FollowModel;
 import org.nexo.userservice.model.UserModel;
+import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserRepository;
 
 import java.util.ArrayList;
@@ -22,6 +27,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
     private final UserRepository userRepository;
     private final FollowService followService;
+    private final FollowRepository followRepository;
 
     @Override
     public void createUser(UserServiceProto.CreateUserRequest request,
@@ -412,6 +418,36 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
             }
         }
         responseObserver.onNext(UserServiceProto.GetUsersByIdsResponse.newBuilder().addAllUsers(list).build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getLikeUsersByIds(UserServiceProto.GetUsersByIdsRequest2 request,
+                                  StreamObserver<UserServiceProto.GetUsersByIdsResponse2> responseObserver) {
+        List<UserServiceProto.UserDTOResponse3> list = new ArrayList<>();
+        UserModel user1 = userRepository.findById(request.getId()).orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        for (Long id : request.getUserIdsList()) {
+            var user = userRepository.findById(id).orElse(null);
+            if (user != null) {
+                int isFollow = 0;
+                FollowModel followModel = followRepository.findById(new FollowId(user1.getId(), user.getId())).orElse(null);
+                if (followModel != null) {
+                    if (followModel.getStatus() == EStatusFollow.ACTIVE)
+                        isFollow = 1;
+                    else
+                        isFollow = 2;
+                }
+                UserServiceProto.UserDTOResponse3 response = UserServiceProto.UserDTOResponse3.newBuilder()
+                        .setId(user.getId())
+                        .setUsername(user.getUsername() != null ? user.getUsername() : "")
+                        .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
+                        .setIsPrivate(user.getIsPrivate())
+                        .setIsFollow(isFollow)
+                        .build();
+                list.add(response);
+            }
+        }
+        responseObserver.onNext(UserServiceProto.GetUsersByIdsResponse2.newBuilder().addAllUsers(list).build());
         responseObserver.onCompleted();
     }
 

@@ -63,4 +63,19 @@ public class UserGrpcClient {
         return response.getUsersList().stream()
                 .collect(Collectors.toMap(UserServiceProto.UserDTOResponse2::getId, u -> u));
     }
+
+    public List<UserServiceProto.UserDTOResponse3> getLikeUsersByIds(Long id, List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+
+        UserServiceProto.GetUsersByIdsRequest2 request = UserServiceProto.GetUsersByIdsRequest2.newBuilder()
+                .setId(id)
+                .addAllUserIds(userIds)
+                .build();
+
+        UserServiceProto.GetUsersByIdsResponse2 response = userStub.getLikeUsersByIds(request);
+
+        return response.getUsersList();
+    }
 }

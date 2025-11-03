@@ -3,7 +3,10 @@ package org.nexo.messagingservice.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
+import org.nexo.messagingservice.model.ConversationModel;
+import org.nexo.messagingservice.repository.ConversationRepository;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -19,6 +22,7 @@ public class PresenceService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final UserGrpcClient userGrpcClient;
+    private final ConversationRepository conversationRepository;
 
     private static final String ONLINE_USERS_KEY = "online_users";
     private static final String USER_LAST_SEEN_PREFIX = "user:last_seen:";
@@ -52,15 +56,6 @@ public class PresenceService {
         log.info("User {} is now offline", userId);
     }
 
-    // check coi thang request dang bat trang hoat dong hay ko
-    // neu dang bat trong thai thi kiem tra 2 dua nó la ban be(mutual friends) ko và
-    // thằng target có bật trạng thái ko
-    // neu cả 2 cùng bật và là bạn bè thì nó sẽ hiện ra trang thái online của thằng
-    // target
-    // nếu thằng request bật mà thằng target ko bật thì ko hiện
-    // nếu thằng request ko bật thì ko hiện dù thằng target có bật
-    // nếu ko phai mutual friends thi ko hien
-
     public boolean canSeeUserOnline(Long requestingUserId, Long targetUserId) {
         if (!isActivityStatusEnabled(requestingUserId)) {
             return false;
@@ -70,7 +65,7 @@ public class PresenceService {
             return false;
         }
 
-        if (!areMutualFriends(requestingUserId, targetUserId)) {
+        if (!hasAcceptedConversation(requestingUserId, targetUserId)) {
             return false;
         }
 
@@ -101,10 +96,12 @@ public class PresenceService {
         return isOnlineStatus;
     }
 
-    private boolean areMutualFriends(Long userId1, Long userId2) {
-        UserServiceProto.CheckFollowResponse response = userGrpcClient.checkMutualFollow(userId1, userId2);
+    private boolean hasAcceptedConversation(Long userId1, Long userId2) {
+        Optional<ConversationModel> conversation = conversationRepository
+                .findDirectConversationBetweenUsers(userId1, userId2);
 
-        return response.getIsFollow();
+        return conversation.isPresent() &&
+                conversation.get().getStatus() == EConversationStatus.NORMAL;
     }
 
     public void refreshUserPresence(Long userId) {
@@ -126,7 +123,6 @@ public class PresenceService {
             for (Long userId : targetUserIds) {
                 statusMap.put(userId, false);
             }
-            log.debug("User {} has activity status disabled, returning all offline", requestingUserId);
             return statusMap;
         }
 
@@ -143,6 +139,9 @@ public class PresenceService {
             return Collections.emptyList();
         }
 
+        // Lấy danh sách user có conversation NORMAL với requesting user
+        // TODO: Có thể cần thêm method trong ConversationRepository để lấy danh sách
+        // này
         UserServiceProto.GetMutualFriendsResponse response = userGrpcClient.getMutualFriends(requestingUserId);
 
         List<Long> mutualFriendIds = response.getUserIdsList();
@@ -152,15 +151,24 @@ public class PresenceService {
                 .collect(Collectors.toList());
     }
 
-
     private void updateLastSeen(Long userId) {
         String key = USER_LAST_SEEN_PREFIX + userId;
         redisTemplate.opsForValue().set(key, LocalDateTime.now().toString());
     }
 
-
     public String getLastSeen(Long requestingUserId, Long targetUserId) {
-        if (!canSeeUserOnline(requestingUserId, targetUserId)) {
+        if (!isActivityStatusEnabled(requestingUserId)) {
+            return null;
+        }
+        if (!hasAcceptedConversation(requestingUserId, targetUserId)) {
+            return null;
+        }
+
+        String onlineKey = "user:online:" + targetUserId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(onlineKey))) {
+            return null; 
+        }
+        if (!isActivityStatusEnabled(targetUserId)) {
             return null;
         }
 
@@ -168,7 +176,6 @@ public class PresenceService {
         Object lastSeen = redisTemplate.opsForValue().get(key);
         return lastSeen != null ? lastSeen.toString() : null;
     }
-
 
     public void clearActivityStatusCache(Long userId) {
         String cacheKey = USER_ONLINE_STATUS_ENABLED_PREFIX + userId;

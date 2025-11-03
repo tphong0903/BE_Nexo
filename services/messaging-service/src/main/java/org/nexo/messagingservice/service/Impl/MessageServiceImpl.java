@@ -4,12 +4,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse;
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.MessageMediaDTO;
 import org.nexo.messagingservice.dto.ReactionDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.dto.UserDTO;
+import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.enums.EMessageType;
 import org.nexo.messagingservice.enums.EReactionType;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
@@ -42,12 +44,41 @@ public class MessageServiceImpl implements MessageService {
     private final ConversationParticipantRepository participantRepository;
     private final MessageReactionRepository reactionRepository;
     private final MessageMediaRepository mediaRepository;
-    private final UserGrpcClient userClientService;
+    private final UserGrpcClient userGrpcClient;
 
     public MessageDTO sendMessage(SendMessageRequest request, Long senderUserId) {
         ConversationModel conversation = conversationRepository.findById(request.getConversationId())
                 .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+        List<Long> participantIds = participantRepository
+                .findActiveUserIdsByConversationId(conversation.getId());
 
+        Long recipientUserId = participantIds.stream()
+                .filter(id -> !id.equals(senderUserId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("Recipient not found"));
+
+        UserServiceProto.CheckIfBlockedResponse blockResponse = userGrpcClient.checkIfBlocked(senderUserId,
+                recipientUserId);
+
+        if (blockResponse.getIsBlocked()) {
+            Long blockedBy = blockResponse.getBlockedByUserId();
+
+            if (blockedBy == recipientUserId) {
+                throw new SecurityException("You cannot send messages to this user. They may have blocked you.");
+            } else if (blockedBy == senderUserId) {
+                throw new SecurityException("You have blocked this user. Unblock them to send messages.");
+            }
+        }
+
+        if (conversation.getStatus() == EConversationStatus.PENDING) {
+            ConversationParticipantModel participant = participantRepository
+                    .findByConversationIdAndUserId(conversation.getId(), senderUserId)
+                    .orElseThrow(() -> new SecurityException("Not a participant"));
+
+            if (participant.isRecipient()) {
+                throw new SecurityException("You must accept the message request before sending messages");
+            }
+        }
         if (!isParticipant(conversation.getId(), senderUserId)) {
             throw new SecurityException("User is not a participant in this conversation");
         }
@@ -120,6 +151,14 @@ public class MessageServiceImpl implements MessageService {
         }
     }
 
+    public Long getLastReadMessageId(Long conversationId, Long userId) {
+        ConversationParticipantModel participant = participantRepository
+                .findByConversationIdAndUserId(conversationId, userId)
+                .orElse(null);
+
+        return participant != null ? participant.getLastReadMessageId() : null;
+    }
+
     public void deleteMessage(Long messageId, Long userId) {
         MessageModel message = messageRepository.findByIdAndIsActiveTrue(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
@@ -146,7 +185,7 @@ public class MessageServiceImpl implements MessageService {
             return;
         } else {
             log.info("Adding new reaction");
-            
+
             MessageReactionModel reaction = new MessageReactionModel();
             reaction.setMessage(message);
             reaction.setUserId(userId);
@@ -166,7 +205,7 @@ public class MessageServiceImpl implements MessageService {
     }
 
     private MessageDTO mapToDto(MessageModel message) {
-        UserDTOResponse sender = userClientService.getUserById(message.getSenderUserId());
+        UserDTOResponse sender = userGrpcClient.getUserById(message.getSenderUserId());
         UserDTO senderUserDTO = UserDTO.builder()
                 .id(sender.getId())
                 .username(sender.getUsername())

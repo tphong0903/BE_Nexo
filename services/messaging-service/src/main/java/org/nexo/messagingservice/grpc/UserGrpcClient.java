@@ -74,4 +74,26 @@ public class UserGrpcClient {
         return userServiceStub.getMutualFriends(request);
 
     }
+
+    public boolean isUserBlocked(Long requesterUserId, Long targetUserId) {
+        UserServiceProto.CheckBlockRequest request = UserServiceProto.CheckBlockRequest.newBuilder()
+                .setRequesterUserId(requesterUserId)
+                .setTargetUserId(targetUserId)
+                .build();
+        UserServiceProto.CheckBlockResponse response = userServiceStub.checkBlock(request);
+        return response.getIsBlocked();
+    }
+
+    public boolean areMutualFriends(Long userId1, Long userId2) {
+        UserServiceProto.CheckMutualFriendsResponse response = checkMutualFriends(userId1, userId2);
+        return response.getAreMutualFriends();
+    }
+
+    public UserServiceProto.CheckIfBlockedResponse checkIfBlocked(Long userId, Long targetUserId) {
+        UserServiceProto.CheckIfBlockedRequest request = UserServiceProto.CheckIfBlockedRequest.newBuilder()
+                .setUserId(userId)
+                .setTargetUserId(targetUserId)
+                .build();
+        return userServiceStub.checkIfBlocked(request);
+    }
 }

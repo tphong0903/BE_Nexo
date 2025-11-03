@@ -106,9 +106,11 @@ public class ChatWebSocketController {
 
         messageService.markConversationAsRead(request.getConversationId(), userId);
 
+        Long lastReadMessageId = messageService.getLastReadMessageId(request.getConversationId(), userId);
+
         messagingTemplate.convertAndSend(
                 "/topic/conversation/" + request.getConversationId() + "/read-all",
-                new ReadAllDTO(request.getConversationId(), userId));
+                new ReadAllDTO(request.getConversationId(), lastReadMessageId, userId));
     }
 
     // bắt lỗi

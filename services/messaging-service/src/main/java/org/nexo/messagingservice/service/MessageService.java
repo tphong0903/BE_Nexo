@@ -17,6 +17,8 @@ public interface MessageService {
 
     void markConversationAsRead(Long conversationId, Long userId);
 
+    Long getLastReadMessageId(Long conversationId, Long userId);
+
     void addReaction(Long messageId, Long userId, EReactionType reactionType);
 
     void removeReaction(Long messageId, Long userId, EReactionType reactionType);

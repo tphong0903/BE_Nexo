@@ -2,7 +2,6 @@ package org.nexo.userservice.service;
 
 import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.dto.PageModelResponse;
-import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
 import java.util.List;

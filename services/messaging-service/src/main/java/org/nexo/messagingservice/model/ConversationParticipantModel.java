@@ -1,4 +1,5 @@
 package org.nexo.messagingservice.model;
+
 import jakarta.persistence.*;
 import lombok.Data;
 
@@ -9,7 +10,7 @@ import org.hibernate.annotations.CreationTimestamp;
 @Data
 @Entity
 @Table(name = "conversation_participants", uniqueConstraints = {
-    @UniqueConstraint(columnNames = {"conversation_id", "user_id"})
+        @UniqueConstraint(columnNames = { "conversation_id", "user_id" })
 })
 public class ConversationParticipantModel {
     @Id
@@ -23,6 +24,9 @@ public class ConversationParticipantModel {
     @JoinColumn(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "is_recipient", nullable = false)
+    private boolean isRecipient = false;
+    
     @CreationTimestamp
     @Column(name = "joined_at", nullable = false, updatable = false)
     private LocalDateTime joinedAt;
@@ -35,5 +39,5 @@ public class ConversationParticipantModel {
 
     @Column(name = "is_archived", nullable = false)
     private boolean isArchived = false;
-    
+
 }

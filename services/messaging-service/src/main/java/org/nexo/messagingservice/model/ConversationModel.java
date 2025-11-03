@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.nexo.messagingservice.enums.EConversationStatus;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -16,7 +17,7 @@ import java.util.List;
 @Data
 @Entity
 @Builder
-@NoArgsConstructor  
+@NoArgsConstructor
 @AllArgsConstructor
 @Table(name = "conversations")
 public class ConversationModel {
@@ -29,7 +30,12 @@ public class ConversationModel {
 
     @Column(name = "last_message_at")
     private LocalDateTime lastMessageAt;
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private EConversationStatus status = EConversationStatus.NORMAL;
 
+    @Column(name = "blocked_by_user_id")
+    private Long blockedByUserId;
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

@@ -2,7 +2,7 @@ package org.nexo.messagingservice.controller;
 
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.ResponseData;
-import org.nexo.messagingservice.service.ConversationService;
+import org.nexo.messagingservice.service.Impl.ConversationService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -51,9 +51,20 @@ public class ConversationController {
                                 .message("User conversations retrieved successfully")
                                 .build();
         }
+        @GetMapping("/requests")
+        public ResponseData<?> getConversationRequests(
+                        @RequestParam(value = "search", required = false) String search,
+                        @PageableDefault(size = 10) Pageable pageable,
+                        Authentication authentication) {
+                String keycloakUserId = authentication.getName();
+                return ResponseData.builder()
+                                .data(conversationService.getPendingRequests(keycloakUserId, pageable))
+                                .message("User conversation requests retrieved successfully")
+                                .build();
+        }
 
         @PutMapping("/{conversationId}/archive")
-        public ResponseData<?> ArchiveConversation(
+        public ResponseData<?> archiveConversation(
                         @PathVariable Long conversationId,
                         Authentication authentication) {
 
@@ -78,4 +89,30 @@ public class ConversationController {
                                 .build();
 
         }
+        @PutMapping("/{conversationId}/decline")
+        public ResponseData<?> declineConversation(
+                        @PathVariable Long conversationId,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                conversationService.declineMessageRequest(conversationId, keycloakUserId);
+
+                return ResponseData.builder()
+                                .message("Conversation declined successfully")
+                                .build();
+        }
+        @PutMapping("/{conversationId}/accept")
+        public ResponseData<?> acceptConversation(
+                        @PathVariable Long conversationId,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                conversationService.acceptMessageRequest(conversationId, keycloakUserId);
+
+                return ResponseData.builder()
+                                .message("Conversation accepted successfully")
+                                .build();
+        }
+
+
 }

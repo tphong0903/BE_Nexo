@@ -9,6 +9,7 @@ import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
+import org.nexo.userservice.repository.UserBlockRepository;
 import org.nexo.userservice.repository.UserRepository;
 
 import java.util.ArrayList;
@@ -22,6 +23,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
         private final UserRepository userRepository;
         private final FollowService followService;
+        private final UserBlockRepository userBlockRepository;
 
         @Override
         public void createUser(UserServiceProto.CreateUserRequest request,
@@ -415,6 +417,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                 responseObserver.onCompleted();
         }
 
+        @Override
         public void getUserOnlineStatus(UserServiceProto.GetUserOnlineStatusRequest request,
                         StreamObserver<UserServiceProto.GetUserOnlineStatusResponse> responseObserver) {
                 Long userId = request.getUserId();
@@ -432,11 +435,123 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
                 UserServiceProto.GetUserOnlineStatusResponse response = UserServiceProto.GetUserOnlineStatusResponse
                                 .newBuilder()
-                                .setOnlineStatus(user.getOnlineStatus())
+                                .setOnlineStatus(user.getOnlineStatus() != null ? user.getOnlineStatus() : true)
                                 .build();
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
 
         }
 
+        @Override
+        public void checkBlock(UserServiceProto.CheckBlockRequest request,
+                        StreamObserver<UserServiceProto.CheckBlockResponse> responseObserver) {
+                Long requesterUserId = request.getRequesterUserId();
+                Long targetUserId = request.getTargetUserId();
+
+                boolean isBlocked = userBlockRepository.existsByIdBlockerIdAndIdBlockedId(requesterUserId, targetUserId)
+                                ||
+                                userBlockRepository.existsByIdBlockerIdAndIdBlockedId(targetUserId, requesterUserId);
+
+                UserServiceProto.CheckBlockResponse response = UserServiceProto.CheckBlockResponse.newBuilder()
+                                .setIsBlocked(isBlocked)
+                                .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void checkMutualFriends(UserServiceProto.CheckMutualFriendsRequest request,
+                        StreamObserver<UserServiceProto.CheckMutualFriendsResponse> responseObserver) {
+
+                Long userId1 = request.getUserId1();
+                Long userId2 = request.getUserId2();
+
+                boolean user1Exists = userRepository.existsById(userId1);
+                boolean user2Exists = userRepository.existsById(userId2);
+
+                if (!user1Exists || !user2Exists) {
+                        log.warn("One or both users not found: userId1={}, userId2={}", userId1, userId2);
+                        UserServiceProto.CheckMutualFriendsResponse response = UserServiceProto.CheckMutualFriendsResponse
+                                        .newBuilder()
+                                        .setAreMutualFriends(false)
+                                        .build();
+                        responseObserver.onNext(response);
+                        responseObserver.onCompleted();
+                        return;
+                }
+
+                List<Boolean> user1FollowsUser2 = followService.isFollow(userId1, userId2);
+                List<Boolean> user2FollowsUser1 = followService.isFollow(userId2, userId1);
+
+                boolean areMutualFriends = user1FollowsUser2.get(0) && user2FollowsUser1.get(0);
+
+                UserServiceProto.CheckMutualFriendsResponse response = UserServiceProto.CheckMutualFriendsResponse
+                                .newBuilder()
+                                .setAreMutualFriends(areMutualFriends)
+                                .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void checkIfBlocked(UserServiceProto.CheckIfBlockedRequest request,
+                        StreamObserver<UserServiceProto.CheckIfBlockedResponse> responseObserver) {
+                Long userId = request.getUserId();
+                Long targetUserId = request.getTargetUserId();
+
+                log.info("Checking if blocked: userId={}, targetUserId={}", userId, targetUserId);
+
+                boolean userBlockedTarget = userBlockRepository.existsByIdBlockerIdAndIdBlockedId(userId, targetUserId);
+
+                boolean targetBlockedUser = userBlockRepository.existsByIdBlockerIdAndIdBlockedId(targetUserId, userId);
+
+                boolean isBlocked = userBlockedTarget || targetBlockedUser;
+                Long blockedByUserId = 0L;
+
+                if (userBlockedTarget) {
+                        blockedByUserId = userId;
+                } else if (targetBlockedUser) {
+                        blockedByUserId = targetUserId;
+                }
+
+                UserServiceProto.CheckIfBlockedResponse response = UserServiceProto.CheckIfBlockedResponse
+                                .newBuilder()
+                                .setIsBlocked(isBlocked)
+                                .setBlockedByUserId(blockedByUserId)
+                                .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void getMutualFriends(UserServiceProto.GetMutualFriendsRequest request,
+                        StreamObserver<UserServiceProto.GetMutualFriendsResponse> responseObserver) {
+                Long userId = request.getUserId();
+
+                log.info("Getting mutual friends for userId={}", userId);
+
+                Set<FolloweeDTO> followings = followService.getFollowingsByUserId(userId);
+
+                Set<FolloweeDTO> followers = followService.getFollowersByUserId(userId);
+
+                List<Long> mutualFriendIds = followings.stream()
+                                .filter(following -> followers.stream()
+                                                .anyMatch(follower -> follower.getUserId()
+                                                                .equals(following.getUserId())))
+                                .map(FolloweeDTO::getUserId)
+                                .toList();
+
+                UserServiceProto.GetMutualFriendsResponse response = UserServiceProto.GetMutualFriendsResponse
+                                .newBuilder()
+                                .addAllUserIds(mutualFriendIds)
+                                .build();
+
+                log.info("Found {} mutual friends for userId={}", mutualFriendIds.size(), userId);
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
 }

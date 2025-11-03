@@ -19,4 +19,5 @@ public class UpdateUserRequest {
 
     private Boolean isPrivate;
 
+    private Boolean onlineStatus;
 }

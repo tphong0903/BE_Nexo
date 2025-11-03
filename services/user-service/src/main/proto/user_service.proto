@@ -18,6 +18,8 @@ service UserService {
   rpc GetUserOnlineStatus(GetUserOnlineStatusRequest) returns (GetUserOnlineStatusResponse);
   rpc CheckMutualFriends(CheckMutualFriendsRequest) returns (CheckMutualFriendsResponse);
   rpc GetMutualFriends(GetMutualFriendsRequest) returns (GetMutualFriendsResponse);
+  rpc CheckBlock(CheckBlockRequest) returns (CheckBlockResponse);
+  rpc CheckIfBlocked(CheckIfBlockedRequest) returns (CheckIfBlockedResponse);
 
 
 }
@@ -156,3 +158,20 @@ message GetMutualFriendsResponse {
   repeated int64 user_ids = 1;
 }
 
+message CheckBlockRequest {
+    int64 requester_user_id = 1;
+    int64 target_user_id = 2;
+}
+
+message CheckBlockResponse {
+    bool is_blocked = 1;
+}
+message CheckIfBlockedRequest {
+  int64 user_id = 1;        
+  int64 target_user_id = 2; 
+}
+
+message CheckIfBlockedResponse {
+  bool is_blocked = 1;           // true = user_id bị target block hoặc ngược lại
+  int64 blocked_by_user_id = 2;  // Ai block (0 = không ai block)
+}

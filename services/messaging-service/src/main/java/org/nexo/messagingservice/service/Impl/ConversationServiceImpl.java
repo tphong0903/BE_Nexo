@@ -10,6 +10,7 @@ import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.PageModelResponse;
 import org.nexo.messagingservice.dto.UserDTO;
+import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.exception.ResourceNotFoundException;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.ConversationModel;
@@ -18,7 +19,7 @@ import org.nexo.messagingservice.model.MessageModel;
 import org.nexo.messagingservice.repository.ConversationParticipantRepository;
 import org.nexo.messagingservice.repository.ConversationRepository;
 import org.nexo.messagingservice.repository.MessageRepository;
-import org.nexo.messagingservice.service.ConversationService;
+import org.nexo.messagingservice.service.MessageService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ public class ConversationServiceImpl implements ConversationService {
     private final ConversationRepository conversationRepository;
     private final ConversationParticipantRepository participantRepository;
     private final MessageRepository messageRepository;
+    private final MessageService messageService;
 
     @Transactional
     public ConversationResponseDTO getOrCreateDirectConversation(String keycloakUserId, Long recipientUserId) {
@@ -49,19 +51,95 @@ public class ConversationServiceImpl implements ConversationService {
         if (userGrpcClient.getUserById(recipientUserId) == null) {
             throw new ResourceNotFoundException("Recipient user not found");
         }
+
+        boolean isBlocked = userGrpcClient.isUserBlocked(user1, recipientUserId);
+        if (isBlocked) {
+            throw new SecurityException("Cannot create conversation with blocked user");
+        }
+
         Optional<ConversationModel> existing = conversationRepository.findDirectConversationBetweenUsers(user1,
                 recipientUserId);
         if (existing.isPresent()) {
+            ConversationModel conv = existing.get();
+            if (conv.getStatus() == EConversationStatus.BLOCKED) {
+                throw new SecurityException("Conversation is blocked");
+            }
             log.info("Found existing conversation between {} and {}", user1, recipientUserId);
-            return mapToDto(existing.get(), user1);
+            return mapToDto(conv, user1);
         }
-        ConversationModel conversation = ConversationModel.builder().build();
+
+        boolean areMutualFriends = userGrpcClient.areMutualFriends(user1, recipientUserId);
+        EConversationStatus initialStatus = areMutualFriends ? EConversationStatus.NORMAL : EConversationStatus.PENDING;
+
+        ConversationModel conversation = ConversationModel.builder()
+                .status(initialStatus)
+                .build();
         conversation = conversationRepository.save(conversation);
 
         addParticipant(conversation, user1);
         addParticipant(conversation, recipientUserId);
 
+        log.info("Created {} conversation between {} and {}", initialStatus, user1, recipientUserId);
         return mapToDto(conversation, user1);
+    }
+
+    @Transactional
+    public void acceptConversationRequest(Long conversationId, String keycloakUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+
+        if (!isUserParticipant(conversationId, userId)) {
+            throw new SecurityException("User is not a participant in this conversation");
+        }
+
+        if (conversation.getStatus() != EConversationStatus.PENDING) {
+            throw new IllegalStateException("Conversation is not in pending status");
+        }
+
+        conversation.setStatus(EConversationStatus.NORMAL);
+        conversationRepository.save(conversation);
+    }
+
+    @Transactional
+    public void declineConversationRequest(Long conversationId, String keycloakUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+
+        if (!isUserParticipant(conversationId, userId)) {
+            throw new SecurityException("User is not a participant in this conversation");
+        }
+
+        if (conversation.getStatus() != EConversationStatus.PENDING) {
+            throw new IllegalStateException("Conversation is not in pending status");
+        }
+
+        conversation.setStatus(EConversationStatus.DECLINED);
+        conversationRepository.save(conversation);
+    }
+
+    @Transactional
+    public void handleBlockStatusChange(Long userId1, Long userId2, boolean isBlocked) {
+        Optional<ConversationModel> conversation = conversationRepository
+                .findDirectConversationBetweenUsers(userId1, userId2);
+
+        if (conversation.isPresent()) {
+            ConversationModel conv = conversation.get();
+            if (isBlocked) {
+                conv.setStatus(EConversationStatus.BLOCKED);
+                conv.setBlockedByUserId(userId1);
+            } else {
+                conv.setStatus(EConversationStatus.NORMAL);
+                conv.setBlockedByUserId(null);
+            }
+            conversationRepository.save(conv);
+            log.info("Updated conversation {} block status: blocked={}", conv.getId(), isBlocked);
+        }
     }
 
     public ConversationResponseDTO getConversationById(Long conversationId, Long requestingUserId) {
@@ -70,6 +148,12 @@ public class ConversationServiceImpl implements ConversationService {
 
         if (!isUserParticipant(conversationId, requestingUserId)) {
             throw new SecurityException("User is not a participant in this conversation");
+        }
+
+        if (conversation.getStatus() == EConversationStatus.BLOCKED
+                && conversation.getBlockedByUserId() != null
+                && conversation.getBlockedByUserId().equals(requestingUserId)) {
+            throw new ResourceNotFoundException("Conversation not found");
         }
 
         return mapToDto(conversation, requestingUserId);
@@ -130,7 +214,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .orElse(null);
 
         String displayName = otherUser != null
-                ? otherUser.getUsername()
+                ? otherUser.getFullName()
                 : "Unknown User";
 
         String displayAvatar = otherUser != null ? otherUser.getAvatarUrl() : null;
@@ -147,13 +231,17 @@ public class ConversationServiceImpl implements ConversationService {
 
         return ConversationResponseDTO.builder()
                 .id(conversation.getId())
-                .name(displayName)
+                .fullname(displayName)
                 .avatarUrl(displayAvatar)
                 .participants(participantDTOs)
                 .lastMessage(lastMessage)
                 .unreadCount(unreadCount)
                 .lastMessageAt(conversation.getLastMessageAt())
                 .createdAt(conversation.getCreatedAt())
+                .status(conversation.getStatus())
+                .isBlockedByMe(conversation.getBlockedByUserId() != null
+                        && conversation.getBlockedByUserId().equals(requestingUserId))
+                .lastReadMessageId(messageService.getLastReadMessageId(conversation.getId(), otherUser.getId()))
                 .build();
     }
 
@@ -161,14 +249,40 @@ public class ConversationServiceImpl implements ConversationService {
         UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
         Long userId = user.getUserId();
         Page<ConversationModel> conversations = conversationRepository
-                .findByUserIdOrderByLastMessageAtDesc(userId, pageable);
+                .findNormalConversationsByUserId(userId, pageable);
+
+        List<ConversationResponseDTO> filteredConversations = conversations.stream()
+                .filter(conv -> !(conv.getStatus() == EConversationStatus.BLOCKED
+                        && conv.getBlockedByUserId() != null
+                        && conv.getBlockedByUserId().equals(userId)))
+                .map(conv -> mapToDto(conv, userId))
+                .toList();
+
         PageModelResponse<ConversationResponseDTO> pageModelResponse = PageModelResponse
                 .<ConversationResponseDTO>builder()
-                .content(conversations.map(conv -> mapToDto(conv, userId)).getContent())
+                .content(filteredConversations)
                 .pageNo(conversations.getNumber())
                 .pageSize(conversations.getSize())
-                .totalElements(conversations.getTotalElements())
+                .totalElements((long) filteredConversations.size())
                 .totalPages(conversations.getTotalPages())
+                .build();
+        return pageModelResponse;
+    }
+
+    public PageModelResponse<ConversationResponseDTO> getPendingRequests(String keycloakUserId, Pageable pageable) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        Page<ConversationModel> pendingConversations = conversationRepository
+                .findPendingConversationsByUserId(userId, pageable);
+
+        PageModelResponse<ConversationResponseDTO> pageModelResponse = PageModelResponse
+                .<ConversationResponseDTO>builder()
+                .content(pendingConversations.map(conv -> mapToDto(conv, userId)).getContent())
+                .pageNo(pendingConversations.getNumber())
+                .pageSize(pendingConversations.getSize())
+                .totalElements(pendingConversations.getTotalElements())
+                .totalPages(pendingConversations.getTotalPages())
                 .build();
         return pageModelResponse;
     }
@@ -204,5 +318,52 @@ public class ConversationServiceImpl implements ConversationService {
                 conversationId,
                 userId,
                 participant.getLastReadMessageId());
+    }
+
+    public void acceptMessageRequest(Long conversationId, String keycloakUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+        ConversationParticipantModel participant = participantRepository
+                .findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Not a participant"));
+
+        if (!participant.isRecipient()) {
+            throw new SecurityException("Only recipient can accept message request");
+        }
+
+        if (conversation.getStatus() != EConversationStatus.PENDING) {
+            throw new IllegalStateException("Conversation is not pending");
+        }
+
+        conversation.setStatus(EConversationStatus.NORMAL);
+        conversationRepository.save(conversation);
+
+    }
+
+    public void declineMessageRequest(Long conversationId, String keycloakUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+        ConversationParticipantModel participant = participantRepository
+                .findByConversationIdAndUserId(conversationId, userId)
+                .orElseThrow(() -> new IllegalArgumentException("Not a participant"));
+
+        if (!participant.isRecipient()) {
+            throw new SecurityException("Only recipient can decline message request");
+        }
+
+        if (conversation.getStatus() != EConversationStatus.PENDING) {
+            throw new IllegalStateException("Conversation is not pending");
+        }
+
+        conversation.setStatus(EConversationStatus.DECLINED);
+        conversationRepository.save(conversation);
+
     }
 }

@@ -1,4 +1,4 @@
-package org.nexo.messagingservice.service;
+package org.nexo.messagingservice.service.Impl;
 
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.PageModelResponse;
@@ -15,4 +15,9 @@ public interface ConversationService {
 
     void muteConversation(Long conversationId, String requestingUserId);
 
+    PageModelResponse<ConversationResponseDTO> getPendingRequests(String keycloakUserId, Pageable pageable);
+
+    void acceptMessageRequest(Long conversationId, String keycloakUserId);
+
+    void declineMessageRequest(Long conversationId, String keycloakUserId);
 }

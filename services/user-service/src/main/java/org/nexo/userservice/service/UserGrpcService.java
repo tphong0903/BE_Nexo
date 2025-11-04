@@ -16,6 +16,8 @@ import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserRepository;
 
+import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -448,6 +450,65 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
             }
         }
         responseObserver.onNext(UserServiceProto.GetUsersByIdsResponse2.newBuilder().addAllUsers(list).build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getTotalUsers(UserServiceProto.Empty request, StreamObserver<UserServiceProto.QuantityTotalUsers> responseObserver) {
+        long total = userRepository.count();
+
+        UserServiceProto.QuantityTotalUsers response = UserServiceProto.QuantityTotalUsers.newBuilder()
+                .setQuantity(total)
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getPercentUsersInThisMonth(UserServiceProto.Empty request, StreamObserver<UserServiceProto.UserPercentResponse> responseObserver) {
+        LocalDateTime startOfThisMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
+        LocalDateTime startOfLastMonth = startOfThisMonth.minusMonths(1);
+        LocalDateTime endOfLastMonth = startOfThisMonth;
+
+        long thisMonth = userRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1));
+        long lastMonth = userRepository.countByCreatedAtBetween(startOfLastMonth, endOfLastMonth);
+
+        double percent = 0;
+        if (lastMonth > 0) {
+            percent = ((double) (thisMonth - lastMonth) / lastMonth) * 100;
+        }
+
+        UserServiceProto.UserPercentResponse response = UserServiceProto.UserPercentResponse.newBuilder()
+                .setPercent(percent)
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getUsersByTime(UserServiceProto.DateRange request,
+                               StreamObserver<UserServiceProto.GetUsersByTimeResponse> responseObserver) {
+        LocalDateTime start = LocalDateTime.parse(request.getStartDate());
+        LocalDateTime end = LocalDateTime.parse(request.getEndDate());
+
+        List<Object[]> result = userRepository.countUsersByDate(start, end);
+
+        UserServiceProto.GetUsersByTimeResponse.Builder responseBuilder =
+                UserServiceProto.GetUsersByTimeResponse.newBuilder();
+
+        for (Object[] row : result) {
+            String date = row[0].toString();
+            long total = ((Number) row[1]).longValue();
+
+            responseBuilder.addData(UserServiceProto.UserCountByDate.newBuilder()
+                    .setDate(date)
+                    .setCount(total)
+                    .build());
+        }
+
+        responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
     }
 

@@ -6,7 +6,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
+
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Repository
 public interface IPostRepository extends JpaRepository<PostModel, Long> {
@@ -31,5 +35,13 @@ public interface IPostRepository extends JpaRepository<PostModel, Long> {
     )
     Page<PostModel> findPopularPublicPostsWithHashtagScore(Pageable pageable);
 
+    long countByCreatedAtBetween(LocalDateTime start, LocalDateTime end);
+
+    @Query("SELECT DATE(p.createdAt) AS date, COUNT(p) AS total " +
+            "FROM PostModel p " +
+            "WHERE p.createdAt BETWEEN :start AND :end " +
+            "GROUP BY DATE(p.createdAt) " +
+            "ORDER BY DATE(p.createdAt)")
+    List<Object[]> countPostsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
 }

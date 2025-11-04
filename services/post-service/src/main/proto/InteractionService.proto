@@ -6,6 +6,29 @@ service InteractionService {
   rpc ExistLikeByIdAndUserId (IsLikeRequest) returns (IsLikeResponse);
   rpc ExistLikesByUserAndPostIds (BatchIsLikeRequest) returns (BatchIsLikeResponse);
   rpc ExistLikesByUserAndReelIds (BatchIsLikeRequest) returns (BatchIsLikeResponse);
+  rpc GetTotalInteractions(Empty) returns (QuantityTotalInteract);
+  rpc GetPercentInteractionsInThisMonth(Empty) returns (PercentInteract);
+  rpc GetInteractionsByTime(DateRange) returns (GetUsersByTimeResponse);
+}
+message DateRange {
+  string startDate = 1;
+  string endDate = 2;
+}
+
+message UserCountByDate {
+  string date = 1;
+  int64 count = 2;
+}
+
+message GetUsersByTimeResponse {
+  repeated UserCountByDate data = 1;
+}
+message Empty{}
+message QuantityTotalInteract {
+  int64 quantity = 1;
+}
+message PercentInteract {
+  double percent = 1;
 }
 message IsLikeRequest {
   int64 postId = 1;

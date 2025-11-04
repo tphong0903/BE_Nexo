@@ -5,6 +5,7 @@ import org.nexo.grpc.user.UserServiceGrpc;
 import org.nexo.grpc.user.UserServiceProto;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -56,4 +57,27 @@ public class UserGrpcClient {
 
         return response.getUsersList();
     }
+
+    public Long getTotalUsers() {
+        UserServiceProto.QuantityTotalUsers response = userStub.getTotalUsers(UserServiceProto.Empty.newBuilder().build());
+        return response.getQuantity();
+    }
+
+    public Double getPercentUsersInThisMonth() {
+        UserServiceProto.UserPercentResponse response = userStub.getPercentUsersInThisMonth(UserServiceProto.Empty.newBuilder().build());
+        return response.getPercent();
+    }
+
+    public List<UserServiceProto.UserCountByDate> getUsersByTime(LocalDate startDate, LocalDate endDate) {
+        UserServiceProto.DateRange request = UserServiceProto.DateRange.newBuilder()
+                .setStartDate(startDate.toString())
+                .setEndDate(endDate.toString())
+                .build();
+
+        UserServiceProto.GetUsersByTimeResponse response = userStub.getUsersByTime(request);
+
+        return response.getDataList();
+    }
+
+
 }

@@ -9,6 +9,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Repository
 public interface IReportReelRepository extends JpaRepository<ReportReelModel, Long> {
     boolean existsByUserIdAndReelModel_Id(Long userId, Long reelId);
@@ -31,5 +34,11 @@ public interface IReportReelRepository extends JpaRepository<ReportReelModel, Lo
             Pageable pageable
     );
 
+    @Query("SELECT DATE(r.createdAt) AS date, COUNT(r) AS total " +
+            "FROM ReportReelModel r " +
+            "WHERE r.createdAt BETWEEN :start AND :end " +
+            "GROUP BY DATE(r.createdAt) " +
+            "ORDER BY DATE(r.createdAt)")
+    List<Object[]> countReportsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
 }

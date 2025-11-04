@@ -16,7 +16,24 @@ service UserService {
   rpc CheckFollow(CheckMutualFollowRequest) returns (CheckFollowResponse);
   rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
   rpc GetLikeUsersByIds(GetUsersByIdsRequest2) returns (GetUsersByIdsResponse2);
+  rpc GetTotalUsers(Empty) returns (QuantityTotalUsers);
+  rpc GetPercentUsersInThisMonth(Empty) returns (UserPercentResponse);
+  rpc GetUsersByTime(DateRange) returns (GetUsersByTimeResponse);
 }
+message DateRange {
+  string startDate = 1;
+  string endDate = 2;
+}
+
+message UserCountByDate {
+  string date = 1;
+  int64 count = 2;
+}
+
+message GetUsersByTimeResponse {
+  repeated UserCountByDate data = 1;
+}
+message Empty {}
 message GetUsersByIdsRequest {
   repeated int64 userIds = 1;
 }
@@ -135,4 +152,10 @@ message CheckFollowResponse {
   bool is_private = 1;
   bool is_follow = 2;
   bool is_close_friend = 3;
+}
+message QuantityTotalUsers{
+  int64 quantity = 1;
+}
+message UserPercentResponse {
+  double percent = 1;
 }

@@ -22,39 +22,34 @@ public interface ConversationRepository extends JpaRepository<ConversationModel,
                         @Param("userId1") Long userId1,
                         @Param("userId2") Long userId2);
 
-        // lay danh sach inbox normal
+        // lay danh sach tat ca inbox
         @Query("SELECT c FROM ConversationModel c " +
                         "JOIN c.participants p " +
                         "WHERE p.userId = :userId " +
                         "AND p.isArchived = false " +
-                        "AND c.status = 'NORMAL' " +
                         "ORDER BY c.lastMessageAt DESC NULLS LAST")
         Page<ConversationModel> findNormalConversationsByUserId(
                         @Param("userId") Long userId,
                         Pageable pageable);
 
-        // lay danh sach pending cho recipient
+        // lay danh sach pending
         @Query("SELECT c FROM ConversationModel c " +
                         "JOIN c.participants p " +
                         "WHERE p.userId = :userId " +
-                        "AND p.isRecipient = true " +
                         "AND c.status = 'PENDING' " +
                         "ORDER BY c.createdAt DESC")
         Page<ConversationModel> findPendingConversationsByRecipientId(
                         @Param("userId") Long userId,
                         Pageable pageable);
 
-        // dem so luong pending request cho recipient
+        // dem so luong pending request (bỏ check isRecipient vì không cần thiết)
         @Query("SELECT COUNT(c) FROM ConversationModel c " +
                         "JOIN c.participants p " +
                         "WHERE p.userId = :userId " +
-                        "AND p.isRecipient = true " +
                         "AND c.status = 'PENDING'")
         Long countPendingRequestsByRecipientId(@Param("userId") Long userId);
 
-        /**
-         * Check user có phải participant không
-         */
+        // Check user có phải participant không
         @Query("SELECT CASE WHEN COUNT(p) > 0 THEN true ELSE false END " +
                         "FROM ConversationParticipantModel p " +
                         "WHERE p.conversation.id = :conversationId " +
@@ -67,4 +62,14 @@ public interface ConversationRepository extends JpaRepository<ConversationModel,
                         "WHERE p.userId = :userId AND c.status = 'PENDING' " +
                         "ORDER BY c.createdAt DESC")
         Page<ConversationModel> findPendingConversationsByUserId(@Param("userId") Long userId, Pageable pageable);
+
+        // Lay danh sach conversation archived (tất cả trạng thái)
+        @Query("SELECT c FROM ConversationModel c " +
+                        "JOIN c.participants p " +
+                        "WHERE p.userId = :userId " +
+                        "AND p.isArchived = true " +
+                        "ORDER BY c.lastMessageAt DESC NULLS LAST")
+        Page<ConversationModel> findArchivedConversationsByUserId(
+                        @Param("userId") Long userId,
+                        Pageable pageable);
 }

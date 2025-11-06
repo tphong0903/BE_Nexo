@@ -14,6 +14,8 @@ import org.springframework.data.web.PageableDefault;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 @RestController
 @RequestMapping("/api/messages")
 @RequiredArgsConstructor
@@ -83,6 +85,25 @@ public class MessageController {
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Reaction removed successfully")
+                                .build();
+        }
+
+        @GetMapping("/{messageId}/reactions")
+        public ResponseData<?> getMessageReactions(
+                        @PathVariable Long messageId,
+                        Authentication authentication) {
+
+                String keycloakUserId = (String) authentication.getName();
+
+                UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+                Long userId = userDto.getUserId();
+
+                List<ReactionDetailDTO> reactions = messageService.getMessageReactions(messageId, userId);
+
+                return ResponseData.builder()
+                                .status(200)
+                                .message("Reactions retrieved successfully")
+                                .data(reactions)
                                 .build();
         }
 }

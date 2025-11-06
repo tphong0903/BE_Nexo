@@ -17,6 +17,10 @@ public interface ConversationService {
 
     PageModelResponse<ConversationResponseDTO> getPendingRequests(String keycloakUserId, Pageable pageable);
 
+    PageModelResponse<ConversationResponseDTO> getUnreadConversations(String keycloakUserId, Pageable pageable);
+
+    PageModelResponse<ConversationResponseDTO> getArchivedConversations(String keycloakUserId, Pageable pageable);
+
     void acceptMessageRequest(Long conversationId, String keycloakUserId);
 
     void declineMessageRequest(Long conversationId, String keycloakUserId);

@@ -51,6 +51,7 @@ public class ConversationController {
                                 .message("User conversations retrieved successfully")
                                 .build();
         }
+
         @GetMapping("/requests")
         public ResponseData<?> getConversationRequests(
                         @RequestParam(value = "search", required = false) String search,
@@ -60,6 +61,28 @@ public class ConversationController {
                 return ResponseData.builder()
                                 .data(conversationService.getPendingRequests(keycloakUserId, pageable))
                                 .message("User conversation requests retrieved successfully")
+                                .build();
+        }
+
+        @GetMapping("/unread")
+        public ResponseData<?> getUnreadConversations(
+                        @PageableDefault(size = 10) Pageable pageable,
+                        Authentication authentication) {
+                String keycloakUserId = authentication.getName();
+                return ResponseData.builder()
+                                .data(conversationService.getUnreadConversations(keycloakUserId, pageable))
+                                .message("Unread conversations retrieved successfully")
+                                .build();
+        }
+
+        @GetMapping("/archived")
+        public ResponseData<?> getArchivedConversations(
+                        @PageableDefault(size = 10) Pageable pageable,
+                        Authentication authentication) {
+                String keycloakUserId = authentication.getName();
+                return ResponseData.builder()
+                                .data(conversationService.getArchivedConversations(keycloakUserId, pageable))
+                                .message("Archived conversations retrieved successfully")
                                 .build();
         }
 
@@ -89,6 +112,7 @@ public class ConversationController {
                                 .build();
 
         }
+
         @PutMapping("/{conversationId}/decline")
         public ResponseData<?> declineConversation(
                         @PathVariable Long conversationId,
@@ -101,6 +125,7 @@ public class ConversationController {
                                 .message("Conversation declined successfully")
                                 .build();
         }
+
         @PutMapping("/{conversationId}/accept")
         public ResponseData<?> acceptConversation(
                         @PathVariable Long conversationId,
@@ -113,6 +138,5 @@ public class ConversationController {
                                 .message("Conversation accepted successfully")
                                 .build();
         }
-
 
 }

@@ -6,9 +6,11 @@ import java.util.stream.Collectors;
 
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse;
+import org.nexo.grpc.user.UserServiceProto.UserDTOResponse2;
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.MessageMediaDTO;
 import org.nexo.messagingservice.dto.ReactionDTO;
+import org.nexo.messagingservice.dto.ReactionDetailDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.dto.UserDTO;
 import org.nexo.messagingservice.enums.EConversationStatus;
@@ -70,14 +72,8 @@ public class MessageServiceImpl implements MessageService {
             }
         }
 
-        if (conversation.getStatus() == EConversationStatus.PENDING) {
-            ConversationParticipantModel participant = participantRepository
-                    .findByConversationIdAndUserId(conversation.getId(), senderUserId)
-                    .orElseThrow(() -> new SecurityException("Not a participant"));
-
-            if (participant.isRecipient()) {
-                throw new SecurityException("You must accept the message request before sending messages");
-            }
+        if (conversation.getStatus() == EConversationStatus.DECLINED) {
+            conversation.setStatus(EConversationStatus.PENDING);
         }
         if (!isParticipant(conversation.getId(), senderUserId)) {
             throw new SecurityException("User is not a participant in this conversation");
@@ -259,6 +255,51 @@ public class MessageServiceImpl implements MessageService {
                         .count(entry.getValue().size())
                         .userIds(entry.getValue())
                         .build())
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<ReactionDetailDTO> getMessageReactions(Long messageId, Long requestingUserId) {
+        // Kiểm tra message có tồn tại không
+        MessageModel message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new IllegalArgumentException("Message not found"));
+
+        // Kiểm tra user có quyền xem message này không (phải là participant của
+        // conversation)
+        if (!isParticipant(message.getConversation().getId(), requestingUserId)) {
+            throw new SecurityException("User is not a participant in this conversation");
+        }
+
+        // Lấy tất cả reactions của message
+        List<MessageReactionModel> reactions = reactionRepository.findByMessageId(messageId);
+
+        // Lấy danh sách userId
+        List<Long> userIds = reactions.stream()
+                .map(MessageReactionModel::getUserId)
+                .distinct()
+                .collect(Collectors.toList());
+
+        // Lấy thông tin user từ gRPC
+        List<UserDTOResponse2> users = userGrpcClient.getUsersByIds(userIds);
+
+        // Map user info theo userId để dễ tìm kiếm
+        Map<Long, UserDTOResponse2> userMap = users.stream()
+                .collect(Collectors.toMap(UserDTOResponse2::getId, u -> u));
+
+        // Map reactions sang DTO kèm user info
+        return reactions.stream()
+                .map(reaction -> {
+                    UserDTOResponse2 user = userMap.get(reaction.getUserId());
+                    return ReactionDetailDTO.builder()
+                            .id(reaction.getId())
+                            .userId(reaction.getUserId())
+                            .username(user != null ? user.getUsername() : "Unknown")
+                            .fullName(user != null ? user.getFullName() : "Unknown User")
+                            .avatarUrl(user != null ? user.getAvatar() : null)
+                            .reactionType(reaction.getReactionType())
+                            .createdAt(reaction.getCreatedAt())
+                            .build();
+                })
                 .collect(Collectors.toList());
     }
 }

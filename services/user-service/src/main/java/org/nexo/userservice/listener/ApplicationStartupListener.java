@@ -3,6 +3,7 @@ package org.nexo.userservice.listener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.userservice.dto.UserSearchDocument;
+import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.MeilisearchService;
@@ -25,7 +26,7 @@ public class ApplicationStartupListener {
     public void onApplicationReady() {
         log.info("Application is ready. Starting initial user indexing...");
         try {
-            List<UserModel> allUsers = userRepository.findAll();
+            List<UserModel> allUsers = userRepository.findAllByAccountStatus(EAccountStatus.ACTIVE);
 
             if (allUsers.isEmpty()) {
                 log.info("No users found in database. Skipping indexing.");

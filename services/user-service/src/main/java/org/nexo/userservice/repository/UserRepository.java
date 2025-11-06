@@ -13,6 +13,7 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserModel, Long> {
+    List<UserModel> findAllByAccountStatus(EAccountStatus status);
 
     Optional<UserModel> findByUsername(String username);
 

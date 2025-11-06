@@ -53,7 +53,7 @@ public class CommentServiceImpl implements ICommentService {
                     .build();
         }
 
-        if (a.getPostId() != 0) {
+        if (a.getPostId() != null && a.getPostId() != 0) {
             model.setPostId(a.getPostId());
         } else {
             model.setReelId(a.getReelId());
@@ -69,7 +69,7 @@ public class CommentServiceImpl implements ICommentService {
             String notificationType = "";
             Long id = 0L;
             String url = "";
-            if (model.getPostId() != 0) {
+            if (a.getPostId() != null && a.getPostId() != 0) {
                 postGrpcClient.addCommentQuantityById(model.getPostId(), true, true);
                 notificationType = String.valueOf(ENotificationType.COMMENT_POST);
                 id = postGrpcClient.getPostById(model.getPostId()).getUserId();
@@ -78,7 +78,7 @@ public class CommentServiceImpl implements ICommentService {
                 postGrpcClient.addCommentQuantityById(model.getReelId(), false, true);
                 notificationType = String.valueOf(ENotificationType.COMMENT_REEL);
                 id = postGrpcClient.getReelById(model.getReelId()).getUserId();
-                url = "/reels/" + model.getPostId();
+                url = "/reels/" + model.getReelId();
             }
             MessageDTO messageDTO = MessageDTO.builder()
                     .actorId(response.getUserId())
@@ -98,7 +98,13 @@ public class CommentServiceImpl implements ICommentService {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         CommentModel model = commentRepository.findById(id).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
-        if (response.getUserId() != model.getUserId())
+        Long ownerId = 0L;
+        if (model.getReelId() != 0) {
+            ownerId = postGrpcClient.getReelById(model.getReelId()).getUserId();
+        } else {
+            ownerId = postGrpcClient.getPostById(model.getPostId()).getUserId();
+        }
+        if (response.getUserId() != model.getUserId() || ownerId != response.getUserId())
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
         commentRepository.delete(model);
         if (model.getPostId() != 0) {
@@ -116,7 +122,7 @@ public class CommentServiceImpl implements ICommentService {
         PostServiceOuterClass.PostResponse model = postGrpcClient.getPostById(postId);
 
         boolean isAllow = false;
-        if (postId == response.getUserId()) {
+        if (model.getUserId() == response.getUserId()) {
             isAllow = true;
         } else {
             UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());
@@ -125,12 +131,12 @@ public class CommentServiceImpl implements ICommentService {
             }
         }
         if (!isAllow)
-            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Dont allow to get Comment", HttpStatus.BAD_REQUEST);
 
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
         Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
-        return commentMapper.toListResponse(postId, commentsPage);
+        return commentMapper.toListResponse(postId, commentsPage, response.getUserId());
 
     }
 
@@ -142,7 +148,7 @@ public class CommentServiceImpl implements ICommentService {
         PostServiceOuterClass.ReelResponse model = postGrpcClient.getReelById(reelId);
 
         boolean isAllow = false;
-        if (reelId == response.getUserId()) {
+        if (model.getUserId() == response.getUserId()) {
             isAllow = true;
         } else {
             UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());
@@ -156,12 +162,13 @@ public class CommentServiceImpl implements ICommentService {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
         Page<CommentModel> commentsPage = commentRepository.findByReelId(reelId, pageable);
-        return commentMapper.toListResponse(reelId, commentsPage);
+        return commentMapper.toListResponse(reelId, commentsPage, response.getUserId());
     }
 
     @Override
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
-
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
         Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(commentId, pageable);
 
@@ -173,7 +180,7 @@ public class CommentServiceImpl implements ICommentService {
         else
             id = model.getReelId();
 
-        return commentMapper.toListResponse(id, repliesPage);
+        return commentMapper.toListResponse(id, repliesPage, response.getUserId());
     }
 
 

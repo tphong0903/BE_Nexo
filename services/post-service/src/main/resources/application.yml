@@ -45,7 +45,7 @@ spring:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 5
         spring.json.add.type.headers: false
-        
+
 eureka:
   client:
     serviceUrl:
@@ -57,7 +57,9 @@ eureka:
 feign:
   client:
     config:
-      default:
+      files:
+        connectTimeout: 10000
+        readTimeout: 60000
         loggerLevel: FULL
   okhttp:
     enabled: true
@@ -70,5 +72,8 @@ grpc:
   client:
     users:
       address: static://localhost:9092
+      negotiation-type: plaintext
+    interactions:
+      address: static://localhost:9095
       negotiation-type: plaintext
 

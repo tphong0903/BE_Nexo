@@ -5,9 +5,12 @@ import org.nexo.postservice.model.*;
 import org.nexo.postservice.repository.IHashTagRepository;
 import org.nexo.postservice.repository.IPostHashTagRepository;
 import org.nexo.postservice.service.IHashTagService;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -51,5 +54,10 @@ public class HashTagServiceImpl implements IHashTagService {
 
             hashTagRepository.save(hashTagModel);
         }
+    }
+
+    public List<HashTagModel> getTrendingHashtags(int topN) {
+        Pageable pageable = PageRequest.of(0, topN);
+        return hashTagRepository.findTopTrendingHashtags(pageable);
     }
 }

@@ -17,7 +17,7 @@ public class CommentResponse {
     private Long parentId;
     private Long quantityLike;
     private List<CommentResponse> responseChildList;
-    private LocalDateTime creatAt;
+    private LocalDateTime createdAt;
     private boolean hasMoreReplies;
     private boolean isLike;
 }

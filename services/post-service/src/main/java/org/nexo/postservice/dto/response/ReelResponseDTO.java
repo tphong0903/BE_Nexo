@@ -12,17 +12,16 @@ import java.util.List;
 @AllArgsConstructor
 @Builder
 public class ReelResponseDTO {
-    private Long postId;
+    private Long reelId;
     private Long userId;
     private String userName;
     private String avatarUrl;
     private String caption;
     private String visibility;
-    private String tag;
+    private Boolean isLike;
     private String mediaUrl;
     private Long quantityLike;
     private Long quantityComment;
-    private List<UserTagDTO> listUserTag;
     private Boolean isActive;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

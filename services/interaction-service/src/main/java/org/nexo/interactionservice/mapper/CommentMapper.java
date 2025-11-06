@@ -27,7 +27,7 @@ public class CommentMapper {
     private final ICommentRepository commentRepository;
     private final ILikeCommentRepository likeCommentRepository;
 
-    public CommentResponse toResponse(CommentModel model, Map<Long, UserServiceProto.UserDTOResponse2> userMap) {
+    public CommentResponse toResponse(CommentModel model, Map<Long, UserServiceProto.UserDTOResponse2> userMap, Long currenUserId) {
         UserServiceProto.UserDTOResponse2 userDto = userMap.get(model.getUserId());
         Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(
                 model.getId(),
@@ -44,9 +44,9 @@ public class CommentMapper {
                             .avatarUrl(replyUser != null ? replyUser.getAvatar() : null)
                             .content(reply.getContent())
                             .parentId(model.getId())
-                            .creatAt(reply.getCreatedAt())
+                            .createdAt(reply.getCreatedAt())
                             .hasMoreReplies(false)
-                            .isLike(likeCommentRepository.findByCommentModelIdAndAndUserId(reply.getId(), model.getUserId()) != null)
+                            .isLike(likeCommentRepository.findByCommentModelIdAndAndUserId(reply.getId(), currenUserId) != null)
                             .quantityLike(likeCommentRepository.countByCommentModel_Id(reply.getId()))
                             .build();
                 })
@@ -61,13 +61,13 @@ public class CommentMapper {
                 .quantityLike(likeCommentRepository.countByCommentModel_Id(model.getId()))
                 .parentId(model.getParentComment() != null ? model.getParentComment().getPostId() : null)
                 .responseChildList(replyResponses)
-                .creatAt(model.getCreatedAt())
+                .createdAt(model.getCreatedAt())
                 .hasMoreReplies(repliesPage.getTotalElements() > 2)
-                .isLike(likeCommentRepository.findByCommentModelIdAndAndUserId(model.getId(), model.getUserId()) != null)
+                .isLike(likeCommentRepository.findByCommentModelIdAndAndUserId(model.getId(), currenUserId) != null)
                 .build();
     }
 
-    public ListCommentResponse toListResponse(Long postId, Page<CommentModel> commentsPage) {
+    public ListCommentResponse toListResponse(Long postId, Page<CommentModel> commentsPage, Long currentUserId) {
         List<CommentModel> allComments = commentsPage.getContent();
 
         Set<Long> userIds = allComments.stream()
@@ -78,7 +78,7 @@ public class CommentMapper {
 
         List<CommentResponse> responses = commentsPage.getContent()
                 .stream()
-                .map(comment -> toResponse(comment, userMap))
+                .map(comment -> toResponse(comment, userMap, currentUserId))
                 .collect(Collectors.toList());
 
         return ListCommentResponse.builder()

@@ -1,0 +1,39 @@
+package org.nexo.notificationservice.util;
+
+import lombok.RequiredArgsConstructor;
+
+import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.notificationservice.exception.CustomException;
+import org.nexo.notificationservice.service.impl.UserGrpcClient;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class SecurityUtil {
+    private final TokenService tokenService;
+    private final UserGrpcClient userClient;
+
+    public void checkOwner(Long id) {
+        String sub = tokenService.getKeyloakIdFromContext();
+        UserServiceProto.UserDto user = userClient.getUserByKeycloakId(sub);
+
+        if (user.getUserId() != id)
+            throw new CustomException("Stop Joke", HttpStatus.BAD_REQUEST);
+    }
+
+    public String getKeyloakId() {
+        return tokenService.getKeyloakIdFromContext();
+    }
+
+    public String getUserNameFromToken(String jwt) {
+        UserServiceProto.UserDto user = userClient.getUserByKeycloakId(jwt);
+        return user.getUsername();
+    }
+
+    public Long getUserIdFromToken() {
+        String sub = tokenService.getKeyloakIdFromContext();
+        UserServiceProto.UserDto user = userClient.getUserByKeycloakId(sub);
+        return user.getUserId();
+    }
+}

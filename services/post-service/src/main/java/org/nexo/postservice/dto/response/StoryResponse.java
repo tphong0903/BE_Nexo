@@ -23,8 +23,8 @@ public class StoryResponse {
     @Builder
     public static class Story {
         private Long storyId;
+        private Long quantitySeen;
         private String mediaUrl;
-        private String mediaType;
         private Boolean isLike;
         private LocalDateTime createdAt;
         private Boolean isActive;

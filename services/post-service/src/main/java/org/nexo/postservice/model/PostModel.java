@@ -21,8 +21,10 @@ import java.util.List;
 @EqualsAndHashCode(callSuper = true)
 public class PostModel extends AbstractPost {
     private String tag;
-    @OneToMany(fetch = FetchType.EAGER, mappedBy = "postModel", cascade = CascadeType.ALL)
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "postModel", cascade = CascadeType.ALL)
     private List<PostHashTagModel> postHashTagModel;
     @OneToMany(fetch = FetchType.EAGER, mappedBy = "postModel", cascade = CascadeType.ALL)
     private List<PostMediaModel> postMediaModels;
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "postModel", cascade = CascadeType.ALL)
+    private List<ReportPostModel> reportPostModels;
 }

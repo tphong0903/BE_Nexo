@@ -8,10 +8,7 @@ import org.nexo.interactionservice.service.impl.LeakyBucketService;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/like")
@@ -48,6 +45,16 @@ public class LikeController {
         }
 
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.saveLikePost(id));
+    }
+
+    @GetMapping("/post/{id}/detail")
+    public ResponseData<?> getLikePostDetail(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "10") int pageSize) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.getLikePostDetail(id, pageNo, pageSize));
+    }
+
+    @GetMapping("/reel/{id}/detail")
+    public ResponseData<?> getLikeReelDetail(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "10") int pageSize) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", likeService.getLikeReelDetail(id, pageNo, pageSize));
     }
 
     @PostMapping("/reel/{id}")

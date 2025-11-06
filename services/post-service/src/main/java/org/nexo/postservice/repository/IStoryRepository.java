@@ -10,10 +10,10 @@ import java.util.List;
 
 @Repository
 public interface IStoryRepository extends JpaRepository<StoryModel, Long> {
-    List<StoryModel> findByUserIdAndIsActive(Long userId, Boolean isActive);
+    Page<StoryModel> findByUserIdAndIsActive(Long userId, Boolean isActive, Pageable pageable);
 
     Page<StoryModel> findByUserId(Long userId, Pageable pageable);
 
 
-    List<StoryModel> findByUserIdAndIsActiveAndIsClosedFriend(Long userId, Boolean isActive, Boolean isClosedFriend);
+    List<StoryModel> findAllByUserIdAndIsActiveAndIsClosedFriend(Long userId, Boolean isActive, Boolean isClosedFriend);
 }

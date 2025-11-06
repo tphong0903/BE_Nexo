@@ -55,7 +55,8 @@ public class UserModel {
     private Boolean isPrivate = false;
 
     @Column(name = "online_status")
-    private Boolean onlineStatus;
+    @Builder.Default
+    private Boolean onlineStatus = true;
 
     @Column(name = "account_status")
     @Enumerated(EnumType.STRING)

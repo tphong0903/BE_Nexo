@@ -6,8 +6,6 @@ import org.nexo.interactionservice.dto.request.CommentDto;
 import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.dto.response.ResponseData;
 import org.nexo.interactionservice.service.ICommentService;
-import org.nexo.interactionservice.service.impl.LeakyBucketService;
-import org.nexo.interactionservice.util.Enum.SecurityUtil;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;

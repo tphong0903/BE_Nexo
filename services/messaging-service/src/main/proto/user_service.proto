@@ -20,16 +20,42 @@ service UserService {
   rpc GetMutualFriends(GetMutualFriendsRequest) returns (GetMutualFriendsResponse);
   rpc CheckBlock(CheckBlockRequest) returns (CheckBlockResponse);
   rpc CheckIfBlocked(CheckIfBlockedRequest) returns (CheckIfBlockedResponse);
+  rpc GetLikeUsersByIds(GetUsersByIdsRequest2) returns (GetUsersByIdsResponse2);
+  rpc GetTotalUsers(Empty) returns (QuantityTotalUsers);
+  rpc GetPercentUsersInThisMonth(Empty) returns (UserPercentResponse);
+  rpc GetUsersByTime(DateRange) returns (GetUsersByTimeResponse);
 
+}
 
+message Empty {}
+
+message DateRange {
+  string startDate = 1;
+  string endDate = 2;
+}
+
+message UserCountByDate {
+  string date = 1;
+  int64 count = 2;
+}
+
+message GetUsersByTimeResponse {
+  repeated UserCountByDate data = 1;
 }
 
 message GetUsersByIdsRequest {
   repeated int64 userIds = 1;
 }
+message GetUsersByIdsRequest2 {
+  int64 id = 1;
+  repeated int64 userIds = 2;
+}
 
 message GetUsersByIdsResponse {
   repeated UserDTOResponse2 users = 1;
+}
+message GetUsersByIdsResponse2 {
+  repeated UserDTOResponse3 users = 1;
 }
 
 message UserDTOResponse2 {
@@ -38,7 +64,13 @@ message UserDTOResponse2 {
   string avatar = 3;
   string full_name=4;
 }
-
+message UserDTOResponse3 {
+  int64 id = 1;
+  string username = 2;
+  string avatar = 3;
+  bool isPrivate = 4;
+  int32 isFollow = 5;
+}
 message CreateUserRequest {
   string keycloak_user_id = 1;
   string email = 2;
@@ -132,6 +164,15 @@ message CheckMutualFollowRequest {
 message CheckFollowResponse {
   bool is_private = 1;
   bool is_follow = 2;
+  bool is_close_friend = 3;
+}
+
+message QuantityTotalUsers {
+  int64 quantity = 1;
+}
+
+message UserPercentResponse {
+  double percent = 1;
 }
 
 message GetUserOnlineStatusRequest {

@@ -7,18 +7,11 @@ import net.devh.boot.grpc.server.service.GrpcService;
 import org.nexo.grpc.user.UserServiceGrpc;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.userservice.dto.FolloweeDTO;
+import org.nexo.userservice.dto.UserSearchEvent;
 import org.nexo.userservice.enums.EAccountStatus;
-import org.nexo.userservice.enums.EStatusFollow;
-import org.nexo.userservice.exception.ResourceNotFoundException;
-import org.nexo.userservice.model.FollowId;
-import org.nexo.userservice.model.FollowModel;
 import org.nexo.userservice.model.UserModel;
-import org.nexo.userservice.repository.UserBlockRepository;
-import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserRepository;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -30,8 +23,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
         private final UserRepository userRepository;
         private final FollowService followService;
-        private final FollowRepository followRepository;
-        private final UserBlockRepository userBlockRepository;
+        private final UserEventProducer userEventProducer;
 
         @Override
         public void createUser(UserServiceProto.CreateUserRequest request,
@@ -82,9 +74,22 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
                 log.info("User created successfully: id={}, email={}, keycloakUserId={}",
                                 savedUser.getId(), savedUser.getEmail(), savedUser.getKeycloakUserId());
+                publishUserEvent(savedUser, "CREATE");
 
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
+        }
+
+        private void publishUserEvent(UserModel user, String eventType) {
+                UserSearchEvent event = UserSearchEvent.builder()
+                                .id(user.getId())
+                                .username(user.getUsername())
+                                .fullName(user.getFullName())
+                                .avatar(user.getAvatar())
+                                .eventType(eventType)
+                                .build();
+
+                userEventProducer.sendUserEvent(event);
         }
 
         @Override
@@ -109,16 +114,16 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                 return;
                         }
 
-                        // Update email verification status and account status
                         if (request.getEmailVerified()) {
-                                user.setAccountStatus(EAccountStatus.ACTIVE); // Kích hoạt tài khoản khi email được xác
-                                // thực
+                                user.setAccountStatus(EAccountStatus.ACTIVE);
                                 log.info("User account activated for keycloakUserId: {}", request.getKeycloakUserId());
                         } else {
-                                user.setAccountStatus(EAccountStatus.PENDING); // Đặt lại về trạng thái chờ
+                                user.setAccountStatus(EAccountStatus.PENDING); 
                         }
 
                         UserModel updatedUser = userRepository.save(user);
+
+                        publishUserEvent(updatedUser, "UPDATE");
 
                         UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
                                         .newBuilder()
@@ -173,6 +178,8 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                 EAccountStatus accountStatus = EAccountStatus.valueOf(request.getAccountStatus());
                                 user.setAccountStatus(accountStatus);
                                 UserModel updatedUser = userRepository.save(user);
+
+                                publishUserEvent(updatedUser, "UPDATE");
 
                                 UserServiceProto.UpdateAccountStatusResponse response = UserServiceProto.UpdateAccountStatusResponse
                                                 .newBuilder()

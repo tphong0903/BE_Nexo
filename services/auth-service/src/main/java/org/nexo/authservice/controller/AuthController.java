@@ -7,6 +7,8 @@ import reactor.core.publisher.Mono;
 import org.nexo.authservice.dto.ForgotPasswordRequest;
 import org.nexo.authservice.dto.LoginRequest;
 import org.nexo.authservice.dto.RegisterRequest;
+import org.nexo.authservice.dto.RegisterResponse;
+import org.nexo.authservice.dto.ResendVerifyEmailRequest;
 import org.nexo.authservice.dto.ResponseData;
 import org.nexo.authservice.dto.TokenResponse;
 import org.nexo.authservice.service.AuthService;
@@ -44,11 +46,16 @@ public class AuthController {
         @PostMapping("/register")
         public Mono<ResponseData<?>> register(@Valid @RequestBody RegisterRequest registerRequest) {
                 return authService.register(registerRequest)
-                                .map(tokenResponse -> {
-                                        log.info("Registration successful for user: {}", registerRequest.getEmail());
-                                        return ResponseData.<TokenResponse>builder()
+                                .map(userId -> {
+                                        log.info("Registration successful for user: {}, userId: {}",
+                                                        registerRequest.getEmail(), userId);
+                                        RegisterResponse registerResponse = RegisterResponse.builder()
+                                                        .userId(userId)
+                                                        .build();
+                                        return ResponseData.<RegisterResponse>builder()
                                                         .status(HttpStatus.OK.value())
-                                                        .message("Registration successful")
+                                                        .message("User registered successfully. Please check your email for verification.")
+                                                        .data(registerResponse)
                                                         .build();
                                 });
         }
@@ -82,8 +89,8 @@ public class AuthController {
         }
 
         @PostMapping("/resend-verify-email")
-        public Mono<ResponseData<?>> resendVerifyEmail(@Valid @RequestBody String userId) {
-                return authService.resendVerifyEmail(userId)
+        public Mono<ResponseData<?>> resendVerifyEmail(@Valid @RequestBody ResendVerifyEmailRequest request) {
+                return authService.resendVerifyEmail(request.getID())
                                 .then(Mono.just(ResponseData.<Void>builder()
                                                 .status(HttpStatus.OK.value())
                                                 .message("Verification email resent successfully")

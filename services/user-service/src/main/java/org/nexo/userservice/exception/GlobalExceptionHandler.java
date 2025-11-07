@@ -1,5 +1,6 @@
 package org.nexo.userservice.exception;
 
+import com.meilisearch.sdk.exceptions.MeilisearchException;
 import lombok.extern.slf4j.Slf4j;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -106,6 +107,16 @@ public class GlobalExceptionHandler {
         return ResponseData.builder()
                 .status(HttpStatus.FORBIDDEN.value())
                 .message("Access denied: You don't have permission to access this resource")
+                .build();
+    }
+
+    @ExceptionHandler(MeilisearchException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ResponseData<?> handleMeilisearchException(MeilisearchException ex, WebRequest request) {
+        log.error("Meilisearch error: {} - Path: {}", ex.getMessage(), request.getDescription(false));
+        return ResponseData.builder()
+                .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .message("Search service is temporarily unavailable. Please try again later.")
                 .build();
     }
 

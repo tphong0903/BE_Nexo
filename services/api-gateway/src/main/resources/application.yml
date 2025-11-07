@@ -22,9 +22,9 @@ spring:
               max-frame-payload-length: 65536
           globalcors:
             cors-configurations:
-              "[/**]":
-                allowedOrigins:
-                  - "http://localhost:3000"
+              "[/api/**]":
+                allowedOriginPatterns:
+                  - "*"
                 allowedMethods: "*"
                 allowedHeaders: "*"
                 allowCredentials: true
@@ -56,13 +56,12 @@ spring:
             #                    redis-rate-limiter.burstCapacity: 20
             #                    redis-rate-limiter.key-resolver: "#{@userKeyResolver}"
 
-            - id: auth-serviceD
+            - id: auth-service
               uri: lb://auth
               predicates:
                 - Path=/api/auth/**
               filters:
                 - StripPrefix=2
-
 
             - id: interaction-service
               uri: lb://interaction
@@ -84,6 +83,17 @@ spring:
               metadata:
                 websocket: true
 
+            - id: messaging-service-ws
+              uri: lb:ws://messaging
+              predicates:
+                - Path=/messaging/ws/**
+              filters:
+                - StripPrefix=1
+
+            - id: messaging-service
+              uri: lb://messaging
+              predicates:
+                - Path=/api/**
 
 eureka:
   client:

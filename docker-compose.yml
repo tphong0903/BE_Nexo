@@ -52,11 +52,16 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GRPC_SERVER_PORT: 9092
       GRPC_CLIENT_UPLOAD-FILE-SERVICE_ADDRESS: static://upload-file-service:9093
+      SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
+      MEILISEARCH_HOST: http://meilisearch:7700
+      MEILISEARCH_APIKEY: masterKey
     depends_on:
       - user-db
       - redis
       - keycloak
       - eureka-server
+      - kafka
+      - meilisearch
     networks:
       - nexo-network
   post-service:
@@ -285,6 +290,18 @@ services:
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
     networks:
       - nexo-network
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: meilisearch
+    ports:
+      - "7700:7700"
+    environment:
+      MEILI_MASTER_KEY: masterKey
+      MEILI_ENV: development
+    volumes:
+      - meilisearch_data:/meili_data
+    networks:
+      - nexo-network
 
 networks:
   nexo-network:
@@ -293,3 +310,4 @@ networks:
 volumes:
   postgres_data:
   user-db:
+  meilisearch_data:

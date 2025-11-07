@@ -3,6 +3,7 @@ package org.nexo.userservice.service.Impl;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
+import org.nexo.userservice.dto.UserSearchEvent;
 import org.nexo.userservice.enums.EStatusFollow;
 import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.nexo.userservice.grpc.UploadFileGrpcClient;
@@ -11,6 +12,7 @@ import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.BlockService;
+import org.nexo.userservice.service.UserEventProducer;
 import org.nexo.userservice.service.UserService;
 import org.nexo.userservice.util.JwtUtil;
 import org.springframework.stereotype.Service;
@@ -31,6 +33,7 @@ public class UserServiceImpl implements UserService {
     private final UserMapper userMapper;
     private final UploadFileGrpcClient uploadFileGrpcClient;
     private final BlockService blockService;
+    private final UserEventProducer userEventProducer;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
         UserModel user = userRepository.findByUsername(username)
@@ -39,12 +42,12 @@ public class UserServiceImpl implements UserService {
         Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
                 .map(UserModel::getId)
                 .orElse(null);
-        
-        //check block
+
+        // check block
         if (currentUserId != null) {
             boolean hasBlockedTarget = blockService.isBlocked(currentUserId, user.getId());
             boolean isBlockedByTarget = blockService.isBlocked(user.getId(), currentUserId);
-            
+
             if (hasBlockedTarget || isBlockedByTarget) {
                 throw new ResourceNotFoundException("User not found with username: " + username);
             }
@@ -92,6 +95,9 @@ public class UserServiceImpl implements UserService {
 
         UserModel updatedUser = userMapper.updateUserModelFromDTO(request, user);
         userRepository.save(updatedUser);
+
+        publishUserEvent(updatedUser, "UPDATE");
+
         return userMapper.toUserDTOResponse(updatedUser);
     }
 
@@ -106,7 +112,22 @@ public class UserServiceImpl implements UserService {
         }
         user.setAvatar(UserModel.DEFAULT_AVATAR_URL);
         userRepository.save(user);
+
+        publishUserEvent(user, "UPDATE");
+
         log.info("Avatar deleted for user: {}, reset to default", user.getUsername());
+    }
+
+    private void publishUserEvent(UserModel user, String eventType) {
+        UserSearchEvent event = UserSearchEvent.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .avatar(user.getAvatar())
+                .eventType(eventType)
+                .build();
+
+        userEventProducer.sendUserEvent(event);
     }
 
 }

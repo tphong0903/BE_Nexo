@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+option java_multiple_files = true;
+option java_package = "org.nexo.grpc.messaging";
+option java_outer_classname = "MessagingServiceProto";
+
+package messaging;
+
+service MessagingService {
+  rpc HandleBlockStatusChange(BlockStatusChangeRequest) returns (BlockStatusChangeResponse);
+}
+
+message BlockStatusChangeRequest {
+  int64 userId1 = 1;
+  int64 userId2 = 2;
+  bool isBlocked = 3;
+}
+
+message BlockStatusChangeResponse {
+  bool success = 1;
+  string message = 2;
+}

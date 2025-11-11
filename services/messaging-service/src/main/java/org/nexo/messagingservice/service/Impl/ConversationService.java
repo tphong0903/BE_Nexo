@@ -1,6 +1,7 @@
 package org.nexo.messagingservice.service.Impl;
 
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
+import org.nexo.messagingservice.dto.NicknameRequest;
 import org.nexo.messagingservice.dto.PageModelResponse;
 import org.springframework.data.domain.Pageable;
 
@@ -24,4 +25,10 @@ public interface ConversationService {
     void acceptMessageRequest(Long conversationId, String keycloakUserId);
 
     void declineMessageRequest(Long conversationId, String keycloakUserId);
+
+    ConversationResponseDTO setNickname(Long conversationId, String keycloakUserId, NicknameRequest request);
+
+    ConversationResponseDTO getNickname(Long conversationId, String keycloakUserId);
+    
+    void handleBlockStatusChange(Long userId1, Long userId2, boolean isBlocked);
 }

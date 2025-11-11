@@ -59,6 +59,9 @@ grpc:
     upload-file-service:
       address: "static://localhost:9093"
       negotiationType: plaintext
+    messaging-service:
+      address: "static://localhost:9095"
+      negotiationType: plaintext
 
 logging:
   level:

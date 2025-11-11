@@ -8,6 +8,7 @@ import org.nexo.grpc.user.UserServiceProto.UserDTOResponse;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse2;
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.MessageDTO;
+import org.nexo.messagingservice.dto.NicknameRequest;
 import org.nexo.messagingservice.dto.PageModelResponse;
 import org.nexo.messagingservice.dto.UserDTO;
 import org.nexo.messagingservice.enums.EConversationStatus;
@@ -205,6 +206,11 @@ public class ConversationServiceImpl implements ConversationService {
                         .username(u.getUsername())
                         .avatarUrl(u.getAvatar())
                         .fullName(u.getFullName())
+                        .nickname(
+                                participantRepository.findByConversationIdAndUserId(conversation.getId(), u.getId())
+                                        .map(ConversationParticipantModel::getNickname)
+                                        .orElse(null))
+                        .onlineStatus(u.getOnlineStatus())
                         .build())
                 .toList();
 
@@ -213,11 +219,20 @@ public class ConversationServiceImpl implements ConversationService {
                 .findFirst()
                 .orElse(null);
 
-        String displayName = otherUser != null
-                ? otherUser.getFullName()
-                : "Unknown User";
+        String displayName = "Null";
+        if (otherUser != null) {
+            ConversationParticipantModel participant = participantRepository
+                    .findByConversationIdAndUserId(conversation.getId(), requestingUserId)
+                    .orElse(null);
+            if (participant != null && participant.getNickname() != null && !participant.getNickname().isEmpty()) {
+                displayName = participant.getNickname();
+            } else {
+                displayName = otherUser.getFullName();
+            }
+        }
 
         String displayAvatar = otherUser != null ? otherUser.getAvatarUrl() : null;
+        Boolean displayOnlineStatus = otherUser != null ? otherUser.getOnlineStatus() : null;
 
         MessageDTO lastMessage = null;
         if (conversation.getLastMessageId() != null) {
@@ -233,6 +248,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .id(conversation.getId())
                 .fullname(displayName)
                 .avatarUrl(displayAvatar)
+                .onlineStatus(displayOnlineStatus)
                 .participants(participantDTOs)
                 .lastMessage(lastMessage)
                 .unreadCount(unreadCount)
@@ -407,5 +423,37 @@ public class ConversationServiceImpl implements ConversationService {
         conversation.setStatus(EConversationStatus.DECLINED);
         conversationRepository.save(conversation);
 
+    }
+
+    public ConversationResponseDTO setNickname(Long conversationId, String keycloakUserId, NicknameRequest request) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        if (!isUserParticipant(conversationId, userId)) {
+            throw new SecurityException("User is not a participant in this conversation");
+        }
+
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+        Long targetUserId = request.getUserId();
+        ConversationParticipantModel participant = participantRepository
+                .findByConversationIdAndUserId(conversationId, targetUserId)
+                .orElseThrow(
+                        () -> new IllegalArgumentException("Target user is not a participant in this conversation"));
+
+        participant.setNickname(request.getNickname());
+        participantRepository.save(participant);
+
+        return mapToDto(conversation, userId);
+    }
+
+    public ConversationResponseDTO getNickname(Long conversationId, String keycloakUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+        return mapToDto(conversation, userId);
     }
 }

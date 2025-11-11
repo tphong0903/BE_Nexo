@@ -1,4 +1,5 @@
 package org.nexo.messagingservice.dto;
+
 import lombok.AllArgsConstructor;
 
 import lombok.Builder;
@@ -16,8 +17,8 @@ import org.nexo.messagingservice.enums.EConversationStatus;
 @AllArgsConstructor
 public class ConversationResponseDTO {
     private Long id;
-    private String fullname; 
-    private String avatarUrl; 
+    private String fullname;
+    private String avatarUrl;
     private List<UserDTO> participants;
     private MessageDTO lastMessage;
     private Long unreadCount;
@@ -26,4 +27,5 @@ public class ConversationResponseDTO {
     private LocalDateTime createdAt;
     private boolean isBlockedByMe;
     private Long lastReadMessageId;
+    private Boolean onlineStatus;
 }

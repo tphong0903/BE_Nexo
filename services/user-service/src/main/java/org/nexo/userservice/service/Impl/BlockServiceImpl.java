@@ -6,6 +6,7 @@ import java.util.stream.Collectors;
 import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.exception.ResourceNotFoundException;
+import org.nexo.userservice.grpc.MessagingGrpcClient;
 import org.nexo.userservice.mapper.UserMapper;
 import org.nexo.userservice.model.UserBlockId;
 import org.nexo.userservice.model.UserBlockModel;
@@ -33,6 +34,7 @@ public class BlockServiceImpl implements BlockService {
         private final JwtUtil jwtUtil;
         private final UserMapper userMapper;
         private final FollowRepository followRepository;
+        private final MessagingGrpcClient messagingGrpcClient;
 
         public void block(Long blockerId, Long blockedId) {
                 if (blockerId.equals(blockedId)) {
@@ -93,7 +95,7 @@ public class BlockServiceImpl implements BlockService {
                                 .orElseThrow(() -> new ResourceNotFoundException("Target user not found"));
                 block(currentUserId, targetUserId);
                 followRepository.deleteByFollowerIdAndFollowingId(currentUserId, targetUserId);
-
+                messagingGrpcClient.handleBlockStatusChange(currentUserId, targetUserId, true);
         }
 
         @Transactional
@@ -109,6 +111,9 @@ public class BlockServiceImpl implements BlockService {
                 userRepository.findById(targetUserId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Target user not found"));
                 unblock(currentUserId, targetUserId);
+
+                messagingGrpcClient.handleBlockStatusChange(currentUserId, targetUserId, false);
+
         }
 
         @Override

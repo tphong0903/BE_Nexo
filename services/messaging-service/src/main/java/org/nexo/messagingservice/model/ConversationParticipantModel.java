@@ -24,6 +24,9 @@ public class ConversationParticipantModel {
     @JoinColumn(name = "user_id", nullable = false)
     private Long userId;
 
+    @Column(name = "nickname", length = 100)
+    private String nickname;
+    
     @CreationTimestamp
     @Column(name = "joined_at", nullable = false, updatable = false)
     private LocalDateTime joinedAt;

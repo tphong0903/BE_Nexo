@@ -426,7 +426,8 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                                 .setUsername(user.getUsername() != null ? user.getUsername() : "")
                                                 .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
                                                 .setFullName(user.getFullName() != null ? user.getFullName() : "")
-                                                .setOnlineStatus(user.getOnlineStatus() != null ? user.getOnlineStatus() : false)
+                                                .setOnlineStatus(user.getOnlineStatus() != null ? user.getOnlineStatus()
+                                                                : false)
                                                 .build();
                                 list.add(response);
                         }

@@ -63,6 +63,7 @@ message UserDTOResponse2 {
   string username = 2;
   string avatar = 3;
   string full_name=4;
+  bool online_status = 5;
 }
 message UserDTOResponse3 {
   int64 id = 1;

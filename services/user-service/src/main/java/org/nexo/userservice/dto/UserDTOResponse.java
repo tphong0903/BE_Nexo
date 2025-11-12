@@ -10,6 +10,7 @@ public class UserDTOResponse {
     private String avatar;
     private String bio;
     private Boolean isPrivate;
+    private Boolean onlineStatus;
     private Long followers;
     private Long following;
 

@@ -1,11 +1,13 @@
 package org.nexo.messagingservice.controller;
 
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
+import org.nexo.messagingservice.dto.NicknameRequest;
 import org.nexo.messagingservice.dto.ResponseData;
 import org.nexo.messagingservice.service.Impl.ConversationService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -136,6 +138,39 @@ public class ConversationController {
 
                 return ResponseData.builder()
                                 .message("Conversation accepted successfully")
+                                .build();
+        }
+
+        @PutMapping("/{conversationId}/nickname")
+        public ResponseData<?> setNickname(
+                        @PathVariable Long conversationId,
+                        @RequestBody NicknameRequest request,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+
+                ConversationResponseDTO conversation = conversationService
+                                .setNickname(conversationId, keycloakUserId, request);
+
+                return ResponseData.builder()
+                                .data(conversation)
+                                .message("Nickname set successfully")
+                                .build();
+        }
+
+        @GetMapping("/{conversationId}/nickname")
+        public ResponseData<?> getNickname(
+                        @PathVariable Long conversationId,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+
+                ConversationResponseDTO conversation = conversationService
+                                .getNickname(conversationId, keycloakUserId);
+
+                return ResponseData.builder()
+                                .data(conversation)
+                                .message("Nickname set successfully")
                                 .build();
         }
 

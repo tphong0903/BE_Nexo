@@ -24,6 +24,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
         private final UserRepository userRepository;
         private final FollowService followService;
         private final UserEventProducer userEventProducer;
+        private final BlockService blockService;
 
         @Override
         public void createUser(UserServiceProto.CreateUserRequest request,
@@ -118,7 +119,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                 user.setAccountStatus(EAccountStatus.ACTIVE);
                                 log.info("User account activated for keycloakUserId: {}", request.getKeycloakUserId());
                         } else {
-                                user.setAccountStatus(EAccountStatus.PENDING); 
+                                user.setAccountStatus(EAccountStatus.PENDING);
                         }
 
                         UserModel updatedUser = userRepository.save(user);
@@ -425,11 +426,120 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                                 .setUsername(user.getUsername() != null ? user.getUsername() : "")
                                                 .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
                                                 .setFullName(user.getFullName() != null ? user.getFullName() : "")
+                                                .setOnlineStatus(user.getOnlineStatus() != null ? user.getOnlineStatus()
+                                                                : false)
                                                 .build();
                                 list.add(response);
                         }
                 }
                 responseObserver.onNext(UserServiceProto.GetUsersByIdsResponse.newBuilder().addAllUsers(list).build());
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void getUserOnlineStatus(UserServiceProto.GetUserOnlineStatusRequest request,
+                        StreamObserver<UserServiceProto.GetUserOnlineStatusResponse> responseObserver) {
+                Long userId = request.getUserId();
+                UserModel user = userRepository.findById(userId).orElse(null);
+
+                boolean onlineStatus = false;
+                if (user != null && user.getOnlineStatus() != null) {
+                        onlineStatus = user.getOnlineStatus();
+                }
+
+                UserServiceProto.GetUserOnlineStatusResponse response = UserServiceProto.GetUserOnlineStatusResponse
+                                .newBuilder()
+                                .setOnlineStatus(onlineStatus)
+                                .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void checkMutualFriends(UserServiceProto.CheckMutualFriendsRequest request,
+                        StreamObserver<UserServiceProto.CheckMutualFriendsResponse> responseObserver) {
+                Long userId1 = request.getUserId1();
+                Long userId2 = request.getUserId2();
+
+                List<Boolean> followStatus1 = followService.isFollow(userId1, userId2);
+                List<Boolean> followStatus2 = followService.isFollow(userId2, userId1);
+
+                boolean areMutualFriends = followStatus1.get(0) && followStatus2.get(0);
+
+                UserServiceProto.CheckMutualFriendsResponse response = UserServiceProto.CheckMutualFriendsResponse
+                                .newBuilder()
+                                .setAreMutualFriends(areMutualFriends)
+                                .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void getMutualFriends(UserServiceProto.GetMutualFriendsRequest request,
+                        StreamObserver<UserServiceProto.GetMutualFriendsResponse> responseObserver) {
+                Long userId = request.getUserId();
+                Set<FolloweeDTO> followers = followService.getFollowersByUserId(userId);
+                Set<FolloweeDTO> followings = followService.getFollowingsByUserId(userId);
+
+                List<Long> mutualFriendIds = followers.stream()
+                                .filter(follower -> followings.stream()
+                                                .anyMatch(following -> following.getUserId()
+                                                                .equals(follower.getUserId())))
+                                .map(FolloweeDTO::getUserId)
+                                .toList();
+
+                UserServiceProto.GetMutualFriendsResponse response = UserServiceProto.GetMutualFriendsResponse
+                                .newBuilder()
+                                .addAllUserIds(mutualFriendIds)
+                                .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void checkBlock(UserServiceProto.CheckBlockRequest request,
+                        StreamObserver<UserServiceProto.CheckBlockResponse> responseObserver) {
+                Long requesterUserId = request.getRequesterUserId();
+                Long targetUserId = request.getTargetUserId();
+
+                boolean isBlocked = blockService.isBlocked(requesterUserId, targetUserId);
+
+                UserServiceProto.CheckBlockResponse response = UserServiceProto.CheckBlockResponse
+                                .newBuilder()
+                                .setIsBlocked(isBlocked)
+                                .build();
+
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+        }
+
+        @Override
+        public void checkIfBlocked(UserServiceProto.CheckIfBlockedRequest request,
+                        StreamObserver<UserServiceProto.CheckIfBlockedResponse> responseObserver) {
+                Long userId = request.getUserId();
+                Long targetUserId = request.getTargetUserId();
+
+                boolean userBlockedTarget = blockService.isBlocked(userId, targetUserId);
+                boolean targetBlockedUser = blockService.isBlocked(targetUserId, userId);
+                boolean isBlocked = userBlockedTarget || targetBlockedUser;
+                long blockedByUserId = 0;
+
+                if (userBlockedTarget) {
+                        blockedByUserId = userId;
+                } else if (targetBlockedUser) {
+                        blockedByUserId = targetUserId;
+                }
+
+                UserServiceProto.CheckIfBlockedResponse response = UserServiceProto.CheckIfBlockedResponse
+                                .newBuilder()
+                                .setIsBlocked(isBlocked)
+                                .setBlockedByUserId(blockedByUserId)
+                                .build();
+
+                responseObserver.onNext(response);
                 responseObserver.onCompleted();
         }
 

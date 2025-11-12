@@ -26,4 +26,7 @@ public class CommentModel extends AbstractEntity<Long> {
 
     @OneToMany(fetch = FetchType.EAGER, mappedBy = "commentModel", cascade = CascadeType.ALL)
     private List<CommentMentionModel> mentionList;
+
+    @OneToMany(mappedBy = "parentComment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CommentModel> childComments;
 }

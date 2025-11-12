@@ -38,7 +38,7 @@ eureka:
     prefer-ip-address: true
 grpc:
   server:
-    port: 9095
+    port: 9098
   client:
     users:
       address: static://localhost:9092

@@ -14,7 +14,6 @@ public class FileService {
 
 
     public void savePostMedia(List<MultipartFile> files, Long postId, String token) {
-
         fileServiceClient.savePostMedia(files, String.valueOf(postId), "Bearer " + token);
     }
 

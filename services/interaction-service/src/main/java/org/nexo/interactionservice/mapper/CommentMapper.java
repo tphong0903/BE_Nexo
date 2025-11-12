@@ -31,7 +31,7 @@ public class CommentMapper {
         UserServiceProto.UserDTOResponse2 userDto = userMap.get(model.getUserId());
         Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(
                 model.getId(),
-                PageRequest.of(0, 2, Sort.by("createdAt").descending())
+                PageRequest.of(0, 2, Sort.by("createdAt").ascending())
         );
 
         List<CommentResponse> replyResponses = repliesPage.getContent().stream()

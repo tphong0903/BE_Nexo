@@ -99,7 +99,7 @@ public class CommentServiceImpl implements ICommentService {
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         CommentModel model = commentRepository.findById(id).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
         Long ownerId = 0L;
-        if (model.getReelId() != 0) {
+        if (model.getReelId() != null) {
             ownerId = postGrpcClient.getReelById(model.getReelId()).getUserId();
         } else {
             ownerId = postGrpcClient.getPostById(model.getPostId()).getUserId();
@@ -107,7 +107,7 @@ public class CommentServiceImpl implements ICommentService {
         if (response.getUserId() != model.getUserId() || ownerId != response.getUserId())
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
         commentRepository.delete(model);
-        if (model.getPostId() != 0) {
+        if (model.getPostId() != null) {
             postGrpcClient.addCommentQuantityById(model.getPostId(), true, false);
         } else {
             postGrpcClient.addCommentQuantityById(model.getReelId(), false, false);
@@ -133,7 +133,7 @@ public class CommentServiceImpl implements ICommentService {
         if (!isAllow)
             throw new CustomException("Dont allow to get Comment", HttpStatus.BAD_REQUEST);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
 
         Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
         return commentMapper.toListResponse(postId, commentsPage, response.getUserId());
@@ -159,9 +159,9 @@ public class CommentServiceImpl implements ICommentService {
         if (!isAllow)
             throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
 
-        Page<CommentModel> commentsPage = commentRepository.findByReelId(reelId, pageable);
+        Page<CommentModel> commentsPage = commentRepository.findByReelIdAndParentComment(reelId, pageable, null);
         return commentMapper.toListResponse(reelId, commentsPage, response.getUserId());
     }
 
@@ -169,7 +169,7 @@ public class CommentServiceImpl implements ICommentService {
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
         Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(commentId, pageable);
 
         CommentModel model = commentRepository.findById(commentId).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));

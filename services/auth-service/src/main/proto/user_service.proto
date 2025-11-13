@@ -24,6 +24,7 @@ service UserService {
   rpc GetTotalUsers(Empty) returns (QuantityTotalUsers);
   rpc GetPercentUsersInThisMonth(Empty) returns (UserPercentResponse);
   rpc GetUsersByTime(DateRange) returns (GetUsersByTimeResponse);
+  rpc GetUserIdByEmail(GetUserIdByEmailRequest) returns (GetUserIdByEmailResponse);
 
 }
 
@@ -215,4 +216,14 @@ message CheckIfBlockedRequest {
 message CheckIfBlockedResponse {
   bool is_blocked = 1;           // true = user_id bị target block hoặc ngược lại
   int64 blocked_by_user_id = 2;  // Ai block (0 = không ai block)
+}
+
+message GetUserIdByEmailRequest {
+  string email = 1;
+}
+
+message GetUserIdByEmailResponse {
+  bool success = 1;
+  string message = 2;
+  string keycloak_user_id = 3;
 }

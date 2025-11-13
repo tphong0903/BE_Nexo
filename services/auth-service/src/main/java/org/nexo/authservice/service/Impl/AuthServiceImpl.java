@@ -345,32 +345,19 @@ public class AuthServiceImpl implements AuthService {
     public Mono<Void> forgotPassword(String email) {
         log.info("Starting forgot password process for email: {}", email);
 
-        return getAdminToken()
-                .flatMap(adminToken -> webClient.get()
-                        .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
-                                + "/users?email=" + email)
-                        .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
-                        .retrieve()
-                        .bodyToMono(JsonNode.class)
-                        .flatMap(users -> {
-                            if (users.isArray() && users.size() > 0) {
-                                String userId = users.get(0).get("id").asText();
-                                log.info("Found user with ID: {} for email: {}", userId, email);
+        return userGrpcClient.getUserIdByEmail(email)
+                .flatMap(grpcResponse -> {
+                    if (!grpcResponse.getSuccess()) {
+                        log.warn("User not found or not active for email: {}", email);
+                        return Mono.error(new KeycloakClientException(404, grpcResponse.getMessage()));
+                    }
 
-                                sendResetPasswordEmail(userId, adminToken)
-                                        .doOnSuccess(
-                                                v -> log.info("Reset password email sent successfully to: {}", email))
-                                        .doOnError(error -> log.error(
-                                                "Failed to send reset password email to: {}, error: {}", email,
-                                                error.getMessage()))
-                                        .subscribe();
+                    String userId = grpcResponse.getKeycloakUserId();
+                    log.info("Found active user with ID: {} for email: {}", userId, email);
 
-                                return Mono.<Void>empty();
-                            } else {
-                                log.warn("User not found with email: {}", email);
-                                return Mono.error(new KeycloakClientException(404, "User not found"));
-                            }
-                        }));
+                    return getAdminToken()
+                            .flatMap(adminToken -> sendResetPasswordEmail(userId, adminToken));
+                });
     }
 
     private Mono<Void> sendResetPasswordEmail(String userId, String adminToken) {

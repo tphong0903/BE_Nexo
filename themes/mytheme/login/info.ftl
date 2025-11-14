@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>NEXO NETWORK - Confirmation</title>
+    <title>NEXO NETWORK - Xác Nhận</title>
     <style>
         * {
             margin: 0;
@@ -85,6 +85,26 @@
             font-size: 14px;
             margin-top: 20px;
         }
+        .error-message {
+            background-color: #fee;
+            color: #c33;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 15px;
+            border-left: 4px solid #c33;
+            text-align: left;
+        }
+        .success-message {
+            background-color: #d4edda;
+            color: #155724;
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            font-size: 15px;
+            border-left: 4px solid #28a745;
+            text-align: left;
+        }
         @media (max-width: 600px) {
             .container {
                 padding: 40px 30px;
@@ -106,29 +126,87 @@
             <h1>NEXO NETWORK</h1>
         </div>
         
+        <#if message?has_content>
+            <#if message.type == 'error'>
+                <div class="error-message">
+                    <#if message.summary?contains('expired') || message.summary?contains('hết hạn')>
+                        ✕ <strong>Link đã hết hạn</strong><br/>
+                        Link đặt lại mật khẩu của bạn đã hết hạn. Vui lòng yêu cầu link mới.
+                    <#elseif message.summary?contains('invalid') || message.summary?contains('không hợp lệ')>
+                        ✕ <strong>Link không hợp lệ</strong><br/>
+                        Link đặt lại mật khẩu không hợp lệ hoặc đã được sử dụng. Vui lòng yêu cầu link mới.
+                    <#else>
+                        ✕ ${message.summary}
+                    </#if>
+                </div>
+            </#if>
+        </#if>
+
         <h2>
-            <#if messageHeader??>
+            <#-- <#if messageHeader??>
                 ${messageHeader}
+            <#elseif message?has_content && message.type == 'error'>
+                Có Lỗi Xảy Ra
+            <#elseif requiredActions??> -->
+            <#if requiredActions??>
+                <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
+                    Đặt Lại Mật Khẩu
+                <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+                    Xác Minh Email
+                <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
+                    Cập Nhật Thông Tin
+                <#else>
+                    Xác Nhận Hành Động
+                </#if>
             <#else>
-                Confirm Your Action
+                Xác Nhận Hành Động
             </#if>
         </h2>
         
-        <div class="message">
-            <p>Please click the button below to complete your email verification.</p>
-        </div>
+        <#if !message?has_content || message.type != 'error'>
+            <div class="message">
+                <#if requiredActions??>
+                    <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
+                        <p>Nhấn vào nút bên dưới để đặt lại mật khẩu của bạn.</p>
+                    <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+                        <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
+                    <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
+                        <p>Nhấn vào nút bên dưới để cập nhật thông tin cá nhân của bạn.</p>
+                    <#else>
+                        <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác nhận.</p>
+                    </#if>
+                <#else>
+                    <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
+                </#if>
+            </div>
+        </#if>
         
         <#if skipLink??>
             <#-- Không hiển thị link -->
         <#else>
-            <#if actionUri?has_content>
-                <a href="#" class="btn" onclick="handleConfirm(event, '${actionUri}')">» Confirm Email</a>
+            <#-- Nếu có lỗi (token hết hạn/invalid), chỉ hiển thị nút quay lại -->
+            <#if message?has_content && message.type == 'error'>
+                <a href="http://localhost:3000/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
+            <#elseif actionUri?has_content>
+                <#if requiredActions??>
+                    <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
+                        <a href="${actionUri}" class="btn">» Đặt Lại Mật Khẩu</a>
+                    <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+                        <a href="#" class="btn" onclick="handleConfirm(event, '${actionUri}')">» Xác Minh Email</a>
+                    <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
+                        <a href="${actionUri}" class="btn">» Cập Nhật Thông Tin</a>
+                    <#else>
+                        <a href="${actionUri}" class="btn">» Xác Nhận</a>
+                    </#if>
+                <#else>
+                    <a href="#" class="btn" onclick="handleConfirm(event, '${actionUri}')">» Xác Minh Email</a>
+                </#if>
             <#elseif pageRedirectUri?has_content>
-                <a href="http://localhost:3000/auth/login" class="btn">« Back to Application</a>
+                <a href="http://localhost:3000/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#elseif client?? && client.baseUrl?has_content>
-                <a href="http://localhost:3000/auth/login" class="btn">« Back to Application</a>
+                <a href="http://localhost:3000/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#else>
-                <p class="error">No confirmation link available.</p>
+                <p class="error">Không có liên kết xác nhận khả dụng.</p>
             </#if>
         </#if>
     </div>
@@ -138,7 +216,7 @@
             event.preventDefault();
             
             const button = event.target;
-            button.textContent = 'Verifying...';
+            button.textContent = 'Đang xác minh...';
             button.style.opacity = '0.6';
             button.style.pointerEvents = 'none';
             
@@ -156,10 +234,10 @@
                 }
             }).catch(error => {
                 console.error('Error:', error);
-                button.textContent = 'Verification Failed';
+                button.textContent = 'Xác minh thất bại';
                 button.style.backgroundColor = '#dc3545';
                 setTimeout(() => {
-                    button.textContent = '» Confirm Email';
+                    button.textContent = '» Xác Minh Email';
                     button.style.backgroundColor = '#007bff';
                     button.style.opacity = '1';
                     button.style.pointerEvents = 'auto';

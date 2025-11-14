@@ -33,6 +33,7 @@
             from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
         }
+       
         .logo {
             margin-bottom: 30px;
         }
@@ -64,6 +65,8 @@
             color: #007bff;
         }
         .btn {
+            border: none;
+            cursor: pointer;
             display: inline-block;
             background-color: #007bff;
             color: white;
@@ -105,6 +108,17 @@
             border-left: 4px solid #28a745;
             text-align: left;
         }
+        #debug-info {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 20px;
+            font-size: 12px;
+            text-align: left;
+            max-height: 200px;
+            overflow-y: auto;
+        }
         @media (max-width: 600px) {
             .container {
                 padding: 40px 30px;
@@ -143,11 +157,6 @@
         </#if>
 
         <h2>
-            <#-- <#if messageHeader??>
-                ${messageHeader}
-            <#elseif message?has_content && message.type == 'error'>
-                Có Lỗi Xảy Ra
-            <#elseif requiredActions??> -->
             <#if requiredActions??>
                 <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
                     Đặt Lại Mật Khẩu
@@ -184,66 +193,76 @@
         <#if skipLink??>
             <#-- Không hiển thị link -->
         <#else>
-            <#-- Nếu có lỗi (token hết hạn/invalid), chỉ hiển thị nút quay lại -->
+           <#-- Nếu có lỗi (token hết hạn/invalid), chỉ hiển thị nút quay lại -->
             <#if message?has_content && message.type == 'error'>
-                <a href="http://localhost:3000/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
+                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
             <#elseif actionUri?has_content>
                 <#if requiredActions??>
                     <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
-                        <a href="${actionUri}" class="btn">» Đặt Lại Mật Khẩu</a>
+                        <a href="${actionUri}" class="btn">Đặt Lại Mật Khẩu</a>
                     <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
-                        <a href="#" class="btn" onclick="handleConfirm(event, '${actionUri}')">» Xác Minh Email</a>
+                            <button id="verifyBtn" class="btn">Xác Minh Email</button>
+
                     <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
-                        <a href="${actionUri}" class="btn">» Cập Nhật Thông Tin</a>
+                        <a href="${actionUri}" class="btn">Cập Nhật Thông Tin</a>
                     <#else>
-                        <a href="${actionUri}" class="btn">» Xác Nhận</a>
+                        <a href="${actionUri}" class="btn">Xác Nhận</a>
                     </#if>
                 <#else>
-                    <a href="#" class="btn" onclick="handleConfirm(event, '${actionUri}')">» Xác Minh Email</a>
+                        <button id="verifyBtn" class="btn">Xác Minh Email</button>
+
                 </#if>
             <#elseif pageRedirectUri?has_content>
-                <a href="http://localhost:3000/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#elseif client?? && client.baseUrl?has_content>
-                <a href="http://localhost:3000/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#else>
                 <p class="error">Không có liên kết xác nhận khả dụng.</p>
             </#if>
         </#if>
+
+        <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var btn = document.getElementById('verifyBtn');
+            if (btn) {
+                btn.addEventListener('click', function() {
+                    const urlParams = new URLSearchParams(window.location.search);
+                    const token = urlParams.get('key');
+                    let userId = '';
+                    let userEmail = '';
+                    if (token) {
+                        try {
+                            const base64Url = token.split('.')[1];
+                            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+                            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
+                                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+                            }).join(''));
+                            const payload = JSON.parse(jsonPayload);
+                            userId = payload.sub || payload.keycloakId || '';
+                            userEmail = payload.eml || payload.email || '';
+                        } catch (e) {}
+                    }
+                    if (userId && userEmail) {
+                        fetch('http://localhost:8080/api/auth/verify-email', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ email: userEmail, keycloakId: userId })
+                        })
+                        .then(res => res.json())
+                        .then(data => {
+                            window.location.href = '${client.rootUrl!"http://localhost:3000"}/auth/login';
+                        })
+                        .catch(err => {
+                            alert('Lỗi xác thực!');
+                        });
+                    } else {
+                        alert('Không lấy được thông tin người dùng từ token!');
+                    }
+                });
+            }
+        });
+        </script>
     </div>
-    
-    <script>
-        function handleConfirm(event, actionUrl) {
-            event.preventDefault();
-            
-            const button = event.target;
-            button.textContent = 'Đang xác minh...';
-            button.style.opacity = '0.6';
-            button.style.pointerEvents = 'none';
-            
-            // Gọi URL xác thực của Keycloak
-            fetch(actionUrl, {
-                method: 'GET',
-                credentials: 'include',
-                redirect: 'follow'
-            }).then(response => {
-                if (response.ok || response.redirected) {
-                    // Xác thực thành công, redirect về login
-                    window.location.href = 'http://localhost:3000/auth/login';
-                } else {
-                    throw new Error('Verification failed');
-                }
-            }).catch(error => {
-                console.error('Error:', error);
-                button.textContent = 'Xác minh thất bại';
-                button.style.backgroundColor = '#dc3545';
-                setTimeout(() => {
-                    button.textContent = '» Xác Minh Email';
-                    button.style.backgroundColor = '#007bff';
-                    button.style.opacity = '1';
-                    button.style.pointerEvents = 'auto';
-                }, 3000);
-            });
-        }
-    </script>
+
 </body>
 </html>

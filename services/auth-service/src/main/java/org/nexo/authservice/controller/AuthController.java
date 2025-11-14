@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
+import org.nexo.authservice.dto.CallBackRequest;
 import org.nexo.authservice.dto.ForgotPasswordRequest;
 import org.nexo.authservice.dto.LoginRequest;
 import org.nexo.authservice.dto.RegisterRequest;
@@ -18,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import jakarta.validation.Valid;
@@ -105,4 +107,15 @@ public class AuthController {
                                                 .message("If the email exists, a password reset link has been sent")
                                                 .build()));
         }
+
+        @PostMapping("verify-email")
+        public Mono<ResponseData<?>> verifyEmail(
+                        @Valid @RequestBody CallBackRequest request) {
+                return authService.callBack(request)
+                                .map(success -> ResponseData.<Void>builder()
+                                                .status(HttpStatus.OK.value())
+                                                .message("Email verified and updated successfully")
+                                                .build());
+        }
+
 }

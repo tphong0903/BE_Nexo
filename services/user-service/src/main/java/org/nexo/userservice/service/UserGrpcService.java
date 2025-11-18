@@ -618,8 +618,9 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
     @Override
     public void getUsersByTime(UserServiceProto.DateRange request,
                                StreamObserver<UserServiceProto.GetUsersByTimeResponse> responseObserver) {
-        LocalDateTime start = LocalDateTime.parse(request.getStartDate());
-        LocalDateTime end = LocalDateTime.parse(request.getEndDate());
+        LocalDateTime start = LocalDate.parse(request.getStartDate()).atStartOfDay();
+        LocalDateTime end = LocalDate.parse(request.getEndDate()).atTime(23, 59, 59);
+        ;
 
         List<Object[]> result = userRepository.countUsersByDate(start, end);
 

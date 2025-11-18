@@ -35,6 +35,9 @@ public abstract class AbstractPost implements Serializable {
     protected Long userId;
     @Column(length = 2000)
     protected String caption;
+
+    @Column
+    protected String authorName;
     @Enumerated(EnumType.STRING)
     protected EVisibilityPost visibility;
 

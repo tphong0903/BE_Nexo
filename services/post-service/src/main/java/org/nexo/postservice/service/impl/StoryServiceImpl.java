@@ -52,6 +52,8 @@ public class StoryServiceImpl implements IStoryService {
     @Override
     public String saveStory(StoryRequestDto dto, List<MultipartFile> files) {
         securityUtil.checkOwner(dto.getUserId());
+        UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(dto.getUserId());
+
         StoryModel model;
         if (dto.getStoryId() != 0) {
             model = storyRepository.findById(dto.getStoryId())
@@ -67,7 +69,9 @@ public class StoryServiceImpl implements IStoryService {
                     .expiresAt(LocalDateTime.now().plusHours(24))
                     .build();
         }
+        model.setAuthorName(userDTOResponse.getUsername());
         storyRepository.save(model);
+        
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty() && dto.getStoryId() == 0) {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();

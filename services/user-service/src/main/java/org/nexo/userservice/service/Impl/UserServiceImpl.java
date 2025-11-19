@@ -4,8 +4,11 @@ import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
 import org.nexo.userservice.dto.UserSearchEvent;
+import org.nexo.userservice.enums.EAccountStatus;
+import org.nexo.userservice.enums.ERole;
 import org.nexo.userservice.enums.EStatusFollow;
 import org.nexo.userservice.exception.ResourceNotFoundException;
+import org.nexo.userservice.grpc.AuthGrpcClient;
 import org.nexo.userservice.grpc.UploadFileGrpcClient;
 import org.nexo.userservice.mapper.UserMapper;
 import org.nexo.userservice.model.UserModel;
@@ -34,6 +37,7 @@ public class UserServiceImpl implements UserService {
     private final UploadFileGrpcClient uploadFileGrpcClient;
     private final BlockService blockService;
     private final UserEventProducer userEventProducer;
+    private final AuthGrpcClient authGrpcClient;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
         UserModel user = userRepository.findByUsername(username)
@@ -125,9 +129,42 @@ public class UserServiceImpl implements UserService {
                 .fullName(user.getFullName())
                 .avatar(user.getAvatar())
                 .eventType(eventType)
+                .email(user.getEmail())
+                .accountStatus(Enum.valueOf(EAccountStatus.class, user.getAccountStatus().name()).name())
+                .role(Enum.valueOf(ERole.class, user.getRole().name()).name())
+                .violationCount(user.getViolationCount())
                 .build();
 
         userEventProducer.sendUserEvent(event);
+    }
+
+    @Transactional
+    public void assignRoleToUser(String username, String role) {
+        UserModel user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+
+        boolean success = authGrpcClient.changeUserRole(user.getKeycloakUserId(), role);
+        if (!success) {
+            throw new ResourceNotFoundException("Failed to change role in auth-service");
+        }
+        user.setRole(ERole.valueOf(role.toUpperCase()));
+        userRepository.save(user);
+        publishUserEvent(user, "UPDATE");
+
+    }
+    @Transactional
+    public void banUser(String username) {
+        UserModel user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+
+        boolean success = authGrpcClient.banUser(user.getKeycloakUserId());
+        if (!success) {
+            throw new ResourceNotFoundException("Failed to ban user in auth-service");
+        }
+        user.setAccountStatus(EAccountStatus.LOCKED);
+        userRepository.save(user);
+        publishUserEvent(user, "UPDATE");
+
     }
 
 }

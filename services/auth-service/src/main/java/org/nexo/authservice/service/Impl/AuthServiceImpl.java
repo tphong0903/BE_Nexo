@@ -18,6 +18,7 @@ import org.nexo.authservice.service.UserGrpcClient;
 import org.nexo.authservice.util.JwtUtil;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
@@ -29,6 +30,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Service
@@ -276,7 +278,7 @@ public class AuthServiceImpl implements AuthService {
                 });
     }
 
-    private Mono<String> getAdminToken() {
+    public Mono<String> getAdminToken() {
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add(GRANT_TYPE, GRANT_TYPE_PASSWORD);
         formData.add(CLIENT_ID, ADMIN_CLI);
@@ -441,4 +443,74 @@ public class AuthServiceImpl implements AuthService {
                 .retrieve()
                 .bodyToMono(Void.class);
     }
+
+    public Mono<Void> banUser(String userId) {
+        return getAdminToken()
+                .flatMap(adminToken -> disableUser(userId, adminToken));
+    }
+
+    private Mono<Void> disableUser(String userId, String adminToken) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("enabled", false);
+        return webClient.put()
+                .uri(keycloakConfig.getServerUrl() + "/admin/realms/"
+                        + keycloakConfig.getRealm() + "/users/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(payload)
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
+
+    public Mono<List<Map>> getAllUserRoles(String userId, String clientUUID, String adminToken) {
+        return webClient.get()
+                .uri(keycloakConfig.getServerUrl()
+                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                        keycloakConfig.getRealm(), userId, clientUUID)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .retrieve()
+                .bodyToFlux(Map.class)
+                .collectList();
+    }
+
+    public Mono<Void> removeAllRoles(String userId, String clientUUID, String adminToken) {
+        return getAllUserRoles(userId, clientUUID, adminToken)
+                .flatMap(roles -> webClient.method(HttpMethod.DELETE)
+                        .uri(keycloakConfig.getServerUrl()
+                                + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                                keycloakConfig.getRealm(), userId, clientUUID)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                        .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                        .bodyValue(roles)
+                        .retrieve()
+                        .bodyToMono(Void.class));
+    }
+
+    public Mono<Map> getClientRole(String clientUUID, String roleName, String adminToken) {
+        return webClient.get()
+                .uri(keycloakConfig.getServerUrl()
+                        + "/admin/realms/{realm}/clients/{clientUUID}/roles/{roleName}",
+                        keycloakConfig.getRealm(), clientUUID, roleName)
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .retrieve()
+                .bodyToFlux(Map.class)
+                .next();
+    }
+
+    public Mono<Void> changeUserRole(String userId, String newRoleName, String adminToken) {
+
+        return getOrCacheClientUUID(keycloakConfig.getRealm(), keycloakConfig.getClientId(), adminToken)
+                .flatMap(clientUUID -> removeAllRoles(userId, clientUUID, adminToken)
+                        .then(getClientRole(clientUUID, newRoleName, adminToken))
+                        .flatMap(newRole -> webClient.post()
+                                .uri(keycloakConfig.getServerUrl()
+                                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                                        keycloakConfig.getRealm(), userId, clientUUID)
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                                .bodyValue(List.of(newRole))
+                                .retrieve()
+                                .bodyToMono(Void.class)));
+    }
+
 }

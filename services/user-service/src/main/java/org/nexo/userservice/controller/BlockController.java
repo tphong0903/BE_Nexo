@@ -1,6 +1,5 @@
 package org.nexo.userservice.controller;
 
-import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UserDTOResponse;

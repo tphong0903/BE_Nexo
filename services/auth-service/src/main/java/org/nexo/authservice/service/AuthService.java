@@ -22,4 +22,9 @@ public interface AuthService {
 
     Mono<String> callBack(CallBackRequest request);
 
+    Mono<String> getAdminToken();
+
+    Mono<Void> changeUserRole(String userId, String roleName, String adminToken);
+
+    Mono<Void> banUser(String userId);
 }

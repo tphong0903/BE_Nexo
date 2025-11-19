@@ -2,6 +2,7 @@ package org.nexo.userservice.model;
 
 import org.hibernate.annotations.SQLRestriction;
 import org.nexo.userservice.enums.EAccountStatus;
+import org.nexo.userservice.enums.ERole;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
@@ -62,12 +63,21 @@ public class UserModel {
     @Enumerated(EnumType.STRING)
     private EAccountStatus accountStatus;
 
+    @Column(name="role")
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private ERole role = ERole.USER;
+
     @Column(name = "last_login")
     private LocalDateTime lastLogin;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     @CreatedDate
     private LocalDateTime createdAt;
+
+    @Column(name = "violation_count")
+    @Builder.Default
+    private Integer violationCount = 0;
 
     @OneToMany(mappedBy = "follower", cascade = CascadeType.ALL, orphanRemoval = true)
     @SQLRestriction("status = 'ACTIVE'")

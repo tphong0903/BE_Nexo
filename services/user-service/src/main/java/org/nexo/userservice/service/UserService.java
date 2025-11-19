@@ -14,4 +14,8 @@ public interface UserService {
     UserDTOResponse updateUser(String accessToken, UpdateUserRequest request, MultipartFile avatarFile);
 
     void deleteAvatar(String accessToken);
+
+    void assignRoleToUser(String username, String role);
+    
+    void banUser(String username);
 }

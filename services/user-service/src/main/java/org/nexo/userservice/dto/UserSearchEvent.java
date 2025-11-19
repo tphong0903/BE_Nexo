@@ -1,5 +1,8 @@
 package org.nexo.userservice.dto;
 
+import org.nexo.userservice.enums.EAccountStatus;
+import org.nexo.userservice.enums.ERole;
+
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,4 +22,6 @@ public class UserSearchEvent {
     private Boolean isPrivate;
     private String accountStatus;
     private String eventType;
+    private String role;
+    private Integer violationCount;
 }

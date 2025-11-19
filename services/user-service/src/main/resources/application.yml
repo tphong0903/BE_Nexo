@@ -62,6 +62,9 @@ grpc:
     messaging-service:
       address: "static://localhost:9098"
       negotiationType: plaintext
+    auth-service:
+      address: "static://localhost:9099"
+      negotiationType: plaintext
 
 logging:
   level:

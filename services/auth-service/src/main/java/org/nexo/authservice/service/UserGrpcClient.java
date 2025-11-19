@@ -73,4 +73,21 @@ public class UserGrpcClient {
                                 .doOnError(error -> log.error("Failed to update account status: {}",
                                                 error.getMessage()));
         }
+
+        public Mono<UserServiceProto.GetUserIdByEmailResponse> getUserIdByEmail(String email) {
+                return Mono.fromCallable(() -> {
+                        UserServiceProto.GetUserIdByEmailRequest request = UserServiceProto.GetUserIdByEmailRequest
+                                        .newBuilder()
+                                        .setEmail(email)
+                                        .build();
+
+                        log.info("Calling user-service gRPC to get user ID by email: {}", email);
+                        return userServiceStub.getUserIdByEmail(request);
+                })
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .doOnSuccess(response -> log.info("Get user ID by email successfully: {}",
+                                                response.getMessage()))
+                                .doOnError(error -> log.error("Failed to get user ID by email: {}",
+                                                error.getMessage()));
+        }
 }

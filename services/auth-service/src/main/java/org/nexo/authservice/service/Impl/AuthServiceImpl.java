@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.authservice.config.KeycloakConfig;
+import org.nexo.authservice.dto.CallBackRequest;
 import org.nexo.authservice.dto.KeycloakErrorResponse;
 import org.nexo.authservice.dto.LoginRequest;
 import org.nexo.authservice.dto.RegisterRequest;
@@ -27,6 +28,8 @@ import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.Map;
 
 @Service
 @AllArgsConstructor
@@ -345,32 +348,19 @@ public class AuthServiceImpl implements AuthService {
     public Mono<Void> forgotPassword(String email) {
         log.info("Starting forgot password process for email: {}", email);
 
-        return getAdminToken()
-                .flatMap(adminToken -> webClient.get()
-                        .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
-                                + "/users?email=" + email)
-                        .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
-                        .retrieve()
-                        .bodyToMono(JsonNode.class)
-                        .flatMap(users -> {
-                            if (users.isArray() && users.size() > 0) {
-                                String userId = users.get(0).get("id").asText();
-                                log.info("Found user with ID: {} for email: {}", userId, email);
+        return userGrpcClient.getUserIdByEmail(email)
+                .flatMap(grpcResponse -> {
+                    if (!grpcResponse.getSuccess()) {
+                        log.warn("User not found or not active for email: {}", email);
+                        return Mono.error(new KeycloakClientException(404, grpcResponse.getMessage()));
+                    }
 
-                                sendResetPasswordEmail(userId, adminToken)
-                                        .doOnSuccess(
-                                                v -> log.info("Reset password email sent successfully to: {}", email))
-                                        .doOnError(error -> log.error(
-                                                "Failed to send reset password email to: {}, error: {}", email,
-                                                error.getMessage()))
-                                        .subscribe();
+                    String userId = grpcResponse.getKeycloakUserId();
+                    log.info("Found active user with ID: {} for email: {}", userId, email);
 
-                                return Mono.<Void>empty();
-                            } else {
-                                log.warn("User not found with email: {}", email);
-                                return Mono.error(new KeycloakClientException(404, "User not found"));
-                            }
-                        }));
+                    return getAdminToken()
+                            .flatMap(adminToken -> sendResetPasswordEmail(userId, adminToken));
+                });
     }
 
     private Mono<Void> sendResetPasswordEmail(String userId, String adminToken) {
@@ -380,6 +370,74 @@ public class AuthServiceImpl implements AuthService {
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
                 .bodyValue(new String[] { "UPDATE_PASSWORD" })
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
+
+    public Mono<String> callBack(CallBackRequest request) {
+        return getAdminToken()
+                .flatMap(adminToken -> {
+                    return webClient.get()
+                            .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
+                                    + "/users/" + request.getKeycloakId())
+                            .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                            .retrieve()
+                            .bodyToMono(String.class)
+                            .flatMap(userInfo -> {
+                                if (userInfo == null || userInfo.isEmpty()) {
+                                    log.error("User not found in Keycloak for keycloakId: {}", request.getKeycloakId());
+                                    return Mono.error(new KeycloakClientException(404, "User not found"));
+                                }
+
+                                try {
+                                    JsonNode userNode = objectMapper.readTree(userInfo);
+                                    String keycloakUserId = userNode.has("id") ? userNode.get("id").asText() : null;
+                                    String keycloakEmail = userNode.has("email") ? userNode.get("email").asText()
+                                            : null;
+                                    if (!request.getKeycloakId().equals(keycloakUserId)) {
+                                        log.error("Keycloak user id mismatch. Expected: {}, Actual: {}",
+                                                request.getKeycloakId(), keycloakUserId);
+                                        return Mono.error(new KeycloakClientException(400, "User id mismatch"));
+                                    }
+                                    if (request.getEmail() != null && !request.getEmail().equals(keycloakEmail)) {
+                                        log.error("Email mismatch. Expected: {}, Actual: {}",
+                                                request.getEmail(), keycloakEmail);
+                                        return Mono.error(new KeycloakClientException(400, "Email mismatch"));
+                                    }
+
+                                } catch (Exception e) {
+                                    return Mono.error(new KeycloakClientException(500, "Failed to parse user info"));
+                                }
+                                verifyEmail(request.getKeycloakId(), adminToken).subscribe();
+                                userGrpcClient.updateAccountStatus(request.getKeycloakId(), "ACTIVE")
+                                        .doOnSuccess(grpcResponse -> {
+                                            if (grpcResponse.getSuccess()) {
+                                                log.info("Account status updated to ACTIVE for userId: {}",
+                                                        request.getKeycloakId());
+                                            } else {
+                                                log.warn("Failed to update account status for userId: {}, message: {}",
+                                                        request.getKeycloakId(), grpcResponse.getMessage());
+                                            }
+                                        })
+                                        .doOnError(error -> {
+                                            log.error("Failed to update account status for userId: {}, error: {}",
+                                                    request.getKeycloakId(), error.getMessage());
+                                        })
+                                        .subscribe();
+                                return Mono.just(userInfo);
+                            });
+                });
+    }
+
+    private Mono<Void> verifyEmail(String userId, String adminToken) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("emailVerified", true);
+        return webClient.put()
+                .uri(keycloakConfig.getServerUrl() + "/admin/realms/"
+                        + keycloakConfig.getRealm() + "/users/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(payload)
                 .retrieve()
                 .bodyToMono(Void.class);
     }

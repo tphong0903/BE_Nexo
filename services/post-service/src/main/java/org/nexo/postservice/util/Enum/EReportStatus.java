@@ -5,5 +5,6 @@ public enum EReportStatus {
     IN_REVIEW,
     APPROVED,
     REJECTED,
-    CLOSED
+    CLOSED,
+    ALL
 }

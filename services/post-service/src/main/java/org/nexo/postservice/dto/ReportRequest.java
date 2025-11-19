@@ -7,4 +7,5 @@ import lombok.Setter;
 @Setter
 public class ReportRequest {
     private String reason;
+    private String detail;
 }

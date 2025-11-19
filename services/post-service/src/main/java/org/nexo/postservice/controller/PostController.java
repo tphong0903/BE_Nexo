@@ -51,7 +51,9 @@ public class PostController {
     }
 
     @GetMapping("/users/{id}")
-    public ResponseData<?> getAllPostOfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
+    public ResponseData<?> getAllPostOfUser(@PathVariable Long id,
+                                            @RequestParam(defaultValue = "0") int pageNo,
+                                            @RequestParam(defaultValue = "20") int pageSize) {
         return new ResponseData<>(200, "Success", postService.getAllPostOfUser(id, pageNo, pageSize));
     }
 
@@ -59,4 +61,6 @@ public class PostController {
     public ResponseData<?> getPost(@PathVariable Long id) {
         return new ResponseData<>(200, "Success", postService.getPostById(id));
     }
+
+
 }

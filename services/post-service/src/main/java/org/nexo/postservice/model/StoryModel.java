@@ -25,6 +25,7 @@ public class StoryModel extends AbstractEntity<Long> {
     private LocalDateTime expiresAt;
     private Boolean isArchive;
     private Boolean isActive;
+    private String authorName;
 
     @OneToMany(mappedBy = "storyModel", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<StoryViewModel> views = new ArrayList<>();

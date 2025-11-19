@@ -2,11 +2,11 @@ package org.nexo.postservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.postservice.dto.response.ReportInfoDTO;
+import org.nexo.postservice.dto.response.ReportResponseDTO;
+import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.exception.CustomException;
-import org.nexo.postservice.model.PostModel;
-import org.nexo.postservice.model.ReelModel;
-import org.nexo.postservice.model.ReportPostModel;
-import org.nexo.postservice.model.ReportReelModel;
+import org.nexo.postservice.model.*;
 import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.repository.IReelRepository;
 import org.nexo.postservice.repository.IReportPostRepository;
@@ -20,8 +20,11 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.repository.Query;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -34,7 +37,7 @@ public class ReportServiceImpl implements IReportService {
     private final UserGrpcClient userGrpcClient;
 
     @Override
-    public String reportPost(Long id, String reason) {
+    public String reportPost(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
         boolean exists = reportPostRepository.existsByUserIdAndPostModel_Id(userId, id);
         if (exists) {
@@ -53,10 +56,15 @@ public class ReportServiceImpl implements IReportService {
         if (!isAllow)
             throw new CustomException("Dont allow to report this Post", HttpStatus.BAD_REQUEST);
 
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(postModel.getUserId(), userId));
+
         ReportPostModel report = ReportPostModel.builder()
                 .userId(userId)
                 .postModel(postModel)
                 .reason(reason)
+                .detail(detail)
+                .reporterName(users.get(1).getUsername())
+                .ownerPostName(users.get(0).getUsername())
                 .reportStatus(EReportStatus.PENDING)
                 .build();
 
@@ -65,7 +73,7 @@ public class ReportServiceImpl implements IReportService {
     }
 
     @Override
-    public String reportReel(Long id, String reason) {
+    public String reportReel(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
         boolean exists = reportReelRepository.existsByUserIdAndReelModel_Id(userId, id);
         if (exists) {
@@ -84,10 +92,15 @@ public class ReportServiceImpl implements IReportService {
         if (!isAllow)
             throw new CustomException("Dont allow to report this Post", HttpStatus.BAD_REQUEST);
 
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(reelModel.getUserId(), userId));
+
         ReportReelModel report = ReportReelModel.builder()
                 .userId(userId)
                 .reelModel(reelModel)
                 .reason(reason)
+                .detail(detail)
+                .reporterName(users.get(1).getUsername())
+                .ownerPostName(users.get(0).getUsername())
                 .reportStatus(EReportStatus.PENDING)
                 .build();
 
@@ -96,13 +109,13 @@ public class ReportServiceImpl implements IReportService {
     }
 
     @Override
-    public String handleReportPost(Long id, EReportStatus decision) {
+    public String handleReportPost(Long id, EReportStatus decision, String note) {
         Long adminId = securityUtil.getUserIdFromToken();
 
         ReportPostModel report = reportPostRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
 
-        if (report.getReportStatus() != EReportStatus.PENDING) {
+        if (report.getReportStatus() != EReportStatus.PENDING && report.getReportStatus() != EReportStatus.IN_REVIEW) {
             throw new CustomException("This report has already been processed", HttpStatus.BAD_REQUEST);
         }
 
@@ -111,7 +124,6 @@ public class ReportServiceImpl implements IReportService {
             throw new CustomException("Post not found for this report", HttpStatus.BAD_REQUEST);
         }
 
-        // 4️⃣ Xử lý theo quyết định của admin
         switch (decision) {
             case APPROVED:
                 post.setIsActive(false);
@@ -123,14 +135,15 @@ public class ReportServiceImpl implements IReportService {
                 report.setReportStatus(EReportStatus.REJECTED);
                 break;
 
-            case CLOSED:
-                report.setReportStatus(EReportStatus.CLOSED);
+            case IN_REVIEW:
+                report.setReportStatus(EReportStatus.IN_REVIEW);
                 break;
 
             default:
                 throw new CustomException("Invalid decision", HttpStatus.BAD_REQUEST);
         }
 
+        report.setNote(note);
         reportPostRepository.save(report);
 
         return "Report processed successfully with decision: " + decision.name();
@@ -138,13 +151,13 @@ public class ReportServiceImpl implements IReportService {
 
 
     @Override
-    public String handleReportReel(Long id, EReportStatus decision) {
+    public String handleReportReel(Long id, EReportStatus decision, String note) {
         Long adminId = securityUtil.getUserIdFromToken();
 
         ReportReelModel report = reportReelRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
 
-        if (report.getReportStatus() != EReportStatus.PENDING) {
+        if (report.getReportStatus() != EReportStatus.PENDING && report.getReportStatus() != EReportStatus.IN_REVIEW) {
             throw new CustomException("This report has already been processed", HttpStatus.BAD_REQUEST);
         }
 
@@ -164,17 +177,15 @@ public class ReportServiceImpl implements IReportService {
                 report.setReportStatus(EReportStatus.REJECTED);
                 break;
 
-            case CLOSED:
-                report.setReportStatus(EReportStatus.CLOSED);
+            case IN_REVIEW:
+                report.setReportStatus(EReportStatus.IN_REVIEW);
                 break;
 
             default:
                 throw new CustomException("Invalid decision", HttpStatus.BAD_REQUEST);
         }
-
-
+        report.setNote(note);
         reportReelRepository.save(report);
-
         return "Report processed successfully with decision: " + decision.name();
     }
 
@@ -200,14 +211,89 @@ public class ReportServiceImpl implements IReportService {
     }
 
     @Override
-    public Page<ReportPostModel> searchReportPosts(int pageNo, int pageSize, EReportStatus status, String keyword) {
+    public ReportInfoDTO searchReportPosts(int pageNo, int pageSize, EReportStatus status, String keyword) {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
-        return reportPostRepository.searchReports(status, keyword, pageable);
+        if (status == null) {
+            status = EReportStatus.ALL;
+        }
+        List<Object[]> countsList = reportPostRepository.getReportQuantitySummary();
+        Object[] counts = countsList.get(0);
+
+        Long pending = ((Number) counts[0]).longValue();
+        Long inReview = ((Number) counts[1]).longValue();
+        Long approved = ((Number) counts[2]).longValue();
+        Long rejected = ((Number) counts[3]).longValue();
+
+        Page<ReportSummaryProjection> reportPage = reportPostRepository.searchReportPostsNative(status.name(), keyword, pageable);
+        return new ReportInfoDTO(pending, approved, inReview, rejected, reportPage);
     }
 
     @Override
-    public Page<ReportReelModel> searchReportReels(int pageNo, int pageSize, EReportStatus status, String keyword) {
+    public ReportInfoDTO searchReportReels(int pageNo, int pageSize, EReportStatus status, String keyword) {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
-        return reportReelRepository.searchReports(status, keyword, pageable);
+        if (status == null) {
+            status = EReportStatus.ALL;
+        }
+        List<Object[]> countsList = reportReelRepository.getReportQuantitySummary();
+        Object[] counts = countsList.get(0);
+
+        Long pending = ((Number) counts[0]).longValue();
+        Long inReview = ((Number) counts[1]).longValue();
+        Long approved = ((Number) counts[2]).longValue();
+        Long rejected = ((Number) counts[3]).longValue();
+
+        Page<ReportSummaryProjection> reportPage = reportReelRepository
+                .searchReportsReelsNative(status.name(), keyword, pageable);
+        return new ReportInfoDTO(pending, approved, inReview, rejected, reportPage);
+    }
+
+    @Override
+    public ReportResponseDTO getPostReportById(Long id) {
+        ReportPostModel model = reportPostRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), model.getPostModel().getUserId()));
+
+        return ReportResponseDTO.builder()
+                .postId(model.getPostModel().getId())
+                .id(model.getId())
+                .userId(model.getUserId())
+                .reason(model.getReason())
+                .detail(model.getDetail())
+                .reportStatus(String.valueOf(model.getReportStatus()))
+                .createdAt(model.getCreatedAt())
+                .reporterName(model.getReporterName())
+                .ownerPostName(model.getOwnerPostName())
+                .reporterAvatarUrl(users.get(0).getAvatar())
+                .ownerPostAvatarUrl(users.get(1).getAvatar())
+                .mediaUrls(model.getPostModel().getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
+                .caption(model.getPostModel().getCaption())
+                .note(model.getNote())
+                .isActive(model.getPostModel().getIsActive())
+                .build();
+    }
+
+    @Override
+    public ReportResponseDTO getReelReportById(Long id) {
+        ReportReelModel model = reportReelRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), model.getReelModel().getUserId()));
+
+        return ReportResponseDTO.builder()
+                .postId(model.getReelModel().getId())
+                .id(model.getId())
+                .userId(model.getUserId())
+                .reason(model.getReason())
+                .detail(model.getDetail())
+                .reportStatus(String.valueOf(model.getReportStatus()))
+                .createdAt(model.getCreatedAt())
+                .reporterName(model.getReporterName())
+                .ownerPostName(model.getOwnerPostName())
+                .reporterAvatarUrl(users.get(0).getAvatar())
+                .ownerPostAvatarUrl(users.get(1).getAvatar())
+                .mediaUrls(List.of(model.getReelModel().getVideoUrl()))
+                .caption(model.getReelModel().getCaption())
+                .note(model.getNote())
+                .isActive(model.getReelModel().getIsActive())
+                .build();
     }
 }

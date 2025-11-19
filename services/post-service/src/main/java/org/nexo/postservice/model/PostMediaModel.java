@@ -1,14 +1,16 @@
 package org.nexo.postservice.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.nexo.postservice.util.Enum.EMediaType;
 
-@Data
 @Entity
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
+@Getter
+@Setter
 @EqualsAndHashCode(callSuper = true)
 public class PostMediaModel extends AbstractEntity<Long> {
     private String mediaUrl;
@@ -16,8 +18,9 @@ public class PostMediaModel extends AbstractEntity<Long> {
     @Enumerated(EnumType.STRING)
     private EMediaType mediaType;
 
-    @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY, cascade = CascadeType.ALL)
     @JoinColumn(name = "post_id")
+    @JsonIgnore
     private PostModel postModel;
 
 }

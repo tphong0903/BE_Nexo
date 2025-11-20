@@ -17,6 +17,7 @@ import org.nexo.interactionservice.repository.ILikeRepository;
 import org.nexo.interactionservice.service.ILikeService;
 import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -37,6 +38,7 @@ public class LikeServiceImpl implements ILikeService {
     private final UserGrpcClient userGrpcClient;
     private final PostGrpcClient postGrpcClient;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final CacheService cacheService;
 
     @Override
     public String saveLikeComment(Long id) {
@@ -62,6 +64,7 @@ public class LikeServiceImpl implements ILikeService {
                     .build();
             kafkaTemplate.send("notification", messageDTO);
         }
+        cacheService.evictByPrefix("comment_like" + id);
         return "Success";
     }
 
@@ -93,11 +96,12 @@ public class LikeServiceImpl implements ILikeService {
         } catch (Exception e) {
             throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
-
+        cacheService.evictByPrefix("post_like" + id);
         return "Success";
     }
 
     @Override
+    @Cacheable(value = "likes", key = "'post_like'+ #id + '_' + #pageNo + '_' + #pageSize")
     public PageModelResponse<FolloweeDTO> getLikePostDetail(Long id, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -137,6 +141,7 @@ public class LikeServiceImpl implements ILikeService {
     }
 
     @Override
+    @Cacheable(value = "likes", key = "'reel_like'+ #id + '_' + #pageNo + '_' + #pageSize")
     public PageModelResponse<FolloweeDTO> getLikeReelDetail(Long id, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -176,6 +181,7 @@ public class LikeServiceImpl implements ILikeService {
     }
 
     @Override
+    @Cacheable(value = "likes", key = "'comment_like'+ #id + '_' + #pageNo + '_' + #pageSize")
     public PageModelResponse<FolloweeDTO> getLikeCommentDetail(Long id, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -242,6 +248,7 @@ public class LikeServiceImpl implements ILikeService {
         } catch (Exception e) {
             throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);
         }
+        cacheService.evictByPrefix("reel_like" + id);
         return "Success";
     }
 }

@@ -27,6 +27,8 @@ logging:
     org.springframework.boot.web: DEBUG
 
 grpc:
+  server:
+    port: 9099
   client:
     user-service:
       address: "static://localhost:9092"

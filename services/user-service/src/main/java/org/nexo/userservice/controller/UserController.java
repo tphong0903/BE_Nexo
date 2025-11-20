@@ -13,12 +13,15 @@ import java.util.stream.Collectors;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserSearchResponse;
+import org.nexo.userservice.dto.UserSearchResponseAdmin;
 import org.nexo.userservice.service.MeilisearchService;
 import org.nexo.userservice.service.UserService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -123,6 +126,43 @@ public class UserController {
                 .status(200)
                 .message("User search completed successfully")
                 .data(response)
+                .build();
+    }
+
+    @GetMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseData<?> getUser(@RequestParam(required = false, defaultValue = "") String query,
+            @RequestParam(required = false, defaultValue = "10") Integer limit,
+            @RequestParam(required = false, defaultValue = "0") Integer offset,
+            @RequestParam(required = false) String filter) throws MeilisearchException {
+
+        UserSearchResponseAdmin response = meilisearchService.searchUsersAdmin(query, limit, offset, filter);
+
+        return ResponseData.builder()
+                .status(200)
+                .message("Admin user search completed successfully")
+                .data(response)
+                .build();
+    }
+    @PostMapping("/assign-role/{username}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseData<?> assignRoleToUser(@PathVariable String username,
+            @RequestParam String role) {
+        userService.assignRoleToUser(username, role);
+        return ResponseData.builder()
+                .status(200)
+                .message("Role assigned to user successfully")
+                .data(null)
+                .build();
+    }
+    @PostMapping("/ban/{username}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseData<?> banUser(@PathVariable String username) {
+        userService.banUser(username);
+        return ResponseData.builder()
+                .status(200)
+                .message("User banned successfully")
+                .data(null)
                 .build();
     }
 }

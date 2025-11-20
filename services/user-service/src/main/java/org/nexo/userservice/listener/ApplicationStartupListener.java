@@ -2,6 +2,8 @@ package org.nexo.userservice.listener;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+import org.nexo.userservice.dto.UserResonspeAdmin;
 import org.nexo.userservice.dto.UserSearchDocument;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
@@ -27,15 +29,19 @@ public class ApplicationStartupListener {
         log.info("Application is ready. Starting initial user indexing...");
         try {
             List<UserModel> allUsers = userRepository.findAllByAccountStatus(EAccountStatus.ACTIVE);
+            List<UserModel> allUsersAdmin = userRepository.findAll();
 
-            if (allUsers.isEmpty()) {
+            if (allUsers.isEmpty() && allUsersAdmin.isEmpty()) {
                 log.info("No users found in database. Skipping indexing.");
                 return;
             }
             List<UserSearchDocument> documents = allUsers.stream()
                     .map(this::convertToDocument)
                     .collect(Collectors.toList());
-            meilisearchService.reindexAllUsers(documents);
+            List<UserResonspeAdmin> documentsAdmin = allUsersAdmin.stream()
+                    .map(this::convertToDocumentAdmin)
+                    .collect(Collectors.toList());
+            meilisearchService.reindexAllUsers(documents, documentsAdmin);
             log.info("Successfully indexed {} users to Meilisearch on startup", documents.size());
         } catch (Exception e) {
             log.error("Failed to index users on startup. Search may not work properly.", e);
@@ -48,6 +54,18 @@ public class ApplicationStartupListener {
                 .username(user.getUsername())
                 .fullName(user.getFullName())
                 .avatar(user.getAvatar())
+                .build();
+    }
+
+    private UserResonspeAdmin convertToDocumentAdmin(UserModel user) {
+        return UserResonspeAdmin.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .fullName(user.getFullName())
+                .email(user.getEmail())
+                .role(user.getRole())
+                .accountStatus(user.getAccountStatus())
+                .violationCount(user.getViolationCount())
                 .build();
     }
 }

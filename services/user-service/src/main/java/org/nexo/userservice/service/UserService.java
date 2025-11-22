@@ -16,6 +16,8 @@ public interface UserService {
     void deleteAvatar(String accessToken);
 
     void assignRoleToUser(String username, String role);
-    
+
     void banUser(String username);
+
+    void updateUserOauth(String keycloakUserId, UpdateUserRequest request);
 }

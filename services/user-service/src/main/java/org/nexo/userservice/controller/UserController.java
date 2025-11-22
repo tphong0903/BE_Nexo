@@ -17,6 +17,7 @@ import org.nexo.userservice.dto.UserSearchResponseAdmin;
 import org.nexo.userservice.service.MeilisearchService;
 import org.nexo.userservice.service.UserService;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.Authentication;
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +33,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.web.bind.annotation.RequestBody;
 
 @RestController
 @RequestMapping
@@ -41,6 +43,18 @@ public class UserController {
     private final UserService userService;
     private final Validator validator;
     private final MeilisearchService meilisearchService;
+
+    @PutMapping
+    public ResponseData<?> updateUser(Authentication authentication,
+            @RequestBody UpdateUserRequest request) {
+        String keycloakUserId = authentication.getName();
+        userService.updateUserOauth(keycloakUserId, request);
+        return ResponseData.builder()
+                .status(200)
+                .message("User updated successfully")
+                .data(null)
+                .build();
+    }
 
     @GetMapping("/profile/{username}")
     public ResponseData<?> getProfile(@PathVariable String username,
@@ -144,6 +158,7 @@ public class UserController {
                 .data(response)
                 .build();
     }
+
     @PostMapping("/assign-role/{username}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseData<?> assignRoleToUser(@PathVariable String username,
@@ -155,6 +170,7 @@ public class UserController {
                 .data(null)
                 .build();
     }
+
     @PostMapping("/ban/{username}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseData<?> banUser(@PathVariable String username) {

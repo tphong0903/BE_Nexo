@@ -70,7 +70,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                 .email(request.getEmail())
                                 .username(request.getUsername())
                                 .fullName(request.getFullName())
-                                .accountStatus(EAccountStatus.PENDING)
+                                .accountStatus(EAccountStatus.valueOf(request.getAccountStatus()))
                                 .build();
 
                 UserModel savedUser = userRepository.save(user);
@@ -655,8 +655,9 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
         @Override
         public void getUserIdByEmail(UserServiceProto.GetUserIdByEmailRequest request,
                         StreamObserver<UserServiceProto.GetUserIdByEmailResponse> responseObserver) {
-                                
-                UserModel user = userRepository.findByEmailAndAccountStatus(request.getEmail(), EAccountStatus.ACTIVE).orElse(null);
+
+                UserModel user = userRepository.findByEmailAndAccountStatus(request.getEmail(), EAccountStatus.ACTIVE)
+                                .orElse(null);
 
                 if (user == null) {
                         UserServiceProto.GetUserIdByEmailResponse response = UserServiceProto.GetUserIdByEmailResponse
@@ -678,7 +679,6 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                                 .setKeycloakUserId(user.getKeycloakUserId())
                                 .build();
 
-                log.info("Successfully returned keycloak user ID for email: {}", request.getEmail());
                 responseObserver.onNext(response);
                 responseObserver.onCompleted();
         }

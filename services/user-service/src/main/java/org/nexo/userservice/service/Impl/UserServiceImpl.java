@@ -152,6 +152,7 @@ public class UserServiceImpl implements UserService {
         publishUserEvent(user, "UPDATE");
 
     }
+
     @Transactional
     public void banUser(String username) {
         UserModel user = userRepository.findByUsername(username)
@@ -165,6 +166,18 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
 
+    }
+
+    @Transactional
+    public void updateUserOauth(String keycloakUserId, UpdateUserRequest request) {
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+
+        UserModel updatedUser = userMapper.updateUserModelFromDTO(request, user);
+        updatedUser.setAccountStatus(EAccountStatus.ACTIVE);
+        userRepository.save(updatedUser);
+
+        publishUserEvent(updatedUser, "UPDATE");
     }
 
 }

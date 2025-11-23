@@ -5,8 +5,11 @@ import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.nexo.grpc.auth.AuthServiceGrpc;
 import org.nexo.grpc.auth.AuthServiceProto.BanUserRequest;
 import org.nexo.grpc.auth.AuthServiceProto.BanUserResponse;
+import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordRequest;
+import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordResponse;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleResponse;
+import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -41,5 +44,24 @@ public class AuthGrpcClient {
             log.warn("Failed to ban userId: {}, message: {}", userId, response.getMessage());
         }
         return response.getSuccess();
+    }
+
+    public void changePassword(String keycloakUserId, String oldPassword, String newPassword) {
+        ChangePasswordRequest request = ChangePasswordRequest.newBuilder()
+                .setUserId(keycloakUserId)
+                .setOldPassword(oldPassword)
+                .setNewPassword(newPassword)
+                .build();
+        ChangePasswordResponse response = authServiceBlockingStub.changePassword(request);
+        if (response.getSuccess()) {
+            log.info("Successfully changed password for keycloakUserId: {}",
+                    keycloakUserId);
+        } else {
+            log.warn("Failed to change password for keycloakUserId: {}, message: {}",
+                    keycloakUserId,
+                    response.getMessage());
+            throw new ResourceNotFoundException("Failed to change password: " +
+                    response.getMessage());
+        }
     }
 }

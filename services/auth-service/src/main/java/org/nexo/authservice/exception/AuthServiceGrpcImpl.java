@@ -1,4 +1,4 @@
-package org.nexo.authservice.grpc;
+package org.nexo.authservice.exception;
 
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +10,8 @@ import org.nexo.grpc.auth.AuthServiceProto.BanUserRequest;
 import org.nexo.grpc.auth.AuthServiceProto.BanUserResponse;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleResponse;
+import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordRequest;
+import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordResponse;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -62,6 +64,32 @@ public class AuthServiceGrpcImpl extends AuthServiceGrpc.AuthServiceImplBase {
                     responseObserver.onNext(BanUserResponse.newBuilder()
                             .setSuccess(false)
                             .setMessage("Failed to ban user: " + e.getMessage())
+                            .build());
+                    responseObserver.onCompleted();
+                })
+                .subscribe();
+    }
+
+    @Override
+    public void changePassword(ChangePasswordRequest request, StreamObserver<ChangePasswordResponse> responseObserver) {
+        String userId = request.getUserId();
+        String oldPassword = request.getOldPassword();
+        String newPassword = request.getNewPassword();
+
+        authService.changePassword(userId, oldPassword, newPassword)
+                .doOnSuccess(v -> {
+                    log.info("Successfully changed password for userId: {}", userId);
+                    responseObserver.onNext(ChangePasswordResponse.newBuilder()
+                            .setSuccess(true)
+                            .setMessage("Password changed successfully")
+                            .build());
+                    responseObserver.onCompleted();
+                })
+                .doOnError(e -> {
+                    log.error("Failed to change password for userId: {}", userId, e);
+                    responseObserver.onNext(ChangePasswordResponse.newBuilder()
+                            .setSuccess(false)
+                            .setMessage("Failed to change password: " + e.getMessage())
                             .build());
                     responseObserver.onCompleted();
                 })

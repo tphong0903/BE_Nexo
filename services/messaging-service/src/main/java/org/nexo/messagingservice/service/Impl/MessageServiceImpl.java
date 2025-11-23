@@ -11,8 +11,10 @@ import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.MessageMediaDTO;
 import org.nexo.messagingservice.dto.ReactionDTO;
 import org.nexo.messagingservice.dto.ReactionDetailDTO;
+import org.nexo.messagingservice.dto.ReactionUpdateDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.dto.UserDTO;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.enums.EMessageType;
 import org.nexo.messagingservice.enums.EReactionType;
@@ -47,6 +49,7 @@ public class MessageServiceImpl implements MessageService {
     private final MessageReactionRepository reactionRepository;
     private final MessageMediaRepository mediaRepository;
     private final UserGrpcClient userGrpcClient;
+    private final SimpMessagingTemplate messagingTemplate;
 
     public MessageDTO sendMessage(SendMessageRequest request, Long senderUserId) {
         ConversationModel conversation = conversationRepository.findById(request.getConversationId())
@@ -178,10 +181,7 @@ public class MessageServiceImpl implements MessageService {
         if (existingReaction != null) {
             existingReaction.setReactionType(reactionType);
             reactionRepository.save(existingReaction);
-            return;
         } else {
-            log.info("Adding new reaction");
-
             MessageReactionModel reaction = new MessageReactionModel();
             reaction.setMessage(message);
             reaction.setUserId(userId);
@@ -190,10 +190,34 @@ public class MessageServiceImpl implements MessageService {
             reactionRepository.save(reaction);
         }
 
+        List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(messageId);
+        List<ReactionDTO> reactions = aggregateReactions(reactionModels);
+        ReactionUpdateDTO update = ReactionUpdateDTO.builder()
+                .messageId(messageId)
+                .reactions(reactions)
+                .build();
+
+        messagingTemplate.convertAndSend(
+                "/topic/conversation/" + message.getConversation().getId() + "/reactions",
+                update);
     }
 
     public void removeReaction(Long messageId, Long userId, EReactionType reactionType) {
+        MessageModel message = messageRepository.findById(messageId)
+                .orElseThrow(() -> new IllegalArgumentException("Message not found"));
+
         reactionRepository.deleteByMessageIdAndUserIdAndReactionType(messageId, userId, reactionType);
+
+        List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(messageId);
+        List<ReactionDTO> reactions = aggregateReactions(reactionModels);
+        ReactionUpdateDTO update = ReactionUpdateDTO.builder()
+                .messageId(messageId)
+                .reactions(reactions)
+                .build();
+
+        messagingTemplate.convertAndSend(
+                "/topic/conversation/" + message.getConversation().getId() + "/reactions",
+                update);
     }
 
     private boolean isParticipant(Long conversationId, Long userId) {
@@ -260,33 +284,19 @@ public class MessageServiceImpl implements MessageService {
 
     @Override
     public List<ReactionDetailDTO> getMessageReactions(Long messageId, Long requestingUserId) {
-        // Kiểm tra message có tồn tại không
         MessageModel message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
-
-        // Kiểm tra user có quyền xem message này không (phải là participant của
-        // conversation)
         if (!isParticipant(message.getConversation().getId(), requestingUserId)) {
             throw new SecurityException("User is not a participant in this conversation");
         }
-
-        // Lấy tất cả reactions của message
         List<MessageReactionModel> reactions = reactionRepository.findByMessageId(messageId);
-
-        // Lấy danh sách userId
         List<Long> userIds = reactions.stream()
                 .map(MessageReactionModel::getUserId)
                 .distinct()
                 .collect(Collectors.toList());
-
-        // Lấy thông tin user từ gRPC
         List<UserDTOResponse2> users = userGrpcClient.getUsersByIds(userIds);
-
-        // Map user info theo userId để dễ tìm kiếm
         Map<Long, UserDTOResponse2> userMap = users.stream()
                 .collect(Collectors.toMap(UserDTOResponse2::getId, u -> u));
-
-        // Map reactions sang DTO kèm user info
         return reactions.stream()
                 .map(reaction -> {
                     UserDTOResponse2 user = userMap.get(reaction.getUserId());
@@ -302,4 +312,5 @@ public class MessageServiceImpl implements MessageService {
                 })
                 .collect(Collectors.toList());
     }
+
 }

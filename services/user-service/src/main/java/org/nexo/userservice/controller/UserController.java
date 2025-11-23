@@ -10,6 +10,7 @@ import jakarta.validation.Validator;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserSearchResponse;
@@ -181,4 +182,17 @@ public class UserController {
                 .data(null)
                 .build();
     }
+    @PostMapping("change-password")
+    public ResponseData<?> changePassword(
+            @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+            @Valid @RequestBody ChangePasswordRequest request) {
+        String accessToken = authHeader.replace("Bearer ", "").trim();
+        userService.changePassword(accessToken, request);
+        return ResponseData.builder()
+                .status(200)
+                .message("Password changed successfully")
+                .data(null)
+                .build();
+    }
+    
 }

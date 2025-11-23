@@ -1,5 +1,6 @@
 package org.nexo.userservice.service.Impl;
 
+import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
@@ -178,6 +179,17 @@ public class UserServiceImpl implements UserService {
         userRepository.save(updatedUser);
 
         publishUserEvent(updatedUser, "UPDATE");
+    }
+
+    @Transactional
+    public void changePassword(String accessToken, ChangePasswordRequest request) {
+        String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+        if (user.getAccountStatus() != EAccountStatus.ACTIVE) {
+            throw new ResourceNotFoundException("Cannot change password for inactive user");
+        }
+        authGrpcClient.changePassword(keycloakUserId, request.getOldPassword(), request.getNewPassword());
     }
 
 }

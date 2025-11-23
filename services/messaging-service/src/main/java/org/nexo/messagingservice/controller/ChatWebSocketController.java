@@ -113,6 +113,28 @@ public class ChatWebSocketController {
                 new ReadAllDTO(request.getConversationId(), lastReadMessageId, userId));
     }
 
+    @MessageMapping("/chat.react")
+    public void reactToMessage(@Payload ReactMessageWebSocketRequest request,
+            Authentication authentication) {
+        String keycloakUserId = (String) authentication.getDetails();
+
+        UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = userDto.getUserId();
+
+        messageService.addReaction(request.getMessageId(), userId, request.getReactionType());
+    }
+
+    @MessageMapping("/chat.remove-reaction")
+    public void removeReaction(@Payload RemoveReactionWebSocketRequest request,
+            Authentication authentication) {
+        String keycloakUserId = (String) authentication.getDetails();
+
+        UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = userDto.getUserId();
+
+        messageService.removeReaction(request.getMessageId(), userId, request.getReactionType());
+    }
+
     // bắt lỗi
     @MessageExceptionHandler
     public void handleWebSocketException(Exception e, Authentication authentication) {

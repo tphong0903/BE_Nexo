@@ -31,6 +31,8 @@ import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -567,6 +569,83 @@ public class AuthServiceImpl implements AuthService {
                                 } else {
                                     tokenResponse.setMissingInfo(true);
                                     return Mono.just(tokenResponse);
+                                }
+                            });
+                });
+    }
+
+    private Mono<Void> updatePassword(String userId, String newPassword, String adminToken) {
+        ObjectNode passwordNode = objectMapper.createObjectNode();
+        passwordNode.put("type", PASSWORD);
+        passwordNode.put("value", newPassword);
+        passwordNode.put("temporary", false);
+
+        return webClient.put()
+                .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
+                        + "/users/" + userId + "/reset-password")
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(passwordNode)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .doOnSuccess(v -> log.info("Password updated successfully for userId: {}", userId))
+                .doOnError(error -> {
+                    log.error("Failed to update password for userId: {}, error: {}", userId, error.getMessage());
+                    if (error instanceof WebClientResponseException) {
+                        WebClientResponseException ex = 
+                            (WebClientResponseException) error;
+                        log.error("Response body: {}", ex.getResponseBodyAsString());
+                    }
+                });
+    }
+
+    @Override
+    public Mono<Void> changePassword(String keycloakUserId, String oldPassword, String newPassword) {
+        return getAdminToken()
+                .flatMap(adminToken -> {
+                    return webClient.get()
+                            .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
+                                    + "/users/" + keycloakUserId)
+                            .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                            .retrieve()
+                            .bodyToMono(String.class)
+                            .flatMap(userInfo -> {
+                                try {
+                                    JsonNode userNode = objectMapper.readTree(userInfo);
+                                    String email = userNode.has("email") ? userNode.get("email").asText() : null;
+
+                                    if (email == null) {
+                                        return Mono.error(new KeycloakClientException(404, "User email not found"));
+                                    }
+                                    return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
+                                            .flatMap(clientSecret -> {
+                                                MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+                                                formData.add(GRANT_TYPE, GRANT_TYPE_PASSWORD);
+                                                formData.add(CLIENT_ID, keycloakConfig.getClientId());
+                                                formData.add(CLIENT_SECRET, clientSecret);
+                                                formData.add(USERNAME, email);
+                                                formData.add(PASSWORD, oldPassword);
+
+                                                return webClient.post()
+                                                        .uri(keycloakConfig.getLoginUrl())
+                                                        .body(BodyInserters.fromFormData(formData))
+                                                        .exchangeToMono(response -> {
+                                                            if (response.statusCode().is2xxSuccessful()) {
+                                                                return updatePassword(keycloakUserId, newPassword,
+                                                                        adminToken);
+                                                            } else {
+                                                                log.warn(
+                                                                        "Old password verification failed for userId: {}",
+                                                                        keycloakUserId);
+                                                                return Mono.error(new KeycloakClientException(400,
+                                                                        "Old password is incorrect"));
+                                                            }
+                                                        });
+                                            });
+                                } catch (Exception e) {
+                                    log.error("Failed to parse user info: {}", e.getMessage());
+                                    return Mono.error(
+                                            new KeycloakClientException(500, "Failed to process user information"));
                                 }
                             });
                 });

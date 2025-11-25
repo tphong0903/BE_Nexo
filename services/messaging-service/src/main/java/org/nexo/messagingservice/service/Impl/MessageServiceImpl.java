@@ -248,6 +248,7 @@ public class MessageServiceImpl implements MessageService {
         return MessageDTO.builder()
                 .id(message.getId())
                 .conversationId(message.getConversation().getId())
+                .status(message.getConversation().getStatus())
                 .sender(senderUserDTO)
                 .content(message.getContent())
                 .messageType(message.getMessageType())

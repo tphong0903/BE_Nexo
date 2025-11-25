@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+
+import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.enums.EMessageType;
 
 import java.time.LocalDateTime;
@@ -19,6 +21,7 @@ public class MessageDTO {
     private UserDTO sender;
     private String content;
     private EMessageType messageType;
+    private EConversationStatus status;
     private Long replyToMessageId;
     private MessageDTO replyToMessage;
     private List<MessageMediaDTO> mediaList;

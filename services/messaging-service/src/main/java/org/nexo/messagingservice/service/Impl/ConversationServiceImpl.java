@@ -246,6 +246,7 @@ public class ConversationServiceImpl implements ConversationService {
 
         return ConversationResponseDTO.builder()
                 .id(conversation.getId())
+                .senderUserId(requestingUserId)
                 .fullname(displayName)
                 .avatarUrl(displayAvatar)
                 .onlineStatus(displayOnlineStatus)

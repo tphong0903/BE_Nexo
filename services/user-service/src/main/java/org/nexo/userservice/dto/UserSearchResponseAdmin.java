@@ -11,7 +11,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @Builder
 public class UserSearchResponseAdmin {
-    private List<UserResonspeAdmin> users;
+    private List<UserResponseAdmin> users;
     private Integer totalHits;
     private Integer limit;
     private Integer offset;

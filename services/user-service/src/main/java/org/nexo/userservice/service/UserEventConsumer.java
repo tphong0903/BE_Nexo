@@ -3,7 +3,7 @@ package org.nexo.userservice.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.nexo.userservice.dto.UserResonspeAdmin;
+import org.nexo.userservice.dto.UserResponseAdmin;
 import org.nexo.userservice.dto.UserSearchDocument;
 import org.nexo.userservice.dto.UserSearchEvent;
 import org.nexo.userservice.enums.EAccountStatus;
@@ -25,7 +25,7 @@ public class UserEventConsumer {
     public void consumeUserEvent(UserSearchEvent event) {
 
         UserSearchDocument document = convertToDocument(event);
-        UserResonspeAdmin documentAdmin = convertToDocumentAdmin(event);
+        UserResponseAdmin documentAdmin = convertToDocumentAdmin(event);
         try {
             switch (event.getEventType()) {
                 case "CREATE":
@@ -51,15 +51,15 @@ public class UserEventConsumer {
                 .build();
     }
 
-    private UserResonspeAdmin convertToDocumentAdmin(UserSearchEvent event) {
+    private UserResponseAdmin convertToDocumentAdmin(UserSearchEvent event) {
 
-        return UserResonspeAdmin.builder()
+        return UserResponseAdmin.builder()
                 .id(event.getId())
                 .username(event.getUsername())
                 .fullName(event.getFullName())
                 .email(event.getEmail())
-                .accountStatus(Enum.valueOf(EAccountStatus.class, event.getAccountStatus()))
-                .role(Enum.valueOf(ERole.class, event.getRole()))
+                .accountStatus(EAccountStatus.fromString(event.getAccountStatus()))
+                .role(event.getRole() != null ? Enum.valueOf(ERole.class, event.getRole()) : ERole.USER)
                 .violationCount(event.getViolationCount())
                 .build();
     }

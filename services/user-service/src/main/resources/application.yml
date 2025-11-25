@@ -65,12 +65,12 @@ grpc:
     auth-service:
       address: "static://localhost:9099"
       negotiationType: plaintext
-
-logging:
-  level:
-    org.nexo.userservice: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    interaction-service:
+      address: "static://localhost:9095"
+      negotiationType: plaintext
+    post-service:
+      address: "static://localhost:9094"
+      negotiationType: plaintext
 
 meilisearch:
   host: http://localhost:7700
@@ -81,3 +81,8 @@ meilisearch:
 kafka:
   topics:
     user-events: user-events
+
+logging:
+  level:
+    "org.apache.kafka": OFF
+    "org.springframework.kafka": OFF

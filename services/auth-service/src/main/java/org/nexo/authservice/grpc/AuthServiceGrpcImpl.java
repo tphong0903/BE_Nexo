@@ -1,4 +1,4 @@
-package org.nexo.authservice.exception;
+package org.nexo.authservice.grpc;
 
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +10,8 @@ import org.nexo.grpc.auth.AuthServiceProto.BanUserRequest;
 import org.nexo.grpc.auth.AuthServiceProto.BanUserResponse;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleResponse;
+import org.nexo.grpc.auth.AuthServiceProto.UnBanUserRequest;
+import org.nexo.grpc.auth.AuthServiceProto.UnBanUserResponse;
 import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordResponse;
 
@@ -64,6 +66,30 @@ public class AuthServiceGrpcImpl extends AuthServiceGrpc.AuthServiceImplBase {
                     responseObserver.onNext(BanUserResponse.newBuilder()
                             .setSuccess(false)
                             .setMessage("Failed to ban user: " + e.getMessage())
+                            .build());
+                    responseObserver.onCompleted();
+                })
+                .subscribe();
+    }
+
+    @Override
+    public void unBanUser(UnBanUserRequest request, StreamObserver<UnBanUserResponse> responseObserver) {
+        String userId = request.getUserId();
+
+        authService.unBanUser(userId)
+                .doOnSuccess(v -> {
+                    log.info("Successfully unbanned userId: {}", userId);
+                    responseObserver.onNext(UnBanUserResponse.newBuilder()
+                            .setSuccess(true)
+                            .setMessage("User unbanned successfully")
+                            .build());
+                    responseObserver.onCompleted();
+                })
+                .doOnError(e -> {
+                    log.error("Failed to unban userId: {}", userId, e);
+                    responseObserver.onNext(UnBanUserResponse.newBuilder()
+                            .setSuccess(false)
+                            .setMessage("Failed to unban user: " + e.getMessage())
                             .build());
                     responseObserver.onCompleted();
                 })

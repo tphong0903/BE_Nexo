@@ -8,6 +8,8 @@ option java_outer_classname = "AuthServiceProto";
 service AuthService {
   rpc ChangeUserRole(ChangeUserRoleRequest) returns (ChangeUserRoleResponse);
   rpc BanUser(BanUserRequest) returns (BanUserResponse);
+  rpc UnBanUser(UnBanUserRequest) returns (UnBanUserResponse);
+
   rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
 }
 
@@ -26,6 +28,14 @@ message BanUserRequest {
 }
 
 message BanUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+message UnBanUserRequest {
+  string user_id = 1;
+}
+
+message UnBanUserResponse {
   bool success = 1;
   string message = 2;
 }

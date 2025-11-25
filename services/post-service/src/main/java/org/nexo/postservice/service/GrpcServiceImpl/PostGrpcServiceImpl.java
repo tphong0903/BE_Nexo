@@ -34,7 +34,8 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     private final ObjectMapper objectMapper;
 
     @Override
-    public void getPostsByIds(PostServiceOuterClass.GetPostsByIdsRequest request, StreamObserver<PostServiceOuterClass.GetPostsByIdsResponse> responseObserver) {
+    public void getPostsByIds(PostServiceOuterClass.GetPostsByIdsRequest request,
+            StreamObserver<PostServiceOuterClass.GetPostsByIdsResponse> responseObserver) {
         try {
             Long viewerId = request.getUserId();
             List<Long> posts = request.getPostIdsList();
@@ -44,7 +45,8 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             List<PostServiceOuterClass.PostResponse> responses = postDTOs.stream()
                     .filter(Objects::nonNull)
                     .map(dto -> {
-                        PostServiceOuterClass.PostResponse.Builder builder = PostServiceOuterClass.PostResponse.newBuilder()
+                        PostServiceOuterClass.PostResponse.Builder builder = PostServiceOuterClass.PostResponse
+                                .newBuilder()
                                 .setPostId(dto.getPostId())
                                 .setUserId(dto.getUserId())
                                 .setUserName(dto.getUserName())
@@ -71,18 +73,17 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                                                     .setUserId(tag.getUserId())
                                                     .setUserName(tag.getUserName())
                                                     .build())
-                                            .toList()
-                            );
+                                            .toList());
                         }
 
                         return builder.build();
                     })
                     .toList();
 
-            PostServiceOuterClass.GetPostsByIdsResponse response =
-                    PostServiceOuterClass.GetPostsByIdsResponse.newBuilder()
-                            .addAllPosts(responses)
-                            .build();
+            PostServiceOuterClass.GetPostsByIdsResponse response = PostServiceOuterClass.GetPostsByIdsResponse
+                    .newBuilder()
+                    .addAllPosts(responses)
+                    .build();
 
             responseObserver.onNext(response);
             responseObserver.onCompleted();
@@ -91,13 +92,13 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onError(
                     Status.INVALID_ARGUMENT
                             .withDescription(e.getMessage())
-                            .asRuntimeException()
-            );
+                            .asRuntimeException());
         }
     }
 
     @Override
-    public void getReelsByIds(PostServiceOuterClass.GetPostsByIdsRequest request, StreamObserver<PostServiceOuterClass.GetReelsByIdsResponse> responseObserver) {
+    public void getReelsByIds(PostServiceOuterClass.GetPostsByIdsRequest request,
+            StreamObserver<PostServiceOuterClass.GetReelsByIdsResponse> responseObserver) {
         try {
             Long viewerId = request.getUserId();
             List<Long> posts = request.getPostIdsList();
@@ -107,7 +108,8 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             List<PostServiceOuterClass.ReelResponse> responses = reelDTOs.stream()
                     .filter(Objects::nonNull)
                     .map(dto -> {
-                        PostServiceOuterClass.ReelResponse.Builder builder = PostServiceOuterClass.ReelResponse.newBuilder()
+                        PostServiceOuterClass.ReelResponse.Builder builder = PostServiceOuterClass.ReelResponse
+                                .newBuilder()
                                 .setPostId(dto.getReelId())
                                 .setUserId(dto.getUserId())
                                 .setUserName(dto.getUserName())
@@ -126,15 +128,14 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                                         : 0L)
                                 .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false);
 
-
                         return builder.build();
                     })
                     .toList();
 
-            PostServiceOuterClass.GetReelsByIdsResponse response =
-                    PostServiceOuterClass.GetReelsByIdsResponse.newBuilder()
-                            .addAllReels(responses)
-                            .build();
+            PostServiceOuterClass.GetReelsByIdsResponse response = PostServiceOuterClass.GetReelsByIdsResponse
+                    .newBuilder()
+                    .addAllReels(responses)
+                    .build();
 
             responseObserver.onNext(response);
             responseObserver.onCompleted();
@@ -143,13 +144,13 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onError(
                     Status.INVALID_ARGUMENT
                             .withDescription(e.getMessage())
-                            .asRuntimeException()
-            );
+                            .asRuntimeException());
         }
     }
 
     @Override
-    public void getPostById(PostServiceOuterClass.GetPostRequest request, StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {
+    public void getPostById(PostServiceOuterClass.GetPostRequest request,
+            StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {
         try {
             Long id = request.getId();
             PostResponseDTO dto = postService.getPostById2(id);
@@ -173,13 +174,12 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                     .addAllListUserTag(
                             dto.getListUserTag() != null
                                     ? dto.getListUserTag().stream()
-                                    .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
-                                            .setUserId(tag.getUserId())
-                                            .setUserName(tag.getUserName())
-                                            .build())
-                                    .toList()
-                                    : List.of()
-                    )
+                                            .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
+                                                    .setUserId(tag.getUserId())
+                                                    .setUserName(tag.getUserName())
+                                                    .build())
+                                            .toList()
+                                    : List.of())
                     .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
                     .setCreatedAt(dto.getCreatedAt() != null
                             ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -196,13 +196,13 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onError(
                     Status.INVALID_ARGUMENT
                             .withDescription(e.getMessage())
-                            .asRuntimeException()
-            );
+                            .asRuntimeException());
         }
     }
 
     @Override
-    public void getReelById(PostServiceOuterClass.GetPostRequest request, StreamObserver<PostServiceOuterClass.ReelResponse> responseObserver) {
+    public void getReelById(PostServiceOuterClass.GetPostRequest request,
+            StreamObserver<PostServiceOuterClass.ReelResponse> responseObserver) {
         try {
             Long id = request.getId();
             ReelResponseDTO dto = postService.getReelById2(id);
@@ -238,13 +238,13 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onError(
                     Status.INVALID_ARGUMENT
                             .withDescription(e.getMessage())
-                            .asRuntimeException()
-            );
+                            .asRuntimeException());
         }
     }
 
     @Override
-    public void addLikeQuantityById(org.nexo.grpc.post.PostServiceOuterClass.GetPostRequest2 request, StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
+    public void addLikeQuantityById(org.nexo.grpc.post.PostServiceOuterClass.GetPostRequest2 request,
+            StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
         try {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();
@@ -260,15 +260,18 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
 
             int count = isIncrease ? 1 : -1;
             if (isPost) {
-                PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
+                PostModel model = postRepository.findById(id)
+                        .orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
                 model.setLikeQuantity(model.getLikeQuantity() + count);
                 postRepository.save(model);
             } else {
-                ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
+                ReelModel model = reelRepository.findById(id)
+                        .orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
                 model.setLikeQuantity(model.getLikeQuantity() + count);
                 reelRepository.save(model);
             }
-            PostServiceOuterClass.PostMessageResponse response = PostServiceOuterClass.PostMessageResponse.newBuilder().setMessage("Success").build();
+            PostServiceOuterClass.PostMessageResponse response = PostServiceOuterClass.PostMessageResponse.newBuilder()
+                    .setMessage("Success").build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
@@ -276,13 +279,13 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onError(
                     Status.INVALID_ARGUMENT
                             .withDescription(e.getMessage())
-                            .asRuntimeException()
-            );
+                            .asRuntimeException());
         }
     }
 
     @Override
-    public void addCommentQuantityById(PostServiceOuterClass.GetPostRequest2 request, StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
+    public void addCommentQuantityById(PostServiceOuterClass.GetPostRequest2 request,
+            StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
         try {
             Long id = request.getId();
             Boolean isPost = request.getIsPost();
@@ -297,15 +300,18 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             }
             int count = isIncrease ? 1 : -1;
             if (isPost) {
-                PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
+                PostModel model = postRepository.findById(id)
+                        .orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
                 model.setCommentQuantity(model.getCommentQuantity() + count);
                 postRepository.save(model);
             } else {
-                ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
+                ReelModel model = reelRepository.findById(id)
+                        .orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
                 model.setCommentQuantity(model.getCommentQuantity() + count);
                 reelRepository.save(model);
             }
-            PostServiceOuterClass.PostMessageResponse response = PostServiceOuterClass.PostMessageResponse.newBuilder().setMessage("Success").build();
+            PostServiceOuterClass.PostMessageResponse response = PostServiceOuterClass.PostMessageResponse.newBuilder()
+                    .setMessage("Success").build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
         } catch (Exception e) {
@@ -313,8 +319,31 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
             responseObserver.onError(
                     Status.INVALID_ARGUMENT
                             .withDescription(e.getMessage())
-                            .asRuntimeException()
-            );
+                            .asRuntimeException());
+        }
+    }
+
+    @Override
+    public void getUserPostsCount(PostServiceOuterClass.GetUserPostsCountRequest request,
+            StreamObserver<PostServiceOuterClass.GetUserPostsCountResponse> responseObserver) {
+        try {
+            Long userId = request.getUserId();
+            long postsCount = postRepository.countByUserIdAndIsActive(userId, true);
+            long reelsCount = reelRepository.countByUserIdAndIsActive(userId, true);
+            long totalCount = postsCount + reelsCount;
+            PostServiceOuterClass.GetUserPostsCountResponse response = PostServiceOuterClass.GetUserPostsCountResponse
+                    .newBuilder()
+                    .setPostsCount(totalCount)
+                    .build();
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            log.error("Error in getUserPostsCount for userId: {}", request.getUserId(), e);
+            responseObserver.onError(
+                    Status.INVALID_ARGUMENT
+                            .withDescription(e.getMessage())
+                            .asRuntimeException());
         }
     }
 }

@@ -9,6 +9,8 @@ import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordResponse;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleResponse;
+import org.nexo.grpc.auth.AuthServiceProto.UnBanUserRequest;
+import org.nexo.grpc.auth.AuthServiceProto.UnBanUserResponse;
 import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.springframework.stereotype.Component;
 
@@ -42,6 +44,19 @@ public class AuthGrpcClient {
             log.info("Successfully banned userId: {}", userId);
         } else {
             log.warn("Failed to ban userId: {}, message: {}", userId, response.getMessage());
+        }
+        return response.getSuccess();
+    }
+
+    public boolean unBanUser(String userId) {
+        UnBanUserRequest request = UnBanUserRequest.newBuilder()
+                .setUserId(userId)
+                .build();
+        UnBanUserResponse response = authServiceBlockingStub.unBanUser(request);
+        if (response.getSuccess()) {
+            log.info("Successfully unbanned userId: {}", userId);
+        } else {
+            log.warn("Failed to unban userId: {}, message: {}", userId, response.getMessage());
         }
         return response.getSuccess();
     }

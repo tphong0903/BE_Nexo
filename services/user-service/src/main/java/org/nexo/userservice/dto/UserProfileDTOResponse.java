@@ -14,6 +14,8 @@ public class UserProfileDTOResponse {
     private Boolean isPrivate;
     private Boolean isFollowing;
     
+    private Boolean isCloseFriend;
+
     @JsonInclude(JsonInclude.Include.NON_NULL)
     private Boolean hasRequestedFollow;
     private Long followers;

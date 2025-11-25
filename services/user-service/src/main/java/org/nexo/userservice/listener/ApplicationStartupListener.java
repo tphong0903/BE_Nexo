@@ -3,7 +3,7 @@ package org.nexo.userservice.listener;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.nexo.userservice.dto.UserResonspeAdmin;
+import org.nexo.userservice.dto.UserResponseAdmin;
 import org.nexo.userservice.dto.UserSearchDocument;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.model.UserModel;
@@ -38,7 +38,7 @@ public class ApplicationStartupListener {
             List<UserSearchDocument> documents = allUsers.stream()
                     .map(this::convertToDocument)
                     .collect(Collectors.toList());
-            List<UserResonspeAdmin> documentsAdmin = allUsersAdmin.stream()
+            List<UserResponseAdmin> documentsAdmin = allUsersAdmin.stream()
                     .map(this::convertToDocumentAdmin)
                     .collect(Collectors.toList());
             meilisearchService.reindexAllUsers(documents, documentsAdmin);
@@ -57,8 +57,8 @@ public class ApplicationStartupListener {
                 .build();
     }
 
-    private UserResonspeAdmin convertToDocumentAdmin(UserModel user) {
-        return UserResonspeAdmin.builder()
+    private UserResponseAdmin convertToDocumentAdmin(UserModel user) {
+        return UserResponseAdmin.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .fullName(user.getFullName())

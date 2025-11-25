@@ -28,5 +28,6 @@ public interface ICommentRepository extends JpaRepository<CommentModel, Long> {
             "ORDER BY DATE(u.createdAt)")
     List<Object[]> countCommentsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    long countByUserId(Long userId);
 
 }

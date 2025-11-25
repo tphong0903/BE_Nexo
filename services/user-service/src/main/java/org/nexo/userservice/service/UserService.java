@@ -19,8 +19,12 @@ public interface UserService {
     void assignRoleToUser(String username, String role);
 
     void banUser(String username);
+    
+    void unbanUser(String username);
 
     void updateUserOauth(String keycloakUserId, UpdateUserRequest request);
 
     void changePassword(String accessToken, ChangePasswordRequest request);
+
+    org.nexo.userservice.dto.UserStatisticsResponse getUserStatistics(Long userId);
 }

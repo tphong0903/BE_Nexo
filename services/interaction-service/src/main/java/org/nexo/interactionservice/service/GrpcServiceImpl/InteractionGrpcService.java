@@ -26,7 +26,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void existLikesByUserAndPostIds(InteractionServiceOuterClass.BatchIsLikeRequest request,
-                                           StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
+            StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
         Long userId = request.getUserId();
         List<Long> postIds = request.getPostIdsList();
 
@@ -40,7 +40,8 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
                 })
                 .collect(Collectors.toList());
 
-        InteractionServiceOuterClass.BatchIsLikeResponse response = InteractionServiceOuterClass.BatchIsLikeResponse.newBuilder()
+        InteractionServiceOuterClass.BatchIsLikeResponse response = InteractionServiceOuterClass.BatchIsLikeResponse
+                .newBuilder()
                 .addAllResults(results)
                 .build();
 
@@ -50,7 +51,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void existLikesByUserAndReelIds(InteractionServiceOuterClass.BatchIsLikeRequest request,
-                                           StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
+            StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
         Long userId = request.getUserId();
         List<Long> postIds = request.getPostIdsList();
 
@@ -64,7 +65,8 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
                 })
                 .collect(Collectors.toList());
 
-        InteractionServiceOuterClass.BatchIsLikeResponse response = InteractionServiceOuterClass.BatchIsLikeResponse.newBuilder()
+        InteractionServiceOuterClass.BatchIsLikeResponse response = InteractionServiceOuterClass.BatchIsLikeResponse
+                .newBuilder()
                 .addAllResults(results)
                 .build();
 
@@ -73,10 +75,12 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
     }
 
     @Override
-    public void getTotalInteractions(InteractionServiceOuterClass.Empty request, StreamObserver<InteractionServiceOuterClass.QuantityTotalInteract> responseObserver) {
+    public void getTotalInteractions(InteractionServiceOuterClass.Empty request,
+            StreamObserver<InteractionServiceOuterClass.QuantityTotalInteract> responseObserver) {
         long total = likeRepository.count() + commentRepository.count();
 
-        InteractionServiceOuterClass.QuantityTotalInteract response = InteractionServiceOuterClass.QuantityTotalInteract.newBuilder()
+        InteractionServiceOuterClass.QuantityTotalInteract response = InteractionServiceOuterClass.QuantityTotalInteract
+                .newBuilder()
                 .setQuantity(total)
                 .build();
 
@@ -85,20 +89,24 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
     }
 
     @Override
-    public void getPercentInteractionsInThisMonth(InteractionServiceOuterClass.Empty request, StreamObserver<InteractionServiceOuterClass.PercentInteract> responseObserver) {
+    public void getPercentInteractionsInThisMonth(InteractionServiceOuterClass.Empty request,
+            StreamObserver<InteractionServiceOuterClass.PercentInteract> responseObserver) {
         LocalDateTime startOfThisMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         LocalDateTime startOfLastMonth = startOfThisMonth.minusMonths(1);
         LocalDateTime endOfLastMonth = startOfThisMonth;
 
-        long thisMonth = likeRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1)) + commentRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1));
-        long lastMonth = likeRepository.countByCreatedAtBetween(startOfLastMonth, endOfLastMonth) + commentRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1));
+        long thisMonth = likeRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1))
+                + commentRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1));
+        long lastMonth = likeRepository.countByCreatedAtBetween(startOfLastMonth, endOfLastMonth)
+                + commentRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1));
 
         double percent = 0;
         if (lastMonth > 0) {
             percent = ((double) (thisMonth - lastMonth) / lastMonth) * 100;
         }
 
-        InteractionServiceOuterClass.PercentInteract response = InteractionServiceOuterClass.PercentInteract.newBuilder()
+        InteractionServiceOuterClass.PercentInteract response = InteractionServiceOuterClass.PercentInteract
+                .newBuilder()
                 .setPercent(percent)
                 .build();
 
@@ -108,7 +116,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void getInteractionsByTime(InteractionServiceOuterClass.DateRange request,
-                                      StreamObserver<InteractionServiceOuterClass.GetUsersByTimeResponse> responseObserver) {
+            StreamObserver<InteractionServiceOuterClass.GetUsersByTimeResponse> responseObserver) {
         LocalDateTime start = LocalDateTime.parse(request.getStartDate());
         LocalDateTime end = LocalDateTime.parse(request.getEndDate());
 
@@ -129,19 +137,36 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
             interactionMap.put(date, interactionMap.getOrDefault(date, 0L) + total);
         }
 
-        InteractionServiceOuterClass.GetUsersByTimeResponse.Builder responseBuilder =
-                InteractionServiceOuterClass.GetUsersByTimeResponse.newBuilder();
+        InteractionServiceOuterClass.GetUsersByTimeResponse.Builder responseBuilder = InteractionServiceOuterClass.GetUsersByTimeResponse
+                .newBuilder();
 
         for (Map.Entry<String, Long> entry : interactionMap.entrySet()) {
             responseBuilder.addData(
                     InteractionServiceOuterClass.UserCountByDate.newBuilder()
                             .setDate(entry.getKey())
                             .setCount(entry.getValue())
-                            .build()
-            );
+                            .build());
         }
 
         responseObserver.onNext(responseBuilder.build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getUserInteractionsCount(InteractionServiceOuterClass.GetUserInteractionsCountRequest request,
+            StreamObserver<InteractionServiceOuterClass.GetUserInteractionsCountResponse> responseObserver) {
+        Long userId = request.getUserId();
+        long likesCount = likeRepository.countByUserId(userId);
+        long commentsCount = commentRepository.countByUserId(userId);
+
+        long totalInteractions = likesCount + commentsCount;
+
+        InteractionServiceOuterClass.GetUserInteractionsCountResponse response = InteractionServiceOuterClass.GetUserInteractionsCountResponse
+                .newBuilder()
+                .setInteractionsCount(totalInteractions)
+                .build();
+
+        responseObserver.onNext(response);
         responseObserver.onCompleted();
     }
 }

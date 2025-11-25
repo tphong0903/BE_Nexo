@@ -2,6 +2,9 @@ syntax = "proto3";
 
 package org.nexo.grpc.post;
 
+option java_package = "org.nexo.grpc.post";
+option java_outer_classname = "PostServiceOuterClass";
+
 service PostService {
   rpc GetPostById (GetPostRequest) returns (PostResponse);
   rpc GetReelById (GetPostRequest) returns (ReelResponse);
@@ -74,8 +77,11 @@ message UserTag {
 
 message GetUserPostsCountRequest {
   int64 userId = 1;
+  optional int64 startDate = 2; // Unix timestamp in milliseconds (optional)
+  optional int64 endDate = 3;   // Unix timestamp in milliseconds (optional)
 }
 
 message GetUserPostsCountResponse {
-  int64 postsCount = 1; // total posts + reels 
+  int64 postsCount = 1; // total posts + reels (filtered by date range if provided)
 }
+

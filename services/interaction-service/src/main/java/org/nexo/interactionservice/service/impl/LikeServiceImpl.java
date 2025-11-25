@@ -101,7 +101,7 @@ public class LikeServiceImpl implements ILikeService {
     }
 
     @Override
-    @Cacheable(value = "likes", key = "'post_like'+ #id + '_' + #pageNo + '_' + #pageSize")
+//    @Cacheable(value = "likes", key = "'post_like'+ #id + '_' + #pageNo + '_' + #pageSize")
     public PageModelResponse<FolloweeDTO> getLikePostDetail(Long id, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -141,7 +141,7 @@ public class LikeServiceImpl implements ILikeService {
     }
 
     @Override
-    @Cacheable(value = "likes", key = "'reel_like'+ #id + '_' + #pageNo + '_' + #pageSize")
+//    @Cacheable(value = "likes", key = "'reel_like'+ #id + '_' + #pageNo + '_' + #pageSize")
     public PageModelResponse<FolloweeDTO> getLikeReelDetail(Long id, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -181,7 +181,7 @@ public class LikeServiceImpl implements ILikeService {
     }
 
     @Override
-    @Cacheable(value = "likes", key = "'comment_like'+ #id + '_' + #pageNo + '_' + #pageSize")
+//    @Cacheable(value = "likes", key = "'comment_like'+ #id + '_' + #pageNo + '_' + #pageSize")
     public PageModelResponse<FolloweeDTO> getLikeCommentDetail(Long id, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);

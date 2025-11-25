@@ -133,7 +133,7 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     @Override
-    @Cacheable(value = "comments", key = "'post'+ #postId + '_' + #pageNo + '_' + #pageSize")
+//    @Cacheable(value = "comments", key = "'post'+ #postId + '_' + #pageNo + '_' + #pageSize")
     public ListCommentResponse getCommentOfPost(Long postId, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -159,7 +159,7 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     @Override
-    @Cacheable(value = "comments", key = "'reel'+ #reelId + '_' + #pageNo + '_' + #pageSize")
+//    @Cacheable(value = "comments", key = "'reel'+ #reelId + '_' + #pageNo + '_' + #pageSize")
     public ListCommentResponse getCommentOfReel(Long reelId, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -185,7 +185,7 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     @Override
-    @Cacheable(value = "comments", key = "'replies'+ #commentId + '_' + #pageNo + '_' + #pageSize")
+//    @Cacheable(value = "comments", key = "'replies'+ #commentId + '_' + #pageNo + '_' + #pageSize")
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);

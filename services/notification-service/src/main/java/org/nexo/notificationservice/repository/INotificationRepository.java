@@ -11,7 +11,9 @@ import java.util.List;
 
 @Repository
 public interface INotificationRepository extends JpaRepository<NotificationModel, Long> {
-    Page<NotificationModel> getNotificationModelByRecipientId(Long id, Pageable pageable);
+    Page<NotificationModel> findByRecipientIdAndActorIdNot(Long recipientId, Long actorId, Pageable pageable);
+
+    Boolean existsByRecipientIdAndActorIdAndMessageAndTargetUrl(Long recipientId, Long actorId, String msg, String url);
 
     List<NotificationModel> getAllByRecipientIdAndIsRead(Long id, Boolean isRead);
 

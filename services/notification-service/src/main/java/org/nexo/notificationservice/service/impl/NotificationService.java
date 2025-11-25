@@ -40,7 +40,7 @@ public class NotificationService implements INotificationService {
     @Override
     public PageModelResponse<?> getNotifications(Pageable pageable) {
         Long userId = securityUtil.getUserIdFromToken();
-        Page<NotificationModel> notificationPage = notificationRepository.getNotificationModelByRecipientId(userId, pageable);
+        Page<NotificationModel> notificationPage = notificationRepository.findByRecipientIdAndActorIdNot(userId, userId, pageable);
         List<NotificationModel> rawNotifications = notificationPage.getContent();
 
         if (rawNotifications.isEmpty()) {
@@ -206,21 +206,24 @@ public class NotificationService implements INotificationService {
 
             default -> "Có một thông báo mới";
         };
+        if (notificationRepository.existsByRecipientIdAndActorIdAndMessageAndTargetUrl(recipient.getId(), actor.getId(), message, messageDTO.getTargetUrl())) {
+            log.info("Notification sent to {}: {} is exist", recipient.getUsername(), message);
+        } else {
+            notificationRepository.save(NotificationModel.builder()
+                    .notificationType(ENotificationType.valueOf(messageDTO.getNotificationType()))
+                    .targetUrl(messageDTO.getTargetUrl())
+                    .isRead(false)
+                    .actorId(actor.getId())
+                    .recipientId(recipient.getId())
+                    .message(message)
+                    .build());
+            String destination = "/queue/notifications";
+            log.info("==> [WEBSOCKET] Attempting to send message to user '{}' at destination '{}'. Message: '{}'",
+                    recipient.getUsername(), destination, message);
+            messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", message);
 
-        notificationRepository.save(NotificationModel.builder()
-                .notificationType(ENotificationType.valueOf(messageDTO.getNotificationType()))
-                .targetUrl(messageDTO.getTargetUrl())
-                .isRead(false)
-                .actorId(actor.getId())
-                .recipientId(recipient.getId())
-                .message(message)
-                .build());
-        String destination = "/queue/notifications";
-        log.info("==> [WEBSOCKET] Attempting to send message to user '{}' at destination '{}'. Message: '{}'",
-                recipient.getUsername(), destination, message);
-        messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", message);
-
-        log.info("Notification sent to {}: {}", recipient.getUsername(), message);
+            log.info("Notification sent to {}: {}", recipient.getUsername(), message);
+        }
     }
 
     private String generateDynamicMessage(List<UserDTO> users, ENotificationType type) {

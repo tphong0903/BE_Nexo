@@ -14,6 +14,7 @@ import org.nexo.interactionservice.service.ICommentMentionService;
 import org.nexo.interactionservice.service.ICommentService;
 import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -32,6 +33,7 @@ public class CommentServiceImpl implements ICommentService {
     private final PostGrpcClient postGrpcClient;
     private final CommentMapper commentMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final CacheService cacheService;
 
     @Override
     public String saveComment(CommentDto a) {
@@ -55,12 +57,15 @@ public class CommentServiceImpl implements ICommentService {
 
         if (a.getPostId() != null && a.getPostId() != 0) {
             model.setPostId(a.getPostId());
+            cacheService.evictByPrefix("post" + a.getPostId());
         } else {
             model.setReelId(a.getReelId());
+            cacheService.evictByPrefix("reel" + a.getReelId());
         }
 
         if (a.getParentId() != 0) {
             model.setParentComment(commentRepository.findById(a.getParentId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST)));
+            cacheService.evictByPrefix("replies" + a.getParentId());
         }
         commentRepository.save(model);
 
@@ -87,6 +92,8 @@ public class CommentServiceImpl implements ICommentService {
                     .targetUrl(url)
                     .build();
             kafkaTemplate.send("notification", messageDTO);
+        } else {
+            cacheService.evictByPrefix("replies" + model.getId());
         }
 
         return "Success";
@@ -104,18 +111,29 @@ public class CommentServiceImpl implements ICommentService {
         } else {
             ownerId = postGrpcClient.getPostById(model.getPostId()).getUserId();
         }
-        if (response.getUserId() != model.getUserId() || ownerId != response.getUserId())
+        if (response.getUserId() != model.getUserId()
+                && !ownerId.equals(response.getUserId())) {
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
+        }
         commentRepository.delete(model);
         if (model.getPostId() != null) {
             postGrpcClient.addCommentQuantityById(model.getPostId(), true, false);
+            cacheService.evictByPrefix("post" + model.getPostId());
         } else {
             postGrpcClient.addCommentQuantityById(model.getReelId(), false, false);
+            cacheService.evictByPrefix("reel" + model.getReelId());
+        }
+
+        if (model.getParentComment() != null) {
+            cacheService.evictByPrefix("replies" + model.getParentComment().getId());
+        } else {
+            cacheService.evictByPrefix("replies" + model.getId());
         }
         return "Success";
     }
 
     @Override
+//    @Cacheable(value = "comments", key = "'post'+ #postId + '_' + #pageNo + '_' + #pageSize")
     public ListCommentResponse getCommentOfPost(Long postId, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -141,6 +159,7 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     @Override
+//    @Cacheable(value = "comments", key = "'reel'+ #reelId + '_' + #pageNo + '_' + #pageSize")
     public ListCommentResponse getCommentOfReel(Long reelId, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -166,6 +185,7 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     @Override
+//    @Cacheable(value = "comments", key = "'replies'+ #commentId + '_' + #pageNo + '_' + #pageSize")
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
@@ -182,6 +202,4 @@ public class CommentServiceImpl implements ICommentService {
 
         return commentMapper.toListResponse(id, repliesPage, response.getUserId());
     }
-
-
 }

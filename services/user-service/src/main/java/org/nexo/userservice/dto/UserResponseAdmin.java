@@ -10,7 +10,7 @@ import lombok.Data;
 
 @Data
 @Builder
-public class UserResonspeAdmin {
+public class UserResponseAdmin {
     @JsonProperty("id")
     private Long id;
 
@@ -31,4 +31,11 @@ public class UserResonspeAdmin {
 
     @JsonProperty("violation_count")
     private Integer violationCount;
+
+    @JsonProperty("posts_count")
+    private Long postsCount;
+
+    @JsonProperty("interactions_count")
+    private Long interactionsCount;
+
 }

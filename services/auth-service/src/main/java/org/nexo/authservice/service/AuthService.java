@@ -30,6 +30,8 @@ public interface AuthService {
 
     Mono<Void> banUser(String userId);
 
+    Mono<Void> unBanUser(String userId);
+
     Mono<OAuthLoginResponse> oauthCallback(OAuthCallbackRequest request);
 
     Mono<Void> changePassword(String keycloakUserId, String oldPassword, String newPassword);

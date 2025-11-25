@@ -2,6 +2,9 @@ syntax = "proto3";
 
 package org.nexo.grpc.interaction;
 
+option java_package = "org.nexo.grpc.interaction";
+option java_outer_classname = "InteractionServiceOuterClass";
+
 service InteractionService {
   rpc ExistLikeByIdAndUserId (IsLikeRequest) returns (IsLikeResponse);
   rpc ExistLikesByUserAndPostIds (BatchIsLikeRequest) returns (BatchIsLikeResponse);
@@ -59,3 +62,4 @@ message GetUserInteractionsCountRequest {
 message GetUserInteractionsCountResponse {
   int64 interactionsCount = 1; // like + cmt
 }
+

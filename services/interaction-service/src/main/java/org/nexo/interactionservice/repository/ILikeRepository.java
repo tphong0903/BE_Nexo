@@ -8,7 +8,6 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -35,5 +34,6 @@ public interface ILikeRepository extends JpaRepository<LikeModel, Long> {
             "ORDER BY DATE(u.createdAt)")
     List<Object[]> countLikesByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    long countByUserId(Long userId);
 
 }

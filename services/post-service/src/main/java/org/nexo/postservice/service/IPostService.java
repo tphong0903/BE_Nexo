@@ -23,6 +23,7 @@ public interface IPostService {
 
     PageModelResponse getAllReelOfUser(Long id, int page, int limit);
 
+
     PostResponseDTO getPostById(Long id);
 
     PostResponseDTO getPostById3(Long id, Boolean isLike);
@@ -36,6 +37,10 @@ public interface IPostService {
     ReelResponseDTO getReelById2(Long id);
 
     String deleteReel(Long id);
+
+    String deleteReel2(Long id);
+
+    String deletePost2(Long id);
 
     PageModelResponse getPopularPosts(int page, int size);
 

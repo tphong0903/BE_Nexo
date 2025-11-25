@@ -627,23 +627,29 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                 LocalDateTime start = LocalDateTime.parse(request.getStartDate());
                 LocalDateTime end = LocalDateTime.parse(request.getEndDate());
 
-                List<Object[]> result = userRepository.countUsersByDate(start, end);
+        @Override
+        public void getUsersByTime(UserServiceProto.DateRange request,
+                                   StreamObserver<UserServiceProto.GetUsersByTimeResponse> responseObserver) {
+            LocalDateTime start = LocalDate.parse(request.getStartDate()).atStartOfDay();
+            LocalDateTime end = LocalDate.parse(request.getEndDate()).atTime(23, 59, 59);
 
-                UserServiceProto.GetUsersByTimeResponse.Builder responseBuilder = UserServiceProto.GetUsersByTimeResponse
-                                .newBuilder();
+            List<Object[]> result = userRepository.countUsersByDate(start, end);
 
-                for (Object[] row : result) {
-                        String date = row[0].toString();
-                        long total = ((Number) row[1]).longValue();
+            UserServiceProto.GetUsersByTimeResponse.Builder responseBuilder = UserServiceProto.GetUsersByTimeResponse
+                                    .newBuilder();
 
-                        responseBuilder.addData(UserServiceProto.UserCountByDate.newBuilder()
-                                        .setDate(date)
-                                        .setCount(total)
-                                        .build());
-                }
+            for (Object[] row : result) {
+                    String date = row[0].toString();
+                    long total = ((Number) row[1]).longValue();
 
-                responseObserver.onNext(responseBuilder.build());
-                responseObserver.onCompleted();
+                    responseBuilder.addData(UserServiceProto.UserCountByDate.newBuilder()
+                                    .setDate(date)
+                                    .setCount(total)
+                                    .build());
+            }
+
+            responseObserver.onNext(responseBuilder.build());
+            responseObserver.onCompleted();
         }
 
         @Override

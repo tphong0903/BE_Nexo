@@ -1,5 +1,6 @@
 package org.nexo.postservice.repository;
 
+import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.model.ReportReelModel;
 import org.nexo.postservice.util.Enum.EReportStatus;
 import org.springframework.data.domain.Page;
@@ -41,4 +42,34 @@ public interface IReportReelRepository extends JpaRepository<ReportReelModel, Lo
             "ORDER BY DATE(r.createdAt)")
     List<Object[]> countReportsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+
+    @Query(value = """
+            SELECT * FROM report_reel_model r 
+            WHERE 
+                (:status = 'ALL' OR r.report_status = :status)
+                AND (
+                    :keyword IS NULL 
+                    OR r.reason  ILIKE CONCAT('%', :keyword, '%')
+                    OR r.owner_post_name  ILIKE CONCAT('%', :keyword, '%')
+                    OR r.reporter_name ILIKE CONCAT('%', :keyword, '%')
+                )
+            ORDER BY r.id DESC
+            """,
+            nativeQuery = true)
+    Page<ReportSummaryProjection> searchReportsReelsNative(
+            @Param("status") String status,
+            @Param("keyword") String keyword,
+            Pageable pageable
+    );
+
+    @Query(value = """
+            SELECT
+                COUNT(*) FILTER (WHERE report_status = 'PENDING') AS pending_count,
+                COUNT(*) FILTER (WHERE report_status = 'IN_REVIEW') AS in_review_count,
+                COUNT(*) FILTER (WHERE report_status = 'APPROVED') AS approved_count,
+                COUNT(*) FILTER (WHERE report_status = 'REJECTED') AS rejected_count
+            FROM report_reel_model r
+            """,
+            nativeQuery = true)
+    List<Object[]> getReportQuantitySummary();
 }

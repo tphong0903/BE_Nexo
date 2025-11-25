@@ -3,10 +3,7 @@ package org.nexo.postservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
-import org.nexo.postservice.dto.MessageDTO;
-import org.nexo.postservice.dto.MessagePostDTO;
-import org.nexo.postservice.dto.PostRequestDTO;
-import org.nexo.postservice.dto.UserTagDTO;
+import org.nexo.postservice.dto.*;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
 import org.nexo.postservice.dto.response.ReelResponseDTO;
@@ -14,6 +11,7 @@ import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.PostMediaModel;
 import org.nexo.postservice.model.PostModel;
 import org.nexo.postservice.model.ReelModel;
+import org.nexo.postservice.repository.AdminContentRepository;
 import org.nexo.postservice.repository.IPostMediaRepository;
 import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.repository.IReelRepository;
@@ -54,16 +52,12 @@ public class PostServiceImpl implements IPostService {
     private final IHashTagService hashTagService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
-
+    private final AdminContentRepository adminContentRepository;
 
     @Override
     public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
         securityUtil.checkOwner(postRequestDTO.getUserId());
-        UserServiceProto.GetUserFolloweesResponse response = userGrpcClient.getUserFollowees(postRequestDTO.getUserId());
-
-        if (!response.getSuccess()) {
-            throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
-        }
+        UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(postRequestDTO.getUserId());
         PostModel model;
 
         String oldTag = "";
@@ -92,6 +86,7 @@ public class PostServiceImpl implements IPostService {
                     .build();
 
         }
+        model.setAuthorName(userDTOResponse.getUsername());
         postRepository.save(model);
 //        if (postRequestDTO.getPostId() != 0) {
 //            String postKey = "post:" + model.getId();
@@ -106,6 +101,7 @@ public class PostServiceImpl implements IPostService {
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
             fileServiceClient.savePostMedia(files, model.getId(), token);
         }
+
         if (postRequestDTO.getPostId() == 0) {
             MessagePostDTO message = MessagePostDTO.builder()
                     .postId(model.getId())
@@ -114,6 +110,7 @@ public class PostServiceImpl implements IPostService {
                     .build();
             kafkaTemplate.send("post-created", message);
         }
+
         hashTagService.findAndAddHashTagFromCaption(model);
         tagUserIntoPost(oldTag, postRequestDTO.getTag(), postRequestDTO.getUserId(), model.getId());
         return "Success";
@@ -122,6 +119,7 @@ public class PostServiceImpl implements IPostService {
     @Override
     public String saveReel(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
         securityUtil.checkOwner(postRequestDTO.getUserId());
+        UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(postRequestDTO.getUserId());
 
         ReelModel model;
         if (postRequestDTO.getPostId() != 0) {
@@ -140,12 +138,15 @@ public class PostServiceImpl implements IPostService {
                     .isActive(true)
                     .build();
         }
+        model.setAuthorName(userDTOResponse.getUsername());
         reelRepository.save(model);
+
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
             fileServiceClient.saveReelMedia(files, model.getId(), token);
         }
+
         if (postRequestDTO.getPostId() == 0) {
             MessagePostDTO message = MessagePostDTO.builder()
                     .postId(model.getId())
@@ -154,6 +155,7 @@ public class PostServiceImpl implements IPostService {
                     .build();
             kafkaTemplate.send("reel-created", message);
         }
+
         hashTagService.findAndAddHashTagFromCaption(model);
         return "Success";
     }
@@ -287,6 +289,7 @@ public class PostServiceImpl implements IPostService {
                 .build();
     }
 
+
     @Override
     public PostResponseDTO getPostById(Long id) {
         String keyloakId = securityUtil.getKeyloakId();
@@ -386,6 +389,40 @@ public class PostServiceImpl implements IPostService {
         redisTemplate.delete(likesKey);
         redisTemplate.delete(commentsKey);
 
+        redisTemplate.opsForZSet().remove(feedKey, id);
+        return "Success";
+    }
+
+    @Override
+    public String deleteReel2(Long id) {
+        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
+        reelRepository.delete(model);
+
+        String reelKey = "reel:" + id;
+        String likesKey = "reel:likes:" + id;
+        String commentsKey = "reel:comments:" + id;
+        String feedKey = "feed:" + model.getUserId();
+
+        redisTemplate.delete(reelKey);
+        redisTemplate.delete(likesKey);
+        redisTemplate.delete(commentsKey);
+
+        redisTemplate.opsForZSet().remove(feedKey, id);
+        return "Success";
+    }
+
+    @Override
+    public String deletePost2(Long id) {
+        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
+        postRepository.delete(model);
+        String postKey = "post:" + id;
+        String likesKey = "post:likes:" + id;
+        String commentsKey = "post:comments:" + id;
+        String feedKey = "feed:" + model.getUserId();
+
+        redisTemplate.delete(postKey);
+        redisTemplate.delete(likesKey);
+        redisTemplate.delete(commentsKey);
         redisTemplate.opsForZSet().remove(feedKey, id);
         return "Success";
     }

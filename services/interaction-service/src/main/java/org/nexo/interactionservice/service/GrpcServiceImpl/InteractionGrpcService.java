@@ -116,9 +116,10 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void getInteractionsByTime(InteractionServiceOuterClass.DateRange request,
-            StreamObserver<InteractionServiceOuterClass.GetUsersByTimeResponse> responseObserver) {
-        LocalDateTime start = LocalDateTime.parse(request.getStartDate());
-        LocalDateTime end = LocalDateTime.parse(request.getEndDate());
+                                      StreamObserver<InteractionServiceOuterClass.GetUsersByTimeResponse> responseObserver) {
+        LocalDateTime start = LocalDate.parse(request.getStartDate()).atStartOfDay();
+        LocalDateTime end = LocalDate.parse(request.getEndDate()).atTime(23, 59, 59);
+        ;
 
         List<Object[]> resultLike = likeRepository.countLikesByDate(start, end);
         List<Object[]> resultComment = commentRepository.countCommentsByDate(start, end);

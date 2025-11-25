@@ -3,14 +3,15 @@ package org.nexo.postservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.interaction.InteractionServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
-import org.nexo.postservice.dto.response.ChartDataDto;
-import org.nexo.postservice.dto.response.DashboardResponseDto;
-import org.nexo.postservice.repository.IPostRepository;
-import org.nexo.postservice.repository.IReportPostRepository;
-import org.nexo.postservice.repository.IReportReelRepository;
+import org.nexo.postservice.dto.response.*;
+import org.nexo.postservice.repository.*;
 import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IDashboardService;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -24,10 +25,12 @@ import java.util.stream.Collectors;
 public class DashboardServiceImpl implements IDashboardService {
 
     private final IPostRepository postRepository;
+    private final IReelRepository reelRepository;
     private final IReportReelRepository reportReelRepository;
     private final IReportPostRepository reportPostRepository;
     private final UserGrpcClient userGrpcClient;
     private final InteractionGrpcClient interactionGrpcClient;
+    private final AdminContentRepository adminContentRepository;
 
     @Override
     public DashboardResponseDto getDashboardData() {
@@ -162,6 +165,33 @@ public class DashboardServiceImpl implements IDashboardService {
         return ChartDataDto.builder()
                 .time(time)
                 .data(data)
+                .build();
+    }
+
+    @Override
+    public PageModelResponse getAllPost(String search, int page, int limit, String type) {
+        Sort sort = Sort.by("created_at").descending();
+        Pageable pageable = PageRequest.of(page, limit, sort);
+        Page<ContentProjection> pageResult = adminContentRepository.findAllContent(search, type, pageable);
+
+        return PageModelResponse.<ContentProjection>builder()
+                .pageNo(pageResult.getNumber())
+                .pageSize(pageResult.getSize())
+                .totalElements(pageResult.getTotalElements())
+                .totalPages(pageResult.getTotalPages())
+                .last(pageResult.isLast())
+                .content(pageResult.getContent())
+                .build();
+    }
+
+    @Override
+    public PostManagementInfo getPostManagementInfo() {
+        Long quantityPost = postRepository.count();
+        Long quantityReel = reelRepository.count();
+        return PostManagementInfo.builder()
+                .totalPost(quantityPost + quantityReel)
+                .quantityPost(quantityPost)
+                .quantityReel(quantityReel)
                 .build();
     }
 

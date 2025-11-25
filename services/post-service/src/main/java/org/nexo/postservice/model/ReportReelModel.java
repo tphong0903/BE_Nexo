@@ -18,6 +18,10 @@ public class ReportReelModel extends AbstractEntity<Long> {
     private ReelModel reelModel;
     private String reason;
     private Long userId;
+    private String detail;
     @Enumerated(EnumType.STRING)
     private EReportStatus reportStatus;
+    private String reporterName;
+    private String ownerPostName;
+    private String note;
 }

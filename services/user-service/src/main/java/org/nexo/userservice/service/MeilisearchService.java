@@ -11,7 +11,7 @@ import com.meilisearch.sdk.model.Searchable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-import org.nexo.userservice.dto.UserResonspeAdmin;
+import org.nexo.userservice.dto.UserResponseAdmin;
 import org.nexo.userservice.dto.UserSearchDocument;
 import org.nexo.userservice.dto.UserSearchResponse;
 import org.nexo.userservice.dto.UserSearchResponseAdmin;
@@ -21,6 +21,8 @@ import org.springframework.stereotype.Service;
 import jakarta.annotation.PostConstruct;
 import java.util.List;
 import java.util.stream.Collectors;
+import org.nexo.userservice.grpc.InteractionGrpcClient;
+import org.nexo.userservice.grpc.PostGrpcClient;
 
 @Service
 @RequiredArgsConstructor
@@ -29,6 +31,8 @@ public class MeilisearchService {
 
         private final Client meilisearchClient;
         private final ObjectMapper objectMapper;
+        private final InteractionGrpcClient interactionGrpcClient;
+        private final PostGrpcClient postGrpcClient;
 
         @Value("${meilisearch.index.users}")
         private String usersIndexName;
@@ -73,7 +77,7 @@ public class MeilisearchService {
                 log.info("Indexed user: {}", document.getId());
         }
 
-        public void updateUser(UserSearchDocument document, UserResonspeAdmin documentAdmin)
+        public void updateUser(UserSearchDocument document, UserResponseAdmin documentAdmin)
                         throws JsonProcessingException, MeilisearchException {
                 String json = objectMapper.writeValueAsString(document);
                 usersIndex.updateDocuments(json);
@@ -129,8 +133,19 @@ public class MeilisearchService {
 
                 Searchable result = usersAdminIndex.search(searchRequest);
 
-                List<UserResonspeAdmin> users = result.getHits().stream()
-                                .map(hit -> objectMapper.convertValue(hit, UserResonspeAdmin.class))
+                List<UserResponseAdmin> users = result.getHits().stream()
+                                .map(hit -> {
+                                        UserResponseAdmin user = objectMapper.convertValue(hit,
+                                                        UserResponseAdmin.class);
+                                        Long postsCount = postGrpcClient.getUserPostsCount(user.getId());
+                                        Long interactionsCount = interactionGrpcClient
+                                                        .getUserInteractionsCount(user.getId());
+
+                                        user.setPostsCount(postsCount);
+                                        user.setInteractionsCount(interactionsCount);
+
+                                        return user;
+                                })
                                 .collect(Collectors.toList());
 
                 return UserSearchResponseAdmin.builder()
@@ -143,7 +158,7 @@ public class MeilisearchService {
                                 .build();
         }
 
-        public void reindexAllUsers(List<UserSearchDocument> users, List<UserResonspeAdmin> documentsAdmin)
+        public void reindexAllUsers(List<UserSearchDocument> users, List<UserResponseAdmin> documentsAdmin)
                         throws JsonProcessingException, MeilisearchException {
                 String json = objectMapper.writeValueAsString(users);
                 usersIndex.addDocuments(json);

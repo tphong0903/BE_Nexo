@@ -10,4 +10,6 @@ public interface IReelRepository extends JpaRepository<ReelModel, Long> {
     Page<ReelModel> findByUserIdAndIsActive(Long id, Boolean isActive, Pageable pageable);
 
     Page<ReelModel> findByUserId(Long id, Pageable pageable);
+
+    long countByUserIdAndIsActive(Long userId, Boolean isActive);
 }

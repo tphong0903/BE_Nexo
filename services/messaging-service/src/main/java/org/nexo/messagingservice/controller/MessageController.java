@@ -47,47 +47,6 @@ public class MessageController {
                                 .build();
         }
 
-        @PostMapping("/{messageId}/reactions")
-        public ResponseData<?> reactToMessage(
-                        @PathVariable Long messageId,
-                        @RequestBody ReactMessageRequest request,
-                        Authentication authentication) {
-
-                String keycloakUserId = (String) authentication.getName();
-
-                UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
-                Long userId = userDto.getUserId();
-
-                messageService.addReaction(messageId, userId, request.getReactionType());
-
-                return ResponseData.builder()
-                                .status(200)
-                                .message("Reaction added successfully")
-                                .build();
-        }
-
-        @DeleteMapping("/{messageId}/reactions")
-        public ResponseData<?> removeReaction(
-                        @PathVariable Long messageId,
-                        @RequestParam String reactionType,
-                        Authentication authentication) {
-
-                String keycloakUserId = (String) authentication.getName();
-
-                UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
-                Long userId = userDto.getUserId();
-
-                messageService.removeReaction(
-                                messageId,
-                                userId,
-                                EReactionType.valueOf(reactionType));
-
-                return ResponseData.builder()
-                                .status(200)
-                                .message("Reaction removed successfully")
-                                .build();
-        }
-
         @GetMapping("/{messageId}/reactions")
         public ResponseData<?> getMessageReactions(
                         @PathVariable Long messageId,

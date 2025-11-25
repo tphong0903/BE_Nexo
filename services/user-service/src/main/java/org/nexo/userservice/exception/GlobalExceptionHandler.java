@@ -89,6 +89,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseData<?> handleNotFoundException(ResourceNotFoundException ex) {
         return new ResponseData<>(HttpStatus.NOT_FOUND.value(), ex.getMessage());
     }

@@ -4,9 +4,13 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
+
 import org.nexo.authservice.dto.CallBackRequest;
 import org.nexo.authservice.dto.ForgotPasswordRequest;
 import org.nexo.authservice.dto.LoginRequest;
+import org.nexo.authservice.dto.OAuthCallbackRequest;
+import org.nexo.authservice.dto.OAuthLoginResponse;
 import org.nexo.authservice.dto.RegisterRequest;
 import org.nexo.authservice.dto.RegisterResponse;
 import org.nexo.authservice.dto.ResendVerifyEmailRequest;
@@ -115,6 +119,19 @@ public class AuthController {
                                                 .status(HttpStatus.OK.value())
                                                 .message("Email verified and updated successfully")
                                                 .build());
+        }
+
+        @PostMapping("oauth/callback")
+        public Mono<ResponseData<?>> oauthCallback(@Valid @RequestBody OAuthCallbackRequest request) {
+                return authService.oauthCallback(request)
+                                .map(tokenResponse -> {
+                                        log.info("OAuth callback successful");
+                                        return ResponseData.<OAuthLoginResponse>builder()
+                                                        .status(HttpStatus.OK.value())
+                                                        .message("OAuth authentication successful")
+                                                        .data(tokenResponse)
+                                                        .build();
+                                });
         }
 
 }

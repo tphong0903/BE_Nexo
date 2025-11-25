@@ -1,5 +1,6 @@
 package org.nexo.userservice.service;
 
+import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
@@ -16,6 +17,14 @@ public interface UserService {
     void deleteAvatar(String accessToken);
 
     void assignRoleToUser(String username, String role);
-    
+
     void banUser(String username);
+    
+    void unbanUser(String username);
+
+    void updateUserOauth(String keycloakUserId, UpdateUserRequest request);
+
+    void changePassword(String accessToken, ChangePasswordRequest request);
+
+    org.nexo.userservice.dto.UserStatisticsResponse getUserStatistics(Long userId);
 }

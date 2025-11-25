@@ -1,14 +1,20 @@
 package org.nexo.userservice.service.Impl;
 
+import java.time.LocalDateTime;
+
+import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
 import org.nexo.userservice.dto.UserSearchEvent;
+import org.nexo.userservice.dto.UserStatisticsResponse;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.enums.ERole;
 import org.nexo.userservice.enums.EStatusFollow;
 import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.nexo.userservice.grpc.AuthGrpcClient;
+import org.nexo.userservice.grpc.InteractionGrpcClient;
+import org.nexo.userservice.grpc.PostGrpcClient;
 import org.nexo.userservice.grpc.UploadFileGrpcClient;
 import org.nexo.userservice.mapper.UserMapper;
 import org.nexo.userservice.model.UserModel;
@@ -38,9 +44,11 @@ public class UserServiceImpl implements UserService {
     private final BlockService blockService;
     private final UserEventProducer userEventProducer;
     private final AuthGrpcClient authGrpcClient;
+    private final PostGrpcClient postGrpcClient;
+    private final InteractionGrpcClient interactionGrpcClient;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
-        UserModel user = userRepository.findByUsername(username)
+        UserModel user = userRepository.findByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
         Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
@@ -59,6 +67,7 @@ public class UserServiceImpl implements UserService {
 
         boolean isFollowing = false;
         boolean hasRequestedFollow = false;
+        boolean isCloseFriend = false;
         // check owwner profile
         if (currentUserId != null && !currentUserId.equals(user.getId())) {
             isFollowing = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
@@ -66,10 +75,14 @@ public class UserServiceImpl implements UserService {
 
             hasRequestedFollow = followRepository.existsByFollowerIdAndFollowingIdAndStatus(
                     currentUserId, user.getId(), EStatusFollow.PENDING);
+
+            isCloseFriend = followRepository.existsByFollowerIdAndFollowingIdAndIsCloseFriendAndStatus(
+                    currentUserId, user.getId(), true, EStatusFollow.ACTIVE);
         }
         UserProfileDTOResponse dto = userMapper.toUserProfileDTOResponse(user);
         dto.setIsFollowing(isFollowing);
         dto.setHasRequestedFollow(hasRequestedFollow);
+        dto.setIsCloseFriend(isCloseFriend);
         return dto;
     }
 
@@ -152,6 +165,7 @@ public class UserServiceImpl implements UserService {
         publishUserEvent(user, "UPDATE");
 
     }
+
     @Transactional
     public void banUser(String username) {
         UserModel user = userRepository.findByUsername(username)
@@ -165,6 +179,66 @@ public class UserServiceImpl implements UserService {
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
 
+    }
+
+    @Transactional
+    public void unbanUser(String username) {
+        UserModel user = userRepository.findByUsername(username)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
+
+        boolean success = authGrpcClient.unBanUser(user.getKeycloakUserId());
+        if (!success) {
+            throw new ResourceNotFoundException("Failed to unban user in auth-service");
+        }
+        user.setAccountStatus(EAccountStatus.ACTIVE);
+        userRepository.save(user);
+        publishUserEvent(user, "UPDATE");
+
+    }
+
+    @Transactional
+    public void updateUserOauth(String keycloakUserId, UpdateUserRequest request) {
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+
+        UserModel updatedUser = userMapper.updateUserModelFromDTO(request, user);
+        updatedUser.setAccountStatus(EAccountStatus.ACTIVE);
+        userRepository.save(updatedUser);
+
+        publishUserEvent(updatedUser, "UPDATE");
+    }
+
+    @Transactional
+    public void changePassword(String accessToken, ChangePasswordRequest request) {
+        String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+        if (user.getAccountStatus() != EAccountStatus.ACTIVE) {
+            throw new ResourceNotFoundException("Cannot change password for inactive user");
+        }
+        authGrpcClient.changePassword(keycloakUserId, request.getOldPassword(), request.getNewPassword());
+    }
+
+    @Override
+    public UserStatisticsResponse getUserStatistics(Long userId) {
+        UserModel user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + userId));
+        Long postsCount = postGrpcClient.getUserPostsCount(userId);
+        Long interactionsCount = interactionGrpcClient.getUserInteractionsCount(userId);
+        LocalDateTime thirtyDaysAgo = LocalDateTime.now().minusDays(30);
+        Long newFollowersCount = followRepository.countNewFollowersByUserIdAndDateRange(userId, thirtyDaysAgo);
+        Long totalFollowersCount = followRepository.countTotalFollowersByUserId(userId);
+        Long totalFollowingCount = followRepository.countFollowingByUserId(userId);
+
+        return UserStatisticsResponse.builder()
+                .userId(userId)
+                .username(user.getUsername())
+                .postsCount(postsCount != null ? postsCount : 0L)
+                .interactionsCount(interactionsCount != null ? interactionsCount : 0L)
+                .newFollowersCount(newFollowersCount != null ? newFollowersCount : 0L)
+                .totalFollowersCount(totalFollowersCount != null ? totalFollowersCount : 0L)
+                .totalFollowingCount(totalFollowingCount != null ? totalFollowingCount : 0L)
+                .build();
     }
 
 }

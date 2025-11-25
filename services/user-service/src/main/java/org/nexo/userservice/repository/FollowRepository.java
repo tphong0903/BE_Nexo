@@ -66,6 +66,11 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
                         Long followingId,
                         EStatusFollow status);
 
+        boolean existsByFollowerIdAndFollowingIdAndIsCloseFriendAndStatus(Long followerId,
+                        Long followingId,
+                        boolean isCloseFriend,
+                        EStatusFollow status);
+
         @Query("SELECT f FROM FollowModel f " +
                         "WHERE f.follower.id = :userId " +
                         "AND f.status = 'ACTIVE' " +
@@ -124,4 +129,21 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
         Page<FollowModel> findMutualFollowersWithSearch(@Param("userId") Long userId,
                         @Param("search") String search,
                         Pageable pageable);
+
+        @Query("SELECT COUNT(f) FROM FollowModel f " +
+                        "WHERE f.following.id = :userId " +
+                        "AND f.status = 'ACTIVE' " +
+                        "AND f.createdAt >= :startDate")
+        Long countNewFollowersByUserIdAndDateRange(@Param("userId") Long userId,
+                        @Param("startDate") java.time.LocalDateTime startDate);
+
+        @Query("SELECT COUNT(f) FROM FollowModel f " +
+                        "WHERE f.follower.id = :userId " +
+                        "AND f.status = 'ACTIVE'")
+        Long countFollowingByUserId(@Param("userId") Long userId);
+
+        @Query("SELECT COUNT(f) FROM FollowModel f " +
+                        "WHERE f.following.id = :userId " +
+                        "AND f.status = 'ACTIVE'")
+        Long countTotalFollowersByUserId(@Param("userId") Long userId);
 }

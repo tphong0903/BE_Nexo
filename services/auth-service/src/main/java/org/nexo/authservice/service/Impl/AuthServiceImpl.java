@@ -10,6 +10,8 @@ import org.nexo.authservice.config.KeycloakConfig;
 import org.nexo.authservice.dto.CallBackRequest;
 import org.nexo.authservice.dto.KeycloakErrorResponse;
 import org.nexo.authservice.dto.LoginRequest;
+import org.nexo.authservice.dto.OAuthCallbackRequest;
+import org.nexo.authservice.dto.OAuthLoginResponse;
 import org.nexo.authservice.dto.RegisterRequest;
 import org.nexo.authservice.dto.TokenResponse;
 import org.nexo.authservice.exception.KeycloakClientException;
@@ -25,7 +27,10 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -49,6 +54,7 @@ public class AuthServiceImpl implements AuthService {
     private static final String GRANT_TYPE_REFRESH_TOKEN = "refresh_token";
     private static final String ADMIN_CLI = "admin-cli";
     private static final String BEARER_PREFIX = "Bearer ";
+    private static final String GRANT_TYPE_AUTH_CODE = "authorization_code";
 
     private final WebClient webClient;
     private final KeycloakConfig keycloakConfig;
@@ -65,8 +71,6 @@ public class AuthServiceImpl implements AuthService {
     }
 
     public Mono<TokenResponse> login(LoginRequest loginRequest) {
-        log.info("Starting login process for user: {}", loginRequest.getEmail());
-
         return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
                 .flatMap(clientSecret -> {
                     MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
@@ -82,27 +86,6 @@ public class AuthServiceImpl implements AuthService {
                             .retrieve()
                             .bodyToMono(TokenResponse.class)
                             .flatMap(tokenResponse -> {
-                                boolean emailVerified = jwtUtil.isEmailVerified(tokenResponse.getAccessToken());
-                                String userId = jwtUtil.getUserIdFromToken(tokenResponse.getAccessToken());
-
-                                log.info("Login successful for user: {}, email_verified: {}, userId: {}",
-                                        loginRequest.getEmail(), emailVerified, userId);
-
-                                userGrpcClient.updateAccountStatus(userId, "ACTIVE")
-                                        .doOnSuccess(grpcResponse -> {
-                                            if (grpcResponse.getSuccess()) {
-                                                log.info("Account status updated to ACTIVE for userId: {}", userId);
-                                            } else {
-                                                log.warn("Failed to update account status for userId: {}, message: {}",
-                                                        userId, grpcResponse.getMessage());
-                                            }
-                                        })
-                                        .doOnError(error -> {
-                                            log.error("Failed to update account status for userId: {}, error: {}",
-                                                    userId, error.getMessage());
-                                        })
-                                        .subscribe();
-
                                 return tokenCacheService.cacheToken(
                                         loginRequest.getEmail(),
                                         tokenResponse.getAccessToken(),
@@ -152,9 +135,6 @@ public class AuthServiceImpl implements AuthService {
                 registerRequest.getUsername())
                 .doOnSuccess(grpcResponse -> {
                     if (grpcResponse.getSuccess()) {
-                        log.info("User created in user-service successfully: userId={}, userServiceId={}",
-                                userId, grpcResponse.getUserId());
-
                         Mono.fromRunnable(() -> sendVerifyEmail(userId, adminToken)
                                 .doOnError(ex -> {
                                     log.error("Send verify email failed for userId={} : {}", userId, ex.getMessage());
@@ -167,19 +147,13 @@ public class AuthServiceImpl implements AuthService {
                 })
                 .doOnError(error -> {
                     log.error("gRPC call to user-service failed for userId={}: {}", userId, error.getMessage());
-                    Mono.fromRunnable(() -> sendVerifyEmail(userId, adminToken)
-                            .doOnError(ex -> {
-                                log.error("Send verify email failed for userId={} : {}", userId, ex.getMessage());
-                                enqueueRetry(userId, adminToken, 1);
-                            })
-                            .subscribe()).subscribe();
+
                 })
                 .map(grpcResponse -> userId)
                 .onErrorReturn(userId);
     }
 
-    private Mono<String> handleRegistrationError(
-            org.springframework.web.reactive.function.client.ClientResponse response) {
+    private Mono<String> handleRegistrationError(ClientResponse response) {
         return response.bodyToMono(String.class)
                 .flatMap(body -> {
                     try {
@@ -348,18 +322,13 @@ public class AuthServiceImpl implements AuthService {
     }
 
     public Mono<Void> forgotPassword(String email) {
-        log.info("Starting forgot password process for email: {}", email);
-
         return userGrpcClient.getUserIdByEmail(email)
                 .flatMap(grpcResponse -> {
                     if (!grpcResponse.getSuccess()) {
                         log.warn("User not found or not active for email: {}", email);
                         return Mono.error(new KeycloakClientException(404, grpcResponse.getMessage()));
                     }
-
                     String userId = grpcResponse.getKeycloakUserId();
-                    log.info("Found active user with ID: {} for email: {}", userId, email);
-
                     return getAdminToken()
                             .flatMap(adminToken -> sendResetPasswordEmail(userId, adminToken));
                 });
@@ -449,6 +418,11 @@ public class AuthServiceImpl implements AuthService {
                 .flatMap(adminToken -> disableUser(userId, adminToken));
     }
 
+    public Mono<Void> unBanUser(String userId) {
+        return getAdminToken()
+                .flatMap(adminToken -> enableUser(userId, adminToken));
+    }
+
     private Mono<Void> disableUser(String userId, String adminToken) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("enabled", false);
@@ -462,14 +436,28 @@ public class AuthServiceImpl implements AuthService {
                 .bodyToMono(Void.class);
     }
 
-    public Mono<List<Map>> getAllUserRoles(String userId, String clientUUID, String adminToken) {
+    private Mono<Void> enableUser(String userId, String adminToken) {
+        Map<String, Object> payload = new HashMap<>();
+        payload.put("enabled", true);
+        return webClient.put()
+                .uri(keycloakConfig.getServerUrl() + "/admin/realms/"
+                        + keycloakConfig.getRealm() + "/users/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(payload)
+                .retrieve()
+                .bodyToMono(Void.class);
+    }
+
+    public Mono<List<Map<String, Object>>> getAllUserRoles(String userId, String clientUUID, String adminToken) {
         return webClient.get()
                 .uri(keycloakConfig.getServerUrl()
                         + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
                         keycloakConfig.getRealm(), userId, clientUUID)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                 .retrieve()
-                .bodyToFlux(Map.class)
+                .bodyToFlux(new ParameterizedTypeReference<Map<String, Object>>() {
+                })
                 .collectList();
     }
 
@@ -486,15 +474,15 @@ public class AuthServiceImpl implements AuthService {
                         .bodyToMono(Void.class));
     }
 
-    public Mono<Map> getClientRole(String clientUUID, String roleName, String adminToken) {
+    public Mono<Map<String, Object>> getClientRole(String clientUUID, String roleName, String adminToken) {
         return webClient.get()
                 .uri(keycloakConfig.getServerUrl()
                         + "/admin/realms/{realm}/clients/{clientUUID}/roles/{roleName}",
                         keycloakConfig.getRealm(), clientUUID, roleName)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                 .retrieve()
-                .bodyToFlux(Map.class)
-                .next();
+                .bodyToMono(new ParameterizedTypeReference<Map<String, Object>>() {
+                });
     }
 
     public Mono<Void> changeUserRole(String userId, String newRoleName, String adminToken) {
@@ -511,6 +499,131 @@ public class AuthServiceImpl implements AuthService {
                                 .bodyValue(List.of(newRole))
                                 .retrieve()
                                 .bodyToMono(Void.class)));
+    }
+
+    @Override
+    public Mono<OAuthLoginResponse> oauthCallback(OAuthCallbackRequest request) {
+        return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
+                .flatMap(clientSecret -> {
+                    MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+                    formData.add(GRANT_TYPE, GRANT_TYPE_AUTH_CODE);
+                    formData.add(CLIENT_ID, keycloakConfig.getClientId());
+                    formData.add(CLIENT_SECRET, clientSecret);
+                    formData.add("code", request.getCode());
+                    formData.add("redirect_uri", request.getRedirectUri());
+
+                    return webClient.post()
+                            .uri(keycloakConfig.getOAuthLoginUrl())
+                            .body(BodyInserters.fromFormData(formData))
+                            .retrieve()
+                            .bodyToMono(OAuthLoginResponse.class)
+                            .flatMap(tokenResponse -> {
+                                String email = jwtUtil.getEmailFromToken(tokenResponse.getAccessToken());
+                                String keycloakId = jwtUtil.getUserIdFromToken(tokenResponse.getAccessToken());
+                                String username = jwtUtil.getUsernameFromToken(tokenResponse.getAccessToken());
+                                String fullname = jwtUtil.getFullnameFromToken(tokenResponse.getAccessToken());
+                                if (email != null) {
+                                    return userGrpcClient.getUserIdByEmail(email)
+                                            .flatMap(grpc -> {
+                                                if (!grpc.getSuccess()) {
+                                                    tokenResponse.setMissingInfo(true);
+                                                    userGrpcClient.createUserOauth(
+                                                            keycloakId,
+                                                            email,
+                                                            fullname,
+                                                            username).subscribe();
+                                                    return Mono.just(tokenResponse);
+                                                } else {
+                                                    tokenResponse.setMissingInfo(false);
+                                                    return tokenCacheService.cacheToken(
+                                                            email,
+                                                            tokenResponse.getAccessToken(),
+                                                            tokenResponse.getRefreshToken(),
+                                                            tokenResponse.getExpiresIn()).thenReturn(tokenResponse);
+                                                }
+                                            });
+                                } else {
+                                    tokenResponse.setMissingInfo(true);
+                                    return Mono.just(tokenResponse);
+                                }
+                            });
+                });
+    }
+
+    private Mono<Void> updatePassword(String userId, String newPassword, String adminToken) {
+        ObjectNode passwordNode = objectMapper.createObjectNode();
+        passwordNode.put("type", PASSWORD);
+        passwordNode.put("value", newPassword);
+        passwordNode.put("temporary", false);
+
+        return webClient.put()
+                .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
+                        + "/users/" + userId + "/reset-password")
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(passwordNode)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .doOnSuccess(v -> log.info("Password updated successfully for userId: {}", userId))
+                .doOnError(error -> {
+                    log.error("Failed to update password for userId: {}, error: {}", userId, error.getMessage());
+                    if (error instanceof WebClientResponseException) {
+                        WebClientResponseException ex = (WebClientResponseException) error;
+                        log.error("Response body: {}", ex.getResponseBodyAsString());
+                    }
+                });
+    }
+
+    @Override
+    public Mono<Void> changePassword(String keycloakUserId, String oldPassword, String newPassword) {
+        return getAdminToken()
+                .flatMap(adminToken -> {
+                    return webClient.get()
+                            .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
+                                    + "/users/" + keycloakUserId)
+                            .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                            .retrieve()
+                            .bodyToMono(String.class)
+                            .flatMap(userInfo -> {
+                                try {
+                                    JsonNode userNode = objectMapper.readTree(userInfo);
+                                    String email = userNode.has("email") ? userNode.get("email").asText() : null;
+
+                                    if (email == null) {
+                                        return Mono.error(new KeycloakClientException(404, "User email not found"));
+                                    }
+                                    return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
+                                            .flatMap(clientSecret -> {
+                                                MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
+                                                formData.add(GRANT_TYPE, GRANT_TYPE_PASSWORD);
+                                                formData.add(CLIENT_ID, keycloakConfig.getClientId());
+                                                formData.add(CLIENT_SECRET, clientSecret);
+                                                formData.add(USERNAME, email);
+                                                formData.add(PASSWORD, oldPassword);
+
+                                                return webClient.post()
+                                                        .uri(keycloakConfig.getLoginUrl())
+                                                        .body(BodyInserters.fromFormData(formData))
+                                                        .exchangeToMono(response -> {
+                                                            if (response.statusCode().is2xxSuccessful()) {
+                                                                return updatePassword(keycloakUserId, newPassword,
+                                                                        adminToken);
+                                                            } else {
+                                                                log.warn(
+                                                                        "Old password verification failed for userId: {}",
+                                                                        keycloakUserId);
+                                                                return Mono.error(new KeycloakClientException(400,
+                                                                        "Old password is incorrect"));
+                                                            }
+                                                        });
+                                            });
+                                } catch (Exception e) {
+                                    log.error("Failed to parse user info: {}", e.getMessage());
+                                    return Mono.error(
+                                            new KeycloakClientException(500, "Failed to process user information"));
+                                }
+                            });
+                });
     }
 
 }

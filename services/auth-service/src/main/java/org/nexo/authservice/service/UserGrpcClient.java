@@ -23,9 +23,8 @@ public class UserGrpcClient {
                                         .setEmail(email)
                                         .setUsername(username)
                                         .setFullName(fullname)
+                                        .setAccountStatus("PENDING")
                                         .build();
-
-                        log.info("Calling user-service gRPC to create user: {}", email);
                         return userServiceStub.createUser(request);
                 })
                                 .subscribeOn(Schedulers.boundedElastic())
@@ -80,8 +79,6 @@ public class UserGrpcClient {
                                         .newBuilder()
                                         .setEmail(email)
                                         .build();
-
-                        log.info("Calling user-service gRPC to get user ID by email: {}", email);
                         return userServiceStub.getUserIdByEmail(request);
                 })
                                 .subscribeOn(Schedulers.boundedElastic())
@@ -89,5 +86,23 @@ public class UserGrpcClient {
                                                 response.getMessage()))
                                 .doOnError(error -> log.error("Failed to get user ID by email: {}",
                                                 error.getMessage()));
+        }
+
+        public Mono<UserServiceProto.CreateUserResponse> createUserOauth(String keycloakUserId, String email,
+                        String fullname, String username) {
+                return Mono.fromCallable(() -> {
+                        UserServiceProto.CreateUserRequest request = UserServiceProto.CreateUserRequest.newBuilder()
+                                        .setKeycloakUserId(keycloakUserId)
+                                        .setEmail(email)
+                                        .setUsername(username)
+                                        .setFullName(fullname)
+                                        .setAccountStatus("UPDATE")
+                                        .build();
+                        return userServiceStub.createUser(request);
+                })
+                                .subscribeOn(Schedulers.boundedElastic())
+                                .doOnSuccess(response -> log.info("User created successfully: {}",
+                                                response.getMessage()))
+                                .doOnError(error -> log.error("Failed to create user: {}", error.getMessage()));
         }
 }

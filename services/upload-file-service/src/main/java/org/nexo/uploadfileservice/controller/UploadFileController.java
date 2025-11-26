@@ -60,4 +60,10 @@ public class UploadFileController {
     public ResponseData<String> test2() {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test File Service");
     }
+    @PostMapping("/upload")
+    public ResponseData<String> uploadFile(@RequestParam("file") MultipartFile file) throws IOException, InterruptedException, ExecutionException {
+        String fileUrl = uploadFileService.upload(file);
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", fileUrl);
+    }
+
 }

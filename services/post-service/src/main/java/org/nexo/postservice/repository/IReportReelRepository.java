@@ -64,10 +64,10 @@ public interface IReportReelRepository extends JpaRepository<ReportReelModel, Lo
 
     @Query(value = """
             SELECT
-                COUNT(*) FILTER (WHERE report_status = 'PENDING') AS pending_count,
-                COUNT(*) FILTER (WHERE report_status = 'IN_REVIEW') AS in_review_count,
-                COUNT(*) FILTER (WHERE report_status = 'APPROVED') AS approved_count,
-                COUNT(*) FILTER (WHERE report_status = 'REJECTED') AS rejected_count
+                SUM(CASE WHEN report_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_count,
+                SUM(CASE WHEN report_status = 'IN_REVIEW' THEN 1 ELSE 0 END) AS in_review_count,
+                SUM(CASE WHEN report_status = 'APPROVED' THEN 1 ELSE 0 END) AS approved_count,
+                SUM(CASE WHEN report_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected_count
             FROM report_reel_model r
             """,
             nativeQuery = true)

@@ -104,9 +104,6 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
     @Override
     public void updateUserEmailVerification(UserServiceProto.UpdateEmailVerificationRequest request,
                                             StreamObserver<UserServiceProto.UpdateEmailVerificationResponse> responseObserver) {
-        log.info("Received gRPC request to update email verification: keycloakUserId={}, emailVerified={}",
-                request.getKeycloakUserId(), request.getEmailVerified());
-
         try {
             UserModel user = userRepository.findByKeycloakUserId(request.getKeycloakUserId())
                     .orElse(null);

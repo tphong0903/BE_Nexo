@@ -3,25 +3,16 @@ package org.nexo.uploadfileservice.service.impl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
-import com.google.auth.Credentials;
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.storage.BlobId;
-import com.google.cloud.storage.BlobInfo;
-import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.uploadfile.grpc.PostMediaServiceProto;
 import org.nexo.uploadfileservice.grpc.PostGrpcClient;
 import org.nexo.uploadfileservice.service.IHlsService;
 import org.nexo.uploadfileservice.service.IUploadFileService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -59,6 +50,28 @@ public class UploadFileServiceImpl implements IUploadFileService {
     }
 
     @Override
+    public List<String> uploadFileMessage(List<MultipartFile> multipartFiles) {
+        List<String> urls = new ArrayList<>();
+        try {
+            for (MultipartFile file : multipartFiles) {
+                String fileName = file.getOriginalFilename();
+                File convertedFile = this.convertToFile(file, fileName);
+                String URL = this.uploadFile(convertedFile, fileName);
+                urls.add(URL);
+                if (convertedFile.delete()) {
+                    System.out.println("File deleted successfully");
+                } else {
+                    System.err.println("Failed to delete file");
+                }
+            }
+            return urls;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Collections.emptyList();
+        }
+    }
+
+    @Override
     public void savePostMedia(List<MultipartFile> files, Long postId) throws InterruptedException, ExecutionException {
         List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = Collections.synchronizedList(new ArrayList<>());
 
@@ -85,14 +98,16 @@ public class UploadFileServiceImpl implements IUploadFileService {
                     } else {
                         mediaType = "VIDEO";
                         File tempFile = File.createTempFile("video", ".mp4");
-//                        String hlsOutputDir = tempFile.getParent() + "/hls_" + index + "_" + System.currentTimeMillis();
+                        // String hlsOutputDir = tempFile.getParent() + "/hls_" + index + "_" +
+                        // System.currentTimeMillis();
                         file.transferTo(tempFile);
-//                        File hlsFolder = hlsService.convertToHls(tempFile, hlsOutputDir);
-//                        mediaUrl = uploadHlsToCloudinary(hlsFolder);
+                        // File hlsFolder = hlsService.convertToHls(tempFile, hlsOutputDir);
+                        // mediaUrl = uploadHlsToCloudinary(hlsFolder);
                         mediaUrl = uploadHlsToCloudinary(tempFile);
                     }
 
-                    PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
+                    PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO
+                            .newBuilder()
                             .setPostID(postId)
                             .setMediaType(mediaType)
                             .setMediaOrder(mediaOrderStart + index)
@@ -119,7 +134,6 @@ public class UploadFileServiceImpl implements IUploadFileService {
         postGrpcClient.savePostMedias(request);
     }
 
-
     @Override
     public void saveReelMedia(List<MultipartFile> files, Long postId) {
         try {
@@ -134,8 +148,9 @@ public class UploadFileServiceImpl implements IUploadFileService {
                 if (mediaType.equals("VIDEO")) {
                     File tempFile = File.createTempFile("video", ".mp4");
                     file.transferTo(tempFile);
-//                    File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
-//                    String m3u8Url = uploadHlsToCloudinary(hlsFolder);
+                    // File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() +
+                    // "/hls");
+                    // String m3u8Url = uploadHlsToCloudinary(hlsFolder);
                     String m3u8Url = uploadHlsToCloudinary(tempFile);
 
                     PostMediaServiceProto.ReelDto grpcItem = PostMediaServiceProto.ReelDto.newBuilder()
@@ -145,7 +160,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
                     postGrpcClient.saveReelMedias(grpcItem);
 
                     deleteRecursive(tempFile);
-//                    deleteRecursive(hlsFolder);
+                    // deleteRecursive(hlsFolder);
                 }
             }
         } catch (Exception e) {
@@ -166,7 +181,8 @@ public class UploadFileServiceImpl implements IUploadFileService {
                 } else {
                     File tempFile = File.createTempFile("video", ".mp4");
                     file.transferTo(tempFile);
-//                    File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
+                    // File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() +
+                    // "/hls");
                     mediaUrl = uploadHlsToCloudinary(tempFile);
                     mediaType = "VIDEO";
                 }
@@ -187,9 +203,8 @@ public class UploadFileServiceImpl implements IUploadFileService {
             Map uploadResult = cloudinary.uploader().upload(file,
                     ObjectUtils.asMap(
                             "public_id", fileName,
-                            "folder", "posts"
-                    )
-            );
+                            "folder", "posts",
+                            "resource_type", "auto"));
             return uploadResult.get("secure_url").toString();
 
         } catch (Exception e) {
@@ -211,8 +226,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
                         "folder", "videos/" + UUID.randomUUID(),
                         "public_id", "master",
                         "eager", Arrays.asList(hlsTransformation),
-                        "eager_async", true
-                ));
+                        "eager_async", true));
 
         return uploadResult.get("playback_url").toString();
     }
@@ -220,7 +234,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
     private File zipFolder(File folder) throws IOException {
         File zipFile = new File(folder.getParentFile(), folder.getName() + ".zip");
         try (FileOutputStream fos = new FileOutputStream(zipFile);
-             ZipOutputStream zos = new ZipOutputStream(fos)) {
+                ZipOutputStream zos = new ZipOutputStream(fos)) {
 
             Path folderPath = folder.toPath();
             Files.walk(folderPath).forEach(path -> {
@@ -271,13 +285,11 @@ public class UploadFileServiceImpl implements IUploadFileService {
 
             String uniqueFileName = "avatars/" + UUID.randomUUID() + "_" + fileName;
 
-
             Map uploadResult = cloudinary.uploader().upload(avatarData,
                     ObjectUtils.asMap(
                             "public_id", uniqueFileName,
                             "resource_type", "image",
-                            "format", contentType != null ? contentType.split("/")[1] : "jpg"
-                    ));
+                            "format", contentType != null ? contentType.split("/")[1] : "jpg"));
 
             return uploadResult.get("secure_url").toString();
 

@@ -22,7 +22,8 @@ public class UploadFileController {
     private final IUploadFileService uploadFileService;
 
     @PostMapping(value = "/post/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<String> uploadMedia(@RequestPart("files") List<MultipartFile> files, @RequestPart("postId") String postId) throws IOException, InterruptedException, ExecutionException {
+    public ResponseEntity<String> uploadMedia(@RequestPart("files") List<MultipartFile> files,
+            @RequestPart("postId") String postId) throws IOException, InterruptedException, ExecutionException {
         if (files != null && !files.isEmpty() && postId != null && !postId.isEmpty()) {
             log.info("Add File");
             uploadFileService.savePostMedia(files, Long.valueOf(postId));
@@ -32,7 +33,8 @@ public class UploadFileController {
     }
 
     @PostMapping(value = "/reel/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<String> uploadMedia2(@RequestPart("files") List<MultipartFile> files, @RequestPart("postId") String postId) {
+    public ResponseEntity<String> uploadMedia2(@RequestPart("files") List<MultipartFile> files,
+            @RequestPart("postId") String postId) {
         if (files != null && !files.isEmpty() && postId != null && !postId.isEmpty()) {
             log.info("Add File");
             uploadFileService.saveReelMedia(files, Long.valueOf(postId));
@@ -42,7 +44,8 @@ public class UploadFileController {
     }
 
     @PostMapping(value = "/story/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    public ResponseEntity<String> uploadMedia3(@RequestPart("files") List<MultipartFile> files, @RequestPart("storyId") String storyId) {
+    public ResponseEntity<String> uploadMedia3(@RequestPart("files") List<MultipartFile> files,
+            @RequestPart("storyId") String storyId) {
         if (files != null && !files.isEmpty() && storyId != null && !storyId.isEmpty()) {
             log.info("Add File");
             uploadFileService.saveStoryMedia(files, Long.valueOf(storyId));
@@ -60,10 +63,12 @@ public class UploadFileController {
     public ResponseData<String> test2() {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test File Service");
     }
-    @PostMapping("/upload")
-    public ResponseData<String> uploadFile(@RequestParam("file") MultipartFile file) throws IOException, InterruptedException, ExecutionException {
-        String fileUrl = uploadFileService.upload(file);
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", fileUrl);
+
+    @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseData<?> uploadFile(@RequestPart("files") List<MultipartFile> files)
+            throws IOException, InterruptedException, ExecutionException {
+        List<String> fileUrls = uploadFileService.uploadFileMessage(files);
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", fileUrls);
     }
 
 }

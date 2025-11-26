@@ -90,6 +90,13 @@ spring:
               filters:
                 - StripPrefix=1
 
+            - id: upload-file-service
+              uri: lb://files
+              predicates:
+                - Path=/api/files/**
+              filters:
+                - StripPrefix=2
+
             - id: messaging-service
               uri: lb://messaging
               predicates:

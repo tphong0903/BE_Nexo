@@ -14,7 +14,5 @@ public class MessageMediaDTO {
     private Long id;
     private String mediaUrl;
     private EMessageType mediaType;
-    private String thumbnailUrl;
-    private String fileName;
-    private Long fileSize;
+
 }

@@ -94,8 +94,17 @@ public class MessageServiceImpl implements MessageService {
                     .orElse(null);
             messageModel.setReplyToMessage(replyTo);
         }
-
         messageModel = messageRepository.save(messageModel);
+
+        if (request.getMediaUrls() != null && !request.getMediaUrls().isEmpty()) {
+            for (String url : request.getMediaUrls()) {
+                MessageMediaModel media = new MessageMediaModel();
+                media.setMessage(messageModel);
+                media.setMediaUrl(url);
+                media.setMediaType(determineMediaType(url));
+                mediaRepository.save(media);
+            }
+        }
 
         conversation.setLastMessageId(messageModel.getId());
         conversation.setLastMessageAt(messageModel.getCreatedAt());
@@ -314,4 +323,18 @@ public class MessageServiceImpl implements MessageService {
                 .collect(Collectors.toList());
     }
 
+    private EMessageType determineMediaType(String url) {
+        String lowerUrl = url.toLowerCase();
+        if (lowerUrl.endsWith(".jpg") || lowerUrl.endsWith(".jpeg") || lowerUrl.endsWith(".png")
+                || lowerUrl.endsWith(".gif") || lowerUrl.endsWith(".webp")) {
+            return EMessageType.IMAGE;
+        } else if (lowerUrl.endsWith(".mp4") || lowerUrl.endsWith(".avi") || lowerUrl.endsWith(".mov")
+                || lowerUrl.endsWith(".mkv")) {
+            return EMessageType.VIDEO;
+        } else if (lowerUrl.endsWith(".mp3") || lowerUrl.endsWith(".wav") || lowerUrl.endsWith(".aac")) {
+            return EMessageType.AUDIO;
+        } else {
+            return EMessageType.FILE;
+        }
+    }
 }

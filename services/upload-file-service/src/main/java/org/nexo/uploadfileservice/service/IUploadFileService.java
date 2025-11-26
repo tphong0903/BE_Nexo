@@ -10,7 +10,11 @@ public interface IUploadFileService {
 
     String upload(MultipartFile multipartFile);
 
-    void savePostMedia(List<MultipartFile> files, Long postId) throws IOException, InterruptedException, ExecutionException;
+    List<String> uploadFileMessage(List<MultipartFile> multipartFile)
+            throws IOException, InterruptedException, ExecutionException;
+
+    void savePostMedia(List<MultipartFile> files, Long postId)
+            throws IOException, InterruptedException, ExecutionException;
 
     void saveReelMedia(List<MultipartFile> files, Long postId);
 

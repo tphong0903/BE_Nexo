@@ -28,67 +28,66 @@ import java.util.Set;
 @Slf4j
 public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
 
-        private final UserRepository userRepository;
-        private final FollowService followService;
-        private final FollowRepository followRepository;
-        private final UserEventProducer userEventProducer;
-        private final BlockService blockService;
+    private final UserRepository userRepository;
+    private final FollowService followService;
+    private final FollowRepository followRepository;
+    private final UserEventProducer userEventProducer;
+    private final BlockService blockService;
 
-        @Override
-        public void createUser(UserServiceProto.CreateUserRequest request,
-                        StreamObserver<UserServiceProto.CreateUserResponse> responseObserver) {
-                log.info("Received gRPC request to create user: email={}, keycloakUserId={}",
-                                request.getEmail(), request.getKeycloakUserId());
+    @Override
+    public void createUser(UserServiceProto.CreateUserRequest request,
+                           StreamObserver<UserServiceProto.CreateUserResponse> responseObserver) {
+        log.info("Received gRPC request to create user: email={}, keycloakUserId={}",
+                request.getEmail(), request.getKeycloakUserId());
 
-                if (userRepository.existsByEmail(request.getEmail())) {
-                        UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("User with email " + request.getEmail() + " already exists")
-                                        .setUserId(0)
-                                        .build();
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                        return;
-                }
-
-                if (userRepository.existsByKeycloakUserId(request.getKeycloakUserId())) {
-                        UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("User with keycloak ID " + request.getKeycloakUserId()
-                                                        + " already exists")
-                                        .setUserId(0)
-                                        .build();
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                        return;
-                }
-
-                UserModel user = UserModel.builder()
-                                .keycloakUserId(request.getKeycloakUserId())
-                                .email(request.getEmail())
-                                .username(request.getUsername())
-                                .fullName(request.getFullName())
-                                .accountStatus(EAccountStatus.valueOf(request.getAccountStatus()))
-                                .build();
-
-                UserModel savedUser = userRepository.save(user);
-
-                UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse.newBuilder()
-                                .setSuccess(true)
-                                .setMessage("User created successfully")
-                                .setUserId(savedUser.getId())
-                                .build();
-
-                log.info("User created successfully: id={}, email={}, keycloakUserId={}",
-                                savedUser.getId(), savedUser.getEmail(), savedUser.getKeycloakUserId());
-                publishUserEvent(savedUser, "CREATE");
-
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
+        if (userRepository.existsByEmail(request.getEmail())) {
+            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("User with email " + request.getEmail() + " already exists")
+                    .setUserId(0)
+                    .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            return;
         }
 
+        if (userRepository.existsByKeycloakUserId(request.getKeycloakUserId())) {
+            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("User with keycloak ID " + request.getKeycloakUserId()
+                            + " already exists")
+                    .setUserId(0)
+                    .build();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            return;
+        }
+
+        UserModel user = UserModel.builder()
+                .keycloakUserId(request.getKeycloakUserId())
+                .email(request.getEmail())
+                .username(request.getUsername())
+                .fullName(request.getFullName())
+                .accountStatus(EAccountStatus.valueOf(request.getAccountStatus()))
+                .build();
+
+        UserModel savedUser = userRepository.save(user);
+
+        UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse.newBuilder()
+                .setSuccess(true)
+                .setMessage("User created successfully")
+                .setUserId(savedUser.getId())
+                .build();
+
+        log.info("User created successfully: id={}, email={}, keycloakUserId={}",
+                savedUser.getId(), savedUser.getEmail(), savedUser.getKeycloakUserId());
+        publishUserEvent(savedUser, "CREATE");
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
 
     private void publishUserEvent(UserModel user, String eventType) {
         UserSearchEvent event = UserSearchEvent.builder()
@@ -158,6 +157,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
             responseObserver.onCompleted();
         }
     }
+
 
     @Override
     public void updateAccountStatus(UserServiceProto.UpdateAccountStatusRequest request,
@@ -644,34 +644,36 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
         responseObserver.onNext(responseBuilder.build());
         responseObserver.onCompleted();
     }
-        @Override
-        public void getUserIdByEmail(UserServiceProto.GetUserIdByEmailRequest request,
-                        StreamObserver<UserServiceProto.GetUserIdByEmailResponse> responseObserver) {
 
-                UserModel user = userRepository.findByEmailAndAccountStatus(request.getEmail(), EAccountStatus.ACTIVE)
-                                .orElse(null);
+    @Override
+    public void getUserIdByEmail(UserServiceProto.GetUserIdByEmailRequest request,
+                                 StreamObserver<UserServiceProto.GetUserIdByEmailResponse> responseObserver) {
 
-                if (user == null) {
-                        UserServiceProto.GetUserIdByEmailResponse response = UserServiceProto.GetUserIdByEmailResponse
-                                        .newBuilder()
-                                        .setSuccess(false)
-                                        .setMessage("User not found with email: " + request.getEmail())
-                                        .setKeycloakUserId("")
-                                        .build();
+        UserModel user = userRepository.findByEmailAndAccountStatus(request.getEmail(), EAccountStatus.ACTIVE).orElse(null);
 
-                        log.warn("User not found with email: {}", request.getEmail());
-                        responseObserver.onNext(response);
-                        responseObserver.onCompleted();
-                        return;
-                }
-                UserServiceProto.GetUserIdByEmailResponse response = UserServiceProto.GetUserIdByEmailResponse
-                                .newBuilder()
-                                .setSuccess(true)
-                                .setMessage("User found successfully")
-                                .setKeycloakUserId(user.getKeycloakUserId())
-                                .build();
+        if (user == null) {
+            UserServiceProto.GetUserIdByEmailResponse response = UserServiceProto.GetUserIdByEmailResponse
+                    .newBuilder()
+                    .setSuccess(false)
+                    .setMessage("User not found with email: " + request.getEmail())
+                    .setKeycloakUserId("")
+                    .build();
 
-                responseObserver.onNext(response);
-                responseObserver.onCompleted();
+            log.warn("User not found with email: {}", request.getEmail());
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+            return;
         }
+
+
+        UserServiceProto.GetUserIdByEmailResponse response = UserServiceProto.GetUserIdByEmailResponse
+                .newBuilder()
+                .setSuccess(true)
+                .setMessage("User found successfully")
+                .setKeycloakUserId(user.getKeycloakUserId())
+                .build();
+
+        responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
 }

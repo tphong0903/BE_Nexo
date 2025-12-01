@@ -62,4 +62,13 @@ public class InteractionGrpcClient {
         return response.getDataList();
     }
 
+    public InteractionServiceOuterClass.GetCommentByIdResponse getCommentById(Long id) {
+        InteractionServiceOuterClass.GetCommentByIdRequest request = InteractionServiceOuterClass.GetCommentByIdRequest.newBuilder().setCommentId(id).build();
+        return interactionBlockingStub.getCommentById(request);
+    }
+
+    public boolean deleteCommentById(Long id) {
+        InteractionServiceOuterClass.DeleteCommentByIdRequest request = InteractionServiceOuterClass.DeleteCommentByIdRequest.newBuilder().setCommentId(id).build();
+        return interactionBlockingStub.deleteCommentById(request).getIsSuccess();
+    }
 }

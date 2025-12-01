@@ -21,6 +21,7 @@ public class ReportResponseDTO {
     private String ownerPostName;
     private String reporterAvatarUrl;
     private String ownerPostAvatarUrl;
+    private String content;
     private LocalDateTime createdAt;
     private List<String> mediaUrls;
     private String caption;

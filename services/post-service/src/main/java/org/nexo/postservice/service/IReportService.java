@@ -13,19 +13,23 @@ public interface IReportService {
 
     String reportReel(Long id, String reason, String detail);
 
+    String reportComment(Long id, String reason, String detail);
+
     String handleReportPost(Long id, EReportStatus decision, String note);
 
     String handleReportReel(Long id, EReportStatus decision, String note);
 
-    Page<ReportPostModel> getAllReportPosts(int pageNo, int pageSize, EReportStatus status);
-
-    Page<ReportReelModel> getAllReportReels(int pageNo, int pageSize, EReportStatus status);
+    String handleReportComment(Long id, EReportStatus decision, String note);
 
     ReportInfoDTO searchReportPosts(int pageNo, int pageSize, EReportStatus status, String keyword);
 
     ReportInfoDTO searchReportReels(int pageNo, int pageSize, EReportStatus status, String keyword);
 
+    ReportInfoDTO searchReportComments(int pageNo, int pageSize, EReportStatus status, String keyword);
+
     ReportResponseDTO getPostReportById(Long id);
 
     ReportResponseDTO getReelReportById(Long id);
+
+    ReportResponseDTO getCommentReportById(Long id);
 }

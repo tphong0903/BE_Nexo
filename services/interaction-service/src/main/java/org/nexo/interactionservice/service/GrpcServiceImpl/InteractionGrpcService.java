@@ -7,6 +7,7 @@ import net.devh.boot.grpc.server.service.GrpcService;
 import org.nexo.grpc.interaction.InteractionServiceGrpc;
 import org.nexo.grpc.interaction.InteractionServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.repository.ICommentRepository;
 import org.nexo.interactionservice.repository.ILikeRepository;
 
@@ -26,7 +27,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void existLikesByUserAndPostIds(InteractionServiceOuterClass.BatchIsLikeRequest request,
-            StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
+                                           StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
         Long userId = request.getUserId();
         List<Long> postIds = request.getPostIdsList();
 
@@ -51,7 +52,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void existLikesByUserAndReelIds(InteractionServiceOuterClass.BatchIsLikeRequest request,
-            StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
+                                           StreamObserver<InteractionServiceOuterClass.BatchIsLikeResponse> responseObserver) {
         Long userId = request.getUserId();
         List<Long> postIds = request.getPostIdsList();
 
@@ -76,7 +77,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void getTotalInteractions(InteractionServiceOuterClass.Empty request,
-            StreamObserver<InteractionServiceOuterClass.QuantityTotalInteract> responseObserver) {
+                                     StreamObserver<InteractionServiceOuterClass.QuantityTotalInteract> responseObserver) {
         long total = likeRepository.count() + commentRepository.count();
 
         InteractionServiceOuterClass.QuantityTotalInteract response = InteractionServiceOuterClass.QuantityTotalInteract
@@ -90,7 +91,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void getPercentInteractionsInThisMonth(InteractionServiceOuterClass.Empty request,
-            StreamObserver<InteractionServiceOuterClass.PercentInteract> responseObserver) {
+                                                  StreamObserver<InteractionServiceOuterClass.PercentInteract> responseObserver) {
         LocalDateTime startOfThisMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         LocalDateTime startOfLastMonth = startOfThisMonth.minusMonths(1);
         LocalDateTime endOfLastMonth = startOfThisMonth;
@@ -155,7 +156,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
     @Override
     public void getUserInteractionsCount(InteractionServiceOuterClass.GetUserInteractionsCountRequest request,
-            StreamObserver<InteractionServiceOuterClass.GetUserInteractionsCountResponse> responseObserver) {
+                                         StreamObserver<InteractionServiceOuterClass.GetUserInteractionsCountResponse> responseObserver) {
         Long userId = request.getUserId();
         long likesCount = likeRepository.countByUserId(userId);
         long commentsCount = commentRepository.countByUserId(userId);
@@ -168,6 +169,52 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
                 .build();
 
         responseObserver.onNext(response);
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void getCommentById(InteractionServiceOuterClass.GetCommentByIdRequest request,
+                               StreamObserver<InteractionServiceOuterClass.GetCommentByIdResponse> responseObserver) {
+
+        Long commentId = request.getCommentId();
+        CommentModel commentModel = commentRepository.findById(commentId).orElse(null);
+
+        InteractionServiceOuterClass.GetCommentByIdResponse.Builder response = InteractionServiceOuterClass.GetCommentByIdResponse.newBuilder();
+
+
+        if (commentModel != null) {
+            response.setCommentId(commentModel.getUserId());
+            response.setContent(commentModel.getContent());
+            response.setUserId(commentModel.getUserId());
+            if (commentModel.getPostId() != 0) {
+                response.setPostId(commentModel.getPostId());
+                response.setReelId(0);
+            } else {
+                response.setReelId(commentModel.getReelId());
+                response.setPostId(0);
+            }
+        } else {
+            response.setCommentId(0);
+        }
+        responseObserver.onNext(response.build());
+        responseObserver.onCompleted();
+    }
+
+    @Override
+    public void deleteCommentById(InteractionServiceOuterClass.DeleteCommentByIdRequest request,
+                                  StreamObserver<InteractionServiceOuterClass.DeleteCommentByIdResponse> responseObserver) {
+
+        Long commentId = request.getCommentId();
+        CommentModel commentModel = commentRepository.findById(commentId).orElse(null);
+        InteractionServiceOuterClass.DeleteCommentByIdResponse.Builder response = InteractionServiceOuterClass.DeleteCommentByIdResponse.newBuilder();
+        if (commentModel != null) {
+            commentRepository.delete(commentModel);
+            response.setIsSuccess(true);
+        } else {
+            response.setIsSuccess(false);
+        }
+
+        responseObserver.onNext(response.build());
         responseObserver.onCompleted();
     }
 }

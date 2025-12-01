@@ -9,6 +9,8 @@ public interface ReportSummaryProjection {
 
     String getOwnerPostName();
 
+    String getOwnerCommentName();
+
     String getReportStatus();
 
     LocalDateTime getCreatedAt();

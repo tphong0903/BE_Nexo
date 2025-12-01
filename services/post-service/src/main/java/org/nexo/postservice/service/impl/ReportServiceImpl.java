@@ -123,9 +123,9 @@ public class ReportServiceImpl implements IReportService {
         AbstractPost abstractPost = null;
 
         if (commentModel.getPostId() != 0)
-            abstractPost = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
+            abstractPost = postRepository.findById(commentModel.getPostId()).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
         else
-            abstractPost = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+            abstractPost = reelRepository.findById(commentModel.getReelId()).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
         boolean isAllow = false;
         if (abstractPost.getUserId().equals(userId)) {
             isAllow = true;
@@ -138,13 +138,14 @@ public class ReportServiceImpl implements IReportService {
         if (!isAllow)
             throw new CustomException("Dont allow to report this Post", HttpStatus.BAD_REQUEST);
 
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(abstractPost.getUserId(), userId));
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(commentModel.getUserId(), userId));
 
         ReportCommentModel report = ReportCommentModel.builder()
                 .userId(userId)
                 .commentId(commentModel.getCommentId())
                 .reason(reason)
                 .detail(detail)
+                .content(commentModel.getContent())
                 .reporterName(users.get(1).getUsername())
                 .ownerCommentName(users.get(0).getUsername())
                 .reportStatus(EReportStatus.PENDING)
@@ -372,7 +373,8 @@ public class ReportServiceImpl implements IReportService {
     @Override
     public ReportResponseDTO getCommentReportById(Long id) {
         ReportCommentModel model = reportCommentRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
-        InteractionServiceOuterClass.GetCommentByIdResponse commentModel = interactionGrpcClient.getCommentById(id);
+
+        InteractionServiceOuterClass.GetCommentByIdResponse commentModel = interactionGrpcClient.getCommentById(model.getCommentId());
         if (commentModel.getCommentId() == 0)
             throw new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST);
         List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), commentModel.getUserId()));

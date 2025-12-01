@@ -183,7 +183,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
 
 
         if (commentModel != null) {
-            response.setCommentId(commentModel.getUserId());
+            response.setCommentId(commentModel.getId());
             response.setContent(commentModel.getContent());
             response.setUserId(commentModel.getUserId());
             if (commentModel.getPostId() != 0) {

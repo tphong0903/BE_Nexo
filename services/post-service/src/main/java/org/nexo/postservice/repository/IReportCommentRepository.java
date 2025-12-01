@@ -25,7 +25,7 @@ public interface IReportCommentRepository extends JpaRepository<ReportCommentMod
                 AND (
                     :keyword IS NULL 
                     OR r.reason  ILIKE CONCAT('%', :keyword, '%')
-                    OR r.owner_post_name  ILIKE CONCAT('%', :keyword, '%')
+                    OR r.owner_comment_name  ILIKE CONCAT('%', :keyword, '%')
                     OR r.reporter_name ILIKE CONCAT('%', :keyword, '%')
                 )
             ORDER BY r.id DESC

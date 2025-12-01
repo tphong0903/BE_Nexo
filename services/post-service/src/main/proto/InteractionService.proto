@@ -9,6 +9,8 @@ service InteractionService {
   rpc GetTotalInteractions(Empty) returns (QuantityTotalInteract);
   rpc GetPercentInteractionsInThisMonth(Empty) returns (PercentInteract);
   rpc GetInteractionsByTime(DateRange) returns (GetUsersByTimeResponse);
+  rpc GetCommentById (GetCommentByIdRequest) returns (GetCommentByIdResponse);
+  rpc DeleteCommentById (DeleteCommentByIdRequest) returns (DeleteCommentByIdResponse);
 }
 message DateRange {
   string startDate = 1;
@@ -49,4 +51,24 @@ message LikeResult {
 }
 message BatchIsLikeResponse {
   repeated LikeResult results = 1;
+}
+
+message GetCommentByIdRequest {
+  int64 commentId = 1;
+}
+
+message GetCommentByIdResponse {
+  int64 commentId = 1;
+  int64 userId = 2;
+  int64 postId = 3;
+  int64 reelId = 4;
+  string content = 5;
+}
+
+message DeleteCommentByIdRequest {
+  int64 commentId = 1;
+}
+
+message DeleteCommentByIdResponse {
+  bool isSuccess = 2;
 }

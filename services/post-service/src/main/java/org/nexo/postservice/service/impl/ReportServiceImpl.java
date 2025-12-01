@@ -1,16 +1,15 @@
 package org.nexo.postservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.nexo.grpc.interaction.InteractionServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.response.ReportInfoDTO;
 import org.nexo.postservice.dto.response.ReportResponseDTO;
 import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.*;
-import org.nexo.postservice.repository.IPostRepository;
-import org.nexo.postservice.repository.IReelRepository;
-import org.nexo.postservice.repository.IReportPostRepository;
-import org.nexo.postservice.repository.IReportReelRepository;
+import org.nexo.postservice.repository.*;
+import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IReportService;
 import org.nexo.postservice.util.Enum.EReportStatus;
@@ -31,10 +30,12 @@ import java.util.List;
 public class ReportServiceImpl implements IReportService {
     private final IReportPostRepository reportPostRepository;
     private final IReportReelRepository reportReelRepository;
+    private final IReportCommentRepository reportCommentRepository;
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
+    private final InteractionGrpcClient interactionGrpcClient;
 
     @Override
     public String reportPost(Long id, String reason, String detail) {
@@ -109,8 +110,52 @@ public class ReportServiceImpl implements IReportService {
     }
 
     @Override
+    public String reportComment(Long id, String reason, String detail) {
+        Long userId = securityUtil.getUserIdFromToken();
+        boolean exists = reportCommentRepository.existsByUserIdAndCommentId(userId, id);
+        if (exists) {
+            throw new CustomException("You reported this post", HttpStatus.BAD_REQUEST);
+        }
+
+        InteractionServiceOuterClass.GetCommentByIdResponse commentModel = interactionGrpcClient.getCommentById(id);
+        if (commentModel.getCommentId() == 0)
+            throw new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST);
+        AbstractPost abstractPost = null;
+
+        if (commentModel.getPostId() != 0)
+            abstractPost = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
+        else
+            abstractPost = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+        boolean isAllow = false;
+        if (abstractPost.getUserId().equals(userId)) {
+            isAllow = true;
+        } else {
+            UserServiceProto.CheckFollowResponse followResponse = userGrpcClient.checkFollow(userId, abstractPost.getUserId());
+            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to report this Post", HttpStatus.BAD_REQUEST);
+
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(abstractPost.getUserId(), userId));
+
+        ReportCommentModel report = ReportCommentModel.builder()
+                .userId(userId)
+                .commentId(commentModel.getCommentId())
+                .reason(reason)
+                .detail(detail)
+                .reporterName(users.get(1).getUsername())
+                .ownerCommentName(users.get(0).getUsername())
+                .reportStatus(EReportStatus.PENDING)
+                .build();
+
+        reportCommentRepository.save(report);
+        return "Success";
+    }
+
+    @Override
     public String handleReportPost(Long id, EReportStatus decision, String note) {
-        Long adminId = securityUtil.getUserIdFromToken();
 
         ReportPostModel report = reportPostRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
@@ -152,8 +197,6 @@ public class ReportServiceImpl implements IReportService {
 
     @Override
     public String handleReportReel(Long id, EReportStatus decision, String note) {
-        Long adminId = securityUtil.getUserIdFromToken();
-
         ReportReelModel report = reportReelRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
 
@@ -190,24 +233,34 @@ public class ReportServiceImpl implements IReportService {
     }
 
     @Override
-    public Page<ReportPostModel> getAllReportPosts(int pageNo, int pageSize, EReportStatus status) {
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
+    public String handleReportComment(Long id, EReportStatus decision, String note) {
+        ReportCommentModel report = reportCommentRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
 
-        if (status != null) {
-            return reportPostRepository.findByReportStatus(status, pageable);
+        if (report.getReportStatus() != EReportStatus.PENDING && report.getReportStatus() != EReportStatus.IN_REVIEW) {
+            throw new CustomException("This report has already been processed", HttpStatus.BAD_REQUEST);
         }
 
-        return reportPostRepository.findAll(pageable);
-    }
+        switch (decision) {
+            case APPROVED:
+                interactionGrpcClient.deleteCommentById(id);
+                report.setReportStatus(EReportStatus.APPROVED);
+                break;
 
-    @Override
-    public Page<ReportReelModel> getAllReportReels(int pageNo, int pageSize, EReportStatus status) {
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
+            case REJECTED:
+                report.setReportStatus(EReportStatus.REJECTED);
+                break;
 
-        if (status != null) {
-            return reportReelRepository.findByReportStatus(status, pageable);
+            case IN_REVIEW:
+                report.setReportStatus(EReportStatus.IN_REVIEW);
+                break;
+
+            default:
+                throw new CustomException("Invalid decision", HttpStatus.BAD_REQUEST);
         }
-        return reportReelRepository.findAll(pageable);
+        report.setNote(note);
+        reportCommentRepository.save(report);
+        return "Report processed successfully with decision: " + decision.name();
     }
 
     @Override
@@ -244,6 +297,25 @@ public class ReportServiceImpl implements IReportService {
 
         Page<ReportSummaryProjection> reportPage = reportReelRepository
                 .searchReportsReelsNative(status.name(), keyword, pageable);
+        return new ReportInfoDTO(pending, approved, inReview, rejected, reportPage);
+    }
+
+    @Override
+    public ReportInfoDTO searchReportComments(int pageNo, int pageSize, EReportStatus status, String keyword) {
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
+        if (status == null) {
+            status = EReportStatus.ALL;
+        }
+        List<Object[]> countsList = reportCommentRepository.getReportQuantitySummary();
+        Object[] counts = countsList.get(0);
+
+        Long pending = ((Number) counts[0]).longValue();
+        Long inReview = ((Number) counts[1]).longValue();
+        Long approved = ((Number) counts[2]).longValue();
+        Long rejected = ((Number) counts[3]).longValue();
+
+        Page<ReportSummaryProjection> reportPage = reportCommentRepository
+                .searchReportCommentsNative(status.name(), keyword, pageable);
         return new ReportInfoDTO(pending, approved, inReview, rejected, reportPage);
     }
 
@@ -294,6 +366,31 @@ public class ReportServiceImpl implements IReportService {
                 .caption(model.getReelModel().getCaption())
                 .note(model.getNote())
                 .isActive(model.getReelModel().getIsActive())
+                .build();
+    }
+
+    @Override
+    public ReportResponseDTO getCommentReportById(Long id) {
+        ReportCommentModel model = reportCommentRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+        InteractionServiceOuterClass.GetCommentByIdResponse commentModel = interactionGrpcClient.getCommentById(id);
+        if (commentModel.getCommentId() == 0)
+            throw new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST);
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), commentModel.getUserId()));
+
+        return ReportResponseDTO.builder()
+                .postId(model.getCommentId())
+                .id(model.getId())
+                .userId(model.getUserId())
+                .reason(model.getReason())
+                .detail(model.getDetail())
+                .reportStatus(String.valueOf(model.getReportStatus()))
+                .createdAt(model.getCreatedAt())
+                .reporterName(model.getReporterName())
+                .ownerPostName(model.getOwnerCommentName())
+                .reporterAvatarUrl(users.get(0).getAvatar())
+                .ownerPostAvatarUrl(users.get(1).getAvatar())
+                .note(model.getNote())
+                .content(model.getContent())
                 .build();
     }
 }

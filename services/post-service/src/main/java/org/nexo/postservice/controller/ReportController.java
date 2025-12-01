@@ -45,6 +45,16 @@ public class ReportController {
         );
     }
 
+    @PostMapping("/comment/{id}")
+    public ResponseData<String> reportComment(
+            @PathVariable Long id,
+            @RequestBody ReportRequest request) {
+        return new ResponseData<>(
+                HttpStatus.CREATED.value(),
+                "Success",
+                reportService.reportComment(id, request.getReason(), request.getDetail())
+        );
+    }
 
     @GetMapping("/posts")
     public ResponseData<?> getAllPostReports(
@@ -67,6 +77,16 @@ public class ReportController {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", reportService.searchReportReels(pageNo, pageSize, status, keyword));
     }
 
+    @GetMapping("/comments")
+    public ResponseData<?> getAllCommentReports(
+            @RequestParam(defaultValue = "0") int pageNo,
+            @RequestParam(defaultValue = "10") int pageSize,
+            @RequestParam(required = false) EReportStatus status,
+            @RequestParam(required = false) String keyword
+    ) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", reportService.searchReportComments(pageNo, pageSize, status, keyword));
+    }
+
 
     @GetMapping("/posts/{id}")
     public ResponseData<?> getReportPostById(@PathVariable Long id) {
@@ -76,6 +96,11 @@ public class ReportController {
     @GetMapping("/reels/{id}")
     public ResponseData<?> getReportReelById(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", reportService.getReelReportById(id));
+    }
+
+    @GetMapping("/comments/{id}")
+    public ResponseData<?> getReportCommentById(@PathVariable Long id) {
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", reportService.getCommentReportById(id));
     }
 
     @PutMapping("/post/{id}/{status}")
@@ -117,6 +142,27 @@ public class ReportController {
                 HttpStatus.CREATED.value(),
                 "Success",
                 reportService.handleReportReel(id, EReportStatus.valueOf(status), note)
+        );
+    }
+
+    @PutMapping("/comment/{id}/{status}")
+    public ResponseData<String> handleReportComment(
+            @PathVariable Long id,
+            @PathVariable String status,
+            @RequestParam String note
+    ) {
+
+        if (!status.equals("IN_REVIEW") && !status.equals("APPROVED") && !status.equals("REJECTED")) {
+            return new ResponseData<>(
+                    HttpStatus.BAD_REQUEST.value(),
+                    "Invalid status value",
+                    null
+            );
+        }
+        return new ResponseData<>(
+                HttpStatus.CREATED.value(),
+                "Success",
+                reportService.handleReportComment(id, EReportStatus.valueOf(status), note)
         );
     }
 

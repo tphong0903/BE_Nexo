@@ -16,6 +16,7 @@ public class ReportCommentModel extends AbstractEntity<Long> {
 
     private Long commentId;
     private Long userId;
+    private Long ownerId;
     private String reason;
     private String content;
     private String detail;

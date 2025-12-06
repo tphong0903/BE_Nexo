@@ -9,6 +9,7 @@ import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.service.IDashboardService;
 import org.nexo.postservice.service.IPostService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -19,6 +20,7 @@ import java.time.LocalDate;
 @Validated
 @Slf4j
 @RequiredArgsConstructor
+@PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
 public class DashboardController {
     private final IDashboardService dashboardService;
     private final IPostService postService;

@@ -12,6 +12,7 @@ import org.nexo.postservice.util.Enum.EReportStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -57,6 +58,7 @@ public class ReportController {
     }
 
     @GetMapping("/posts")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<?> getAllPostReports(
             @RequestParam(defaultValue = "0") int pageNo,
             @RequestParam(defaultValue = "10") int pageSize,
@@ -68,6 +70,7 @@ public class ReportController {
 
 
     @GetMapping("/reels")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<?> getAllReelReports(
             @RequestParam(defaultValue = "0") int pageNo,
             @RequestParam(defaultValue = "10") int pageSize,
@@ -78,6 +81,7 @@ public class ReportController {
     }
 
     @GetMapping("/comments")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<?> getAllCommentReports(
             @RequestParam(defaultValue = "0") int pageNo,
             @RequestParam(defaultValue = "10") int pageSize,
@@ -89,21 +93,25 @@ public class ReportController {
 
 
     @GetMapping("/posts/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<?> getReportPostById(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", reportService.getPostReportById(id));
     }
 
     @GetMapping("/reels/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<?> getReportReelById(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", reportService.getReelReportById(id));
     }
 
     @GetMapping("/comments/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<?> getReportCommentById(@PathVariable Long id) {
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", reportService.getCommentReportById(id));
     }
 
     @PutMapping("/post/{id}/{status}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<String> handleReportPost(
             @PathVariable Long id,
             @PathVariable String status,
@@ -125,6 +133,7 @@ public class ReportController {
     }
 
     @PutMapping("/reel/{id}/{status}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<String> handleReportReel(
             @PathVariable Long id,
             @PathVariable String status,
@@ -146,6 +155,7 @@ public class ReportController {
     }
 
     @PutMapping("/comment/{id}/{status}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MODERATOR')")
     public ResponseData<String> handleReportComment(
             @PathVariable Long id,
             @PathVariable String status,
@@ -165,5 +175,4 @@ public class ReportController {
                 reportService.handleReportComment(id, EReportStatus.valueOf(status), note)
         );
     }
-
 }

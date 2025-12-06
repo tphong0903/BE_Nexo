@@ -9,6 +9,7 @@ import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.response.ResponseData;
 import org.nexo.postservice.service.IPostService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;

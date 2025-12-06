@@ -145,6 +145,7 @@ public class ReportServiceImpl implements IReportService {
                 .commentId(commentModel.getCommentId())
                 .reason(reason)
                 .detail(detail)
+                .ownerId(commentModel.getUserId())
                 .content(commentModel.getContent())
                 .reporterName(users.get(1).getUsername())
                 .ownerCommentName(users.get(0).getUsername())
@@ -246,6 +247,7 @@ public class ReportServiceImpl implements IReportService {
             case APPROVED:
                 interactionGrpcClient.deleteCommentById(id);
                 report.setReportStatus(EReportStatus.APPROVED);
+                report.setCommentId(0L);
                 break;
 
             case REJECTED:
@@ -374,10 +376,7 @@ public class ReportServiceImpl implements IReportService {
     public ReportResponseDTO getCommentReportById(Long id) {
         ReportCommentModel model = reportCommentRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
 
-        InteractionServiceOuterClass.GetCommentByIdResponse commentModel = interactionGrpcClient.getCommentById(model.getCommentId());
-        if (commentModel.getCommentId() == 0)
-            throw new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST);
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), commentModel.getUserId()));
+        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), model.getOwnerId()));
 
         return ReportResponseDTO.builder()
                 .postId(model.getCommentId())

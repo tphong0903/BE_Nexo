@@ -428,12 +428,15 @@ public class PostServiceImpl implements IPostService {
     }
 
     @Override
-    public PageModelResponse<PostResponseDTO> getPopularPosts(int page, int size) {
+    public PageModelResponse<PostResponseDTO> getPopularPosts(int page, int size, String hashtag) {
         Pageable pageable = PageRequest.of(page, size);
         Long id = securityUtil.getUserIdFromToken();
         UserServiceProto.UserDTOResponse currentUser = userGrpcClient.getUserDTOById(id);
-        Page<PostModel> postPage = postRepository.findPopularPublicPostsWithHashtagScore(pageable);
-
+        Page<PostModel> postPage = null;
+        if (hashtag.isEmpty())
+            postPage = postRepository.findPopularPublicPostsWithHashtagScore(pageable);
+        else
+            postPage = postRepository.findPopularPublicPostsByHashtag(hashtag, pageable);
         List<PostModel> posts = postPage.getContent();
         List<Long> postIds = posts.stream().map(PostModel::getId).toList();
         Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getId(), postIds);

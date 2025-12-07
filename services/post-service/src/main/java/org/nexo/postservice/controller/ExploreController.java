@@ -30,7 +30,8 @@ public class ExploreController {
     @GetMapping("")
     public ResponseData<?> getExplorePosts(
             @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "") String hashtag,
             @RequestParam(defaultValue = "20") int size) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.getPopularPosts(page, size));
+        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.getPopularPosts(page, size, "#" + hashtag));
     }
 }

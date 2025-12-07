@@ -42,7 +42,7 @@ public interface IPostService {
 
     String deletePost2(Long id);
 
-    PageModelResponse getPopularPosts(int page, int size);
+    PageModelResponse getPopularPosts(int page, int size, String hashtag);
 
     List<PostResponseDTO> getPostsByIds(List<Long> postIds, Long viewerId);
 

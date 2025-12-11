@@ -65,7 +65,14 @@ public class ConversationServiceImpl implements ConversationService {
             if (conv.getStatus() == EConversationStatus.BLOCKED) {
                 throw new SecurityException("Conversation is blocked");
             }
-            log.info("Found existing conversation between {} and {}", user1, recipientUserId);
+
+            if (conv.getStatus() == EConversationStatus.PENDING) {
+                boolean areMutualFriends = userGrpcClient.areMutualFriends(user1, recipientUserId);
+                if (areMutualFriends) {
+                    conv.setStatus(EConversationStatus.NORMAL);
+                    conv = conversationRepository.save(conv);
+                }
+            }
             return mapToDto(conv, user1);
         }
 

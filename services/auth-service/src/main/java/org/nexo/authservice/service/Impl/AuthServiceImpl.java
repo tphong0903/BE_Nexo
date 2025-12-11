@@ -34,6 +34,7 @@ import org.springframework.web.reactive.function.client.WebClientResponseExcepti
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -403,6 +404,7 @@ public class AuthServiceImpl implements AuthService {
     private Mono<Void> verifyEmail(String userId, String adminToken) {
         Map<String, Object> payload = new HashMap<>();
         payload.put("emailVerified", true);
+        payload.put("requiredActions", Collections.emptyList());
         return webClient.put()
                 .uri(keycloakConfig.getServerUrl() + "/admin/realms/"
                         + keycloakConfig.getRealm() + "/users/" + userId)

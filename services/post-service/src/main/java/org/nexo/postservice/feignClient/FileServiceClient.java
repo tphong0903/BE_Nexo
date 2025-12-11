@@ -11,27 +11,23 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
-
-@FeignClient(name = "files", url = "http://localhost:8086", configuration = FeignConfig.class)
+@FeignClient(name = "files", configuration = FeignConfig.class)
 public interface FileServiceClient {
-    @PostMapping(value = "/post/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ResponseEntity<String> savePostMedia(
-            @RequestPart("files") List<MultipartFile> files,
-            @RequestPart("postId") String postId,
-            @RequestHeader("Authorization") String token
-    );
+        @PostMapping(value = "/post/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        ResponseEntity<String> savePostMedia(
+                        @RequestPart("files") List<MultipartFile> files,
+                        @RequestPart("postId") String postId,
+                        @RequestHeader("Authorization") String token);
 
-    @PostMapping(value = "/reel/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ResponseEntity<String> saveReelMedia(
-            @RequestPart("files") List<MultipartFile> files,
-            @RequestPart("postId") String postId,
-            @RequestHeader("Authorization") String token
-    );
+        @PostMapping(value = "/reel/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        ResponseEntity<String> saveReelMedia(
+                        @RequestPart("files") List<MultipartFile> files,
+                        @RequestPart("postId") String postId,
+                        @RequestHeader("Authorization") String token);
 
-    @PostMapping(value = "/story/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
-    ResponseEntity<String> saveStoryMedia(
-            @RequestPart("files") List<MultipartFile> files,
-            @RequestPart("storyId") String postId,
-            @RequestHeader("Authorization") String token
-    );
+        @PostMapping(value = "/story/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+        ResponseEntity<String> saveStoryMedia(
+                        @RequestPart("files") List<MultipartFile> files,
+                        @RequestPart("storyId") String postId,
+                        @RequestHeader("Authorization") String token);
 }

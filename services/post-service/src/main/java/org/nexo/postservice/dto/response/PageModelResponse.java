@@ -9,8 +9,11 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PageModelResponse {
+public class PageModelResponse<T> {
     private int pageNo;
     private int pageSize;
-    private List<PostResponseDTO> postResponseDTOList;
+    private long totalElements;
+    private int totalPages;
+    private boolean last;
+    private List<T> content;
 }

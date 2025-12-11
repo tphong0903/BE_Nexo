@@ -33,6 +33,19 @@ spring:
     redis:
       port: 6379
       host: localhost
+
+  kafka:
+    bootstrap-servers: localhost:9097
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 1
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 5
+        spring.json.add.type.headers: false
+
 eureka:
   client:
     serviceUrl:
@@ -44,7 +57,9 @@ eureka:
 feign:
   client:
     config:
-      default:
+      files:
+        connectTimeout: 10000
+        readTimeout: 60000
         loggerLevel: FULL
   okhttp:
     enabled: true
@@ -58,6 +73,7 @@ grpc:
     users:
       address: static://localhost:9092
       negotiation-type: plaintext
-    posts:
-      address: static://localhost:9091
-      negotiationType: plaintext
+    interactions:
+      address: static://localhost:9095
+      negotiation-type: plaintext
+

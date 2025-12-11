@@ -1,10 +1,7 @@
 package org.nexo.postservice.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.nexo.postservice.util.Enum.EMediaType;
 
@@ -12,7 +9,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @Entity
 @SuperBuilder
 @NoArgsConstructor
@@ -27,7 +25,10 @@ public class StoryModel extends AbstractEntity<Long> {
     private LocalDateTime expiresAt;
     private Boolean isArchive;
     private Boolean isActive;
+    private String authorName;
 
     @OneToMany(mappedBy = "storyModel", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<StoryViewModel> views = new ArrayList<>();
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "storyModel", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CollectionItemModel> collectionItemModelList = new ArrayList<>();
 }

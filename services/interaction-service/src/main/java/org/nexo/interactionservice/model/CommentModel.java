@@ -1,14 +1,13 @@
 package org.nexo.interactionservice.model;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.FetchType;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
+import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
 import lombok.experimental.SuperBuilder;
+
+import java.util.List;
 
 @Data
 @Entity
@@ -25,5 +24,9 @@ public class CommentModel extends AbstractEntity<Long> {
     private CommentModel parentComment;
     private String content;
 
+    @OneToMany(fetch = FetchType.EAGER, mappedBy = "commentModel", cascade = CascadeType.ALL)
+    private List<CommentMentionModel> mentionList;
 
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "parentComment", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<CommentModel> childComments;
 }

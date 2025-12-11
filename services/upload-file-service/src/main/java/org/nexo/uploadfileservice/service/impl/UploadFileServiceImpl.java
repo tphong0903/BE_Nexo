@@ -1,29 +1,27 @@
 package org.nexo.uploadfileservice.service.impl;
 
-import com.google.auth.Credentials;
-import com.google.auth.oauth2.GoogleCredentials;
-import com.google.cloud.storage.BlobId;
-import com.google.cloud.storage.BlobInfo;
-import com.google.cloud.storage.Storage;
-import com.google.cloud.storage.StorageOptions;
+import com.cloudinary.Cloudinary;
+import com.cloudinary.Transformation;
+import com.cloudinary.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.uploadfile.grpc.PostMediaServiceProto;
 import org.nexo.uploadfileservice.grpc.PostGrpcClient;
 import org.nexo.uploadfileservice.service.IHlsService;
 import org.nexo.uploadfileservice.service.IUploadFileService;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
+import java.io.*;
 import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @Service
 @RequiredArgsConstructor
@@ -31,10 +29,7 @@ import java.util.*;
 public class UploadFileServiceImpl implements IUploadFileService {
     private final PostGrpcClient postGrpcClient;
     private final IHlsService hlsService;
-    @Value("${app.firebase.bucket}")
-    private String BUCKET_NAME;
-    @Value("${app.firebase.file}")
-    private String FIREBASE_PRIVATE_KEY;
+    private final Cloudinary cloudinary;
 
     @Override
     public String upload(MultipartFile multipartFile) {
@@ -55,37 +50,88 @@ public class UploadFileServiceImpl implements IUploadFileService {
     }
 
     @Override
-    public void savePostMedia(List<MultipartFile> files, Long postId) {
-        List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = new ArrayList<>();
-        PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient.findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
-        int mediaOrder = postMediaListRequests.getPostsList().size();
-        for (int i = 0; i < files.size(); i++) {
-            MultipartFile file = files.get(i);
-            String contentType = file.getContentType();
-
-            String mediaType;
-            if (contentType.startsWith("image")) {
-                mediaType = "PICTURE";
-            } else {
-                mediaType = "VIDEO";
+    public List<String> uploadFileMessage(List<MultipartFile> multipartFiles) {
+        List<String> urls = new ArrayList<>();
+        try {
+            for (MultipartFile file : multipartFiles) {
+                String fileName = file.getOriginalFilename();
+                File convertedFile = this.convertToFile(file, fileName);
+                String URL = this.uploadFile(convertedFile, fileName);
+                urls.add(URL);
+                if (convertedFile.delete()) {
+                    System.out.println("File deleted successfully");
+                } else {
+                    System.err.println("Failed to delete file");
+                }
             }
-
-            PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
-                    .setPostID(postId)
-                    .setMediaType(mediaType)
-                    .setMediaOrder(mediaOrder++)
-                    .setMediaUrl(upload(file))
-                    .build();
-
-            grpcRequests.add(grpcItem);
+            return urls;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return Collections.emptyList();
         }
-        PostMediaServiceProto.PostMediaListRequest request =
-                PostMediaServiceProto.PostMediaListRequest.newBuilder()
-                        .addAllPosts(grpcRequests)
-                        .build();
+    }
 
+    @Override
+    public void savePostMedia(List<MultipartFile> files, Long postId) throws InterruptedException, ExecutionException {
+        List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = Collections.synchronizedList(new ArrayList<>());
+
+        PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient
+                .findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
+        int mediaOrderStart = postMediaListRequests.getPostsList().size();
+
+        ExecutorService executor = Executors.newFixedThreadPool(Math.min(files.size(), 8));
+
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+
+        for (int i = 0; i < files.size(); i++) {
+            final int index = i;
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                try {
+                    MultipartFile file = files.get(index);
+                    String contentType = file.getContentType();
+                    String mediaUrl = "";
+                    String mediaType;
+
+                    if (contentType.startsWith("image")) {
+                        mediaType = "PICTURE";
+                        mediaUrl = upload(file);
+                    } else {
+                        mediaType = "VIDEO";
+                        File tempFile = File.createTempFile("video", ".mp4");
+                        // String hlsOutputDir = tempFile.getParent() + "/hls_" + index + "_" +
+                        // System.currentTimeMillis();
+                        file.transferTo(tempFile);
+                        // File hlsFolder = hlsService.convertToHls(tempFile, hlsOutputDir);
+                        // mediaUrl = uploadHlsToCloudinary(hlsFolder);
+                        mediaUrl = uploadHlsToCloudinary(tempFile);
+                    }
+
+                    PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO
+                            .newBuilder()
+                            .setPostID(postId)
+                            .setMediaType(mediaType)
+                            .setMediaOrder(mediaOrderStart + index)
+                            .setMediaUrl(mediaUrl)
+                            .build();
+
+                    grpcRequests.add(grpcItem);
+
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            }, executor);
+
+            futures.add(future);
+        }
+
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
+
+        executor.shutdown();
+
+        PostMediaServiceProto.PostMediaListRequest request = PostMediaServiceProto.PostMediaListRequest.newBuilder()
+                .addAllPosts(grpcRequests)
+                .build();
         postGrpcClient.savePostMedias(request);
-
     }
 
     @Override
@@ -102,8 +148,10 @@ public class UploadFileServiceImpl implements IUploadFileService {
                 if (mediaType.equals("VIDEO")) {
                     File tempFile = File.createTempFile("video", ".mp4");
                     file.transferTo(tempFile);
-                    File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() + "/hls");
-                    String m3u8Url = uploadHlsToFirebase(hlsFolder);
+                    // File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() +
+                    // "/hls");
+                    // String m3u8Url = uploadHlsToCloudinary(hlsFolder);
+                    String m3u8Url = uploadHlsToCloudinary(tempFile);
 
                     PostMediaServiceProto.ReelDto grpcItem = PostMediaServiceProto.ReelDto.newBuilder()
                             .setPostId(postId)
@@ -112,7 +160,7 @@ public class UploadFileServiceImpl implements IUploadFileService {
                     postGrpcClient.saveReelMedias(grpcItem);
 
                     deleteRecursive(tempFile);
-                    deleteRecursive(hlsFolder);
+                    // deleteRecursive(hlsFolder);
                 }
             }
         } catch (Exception e) {
@@ -124,100 +172,91 @@ public class UploadFileServiceImpl implements IUploadFileService {
     public void saveStoryMedia(List<MultipartFile> files, Long postId) {
         for (MultipartFile file : files) {
             String contentType = file.getContentType();
-
+            String mediaUrl = "";
             String mediaType;
-            if (contentType.startsWith("image")) {
-                mediaType = "PICTURE";
-            } else {
-                mediaType = "VIDEO";
+            try {
+                if (contentType.startsWith("image")) {
+                    mediaType = "PICTURE";
+                    mediaUrl = upload(file);
+                } else {
+                    File tempFile = File.createTempFile("video", ".mp4");
+                    file.transferTo(tempFile);
+                    // File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() +
+                    // "/hls");
+                    mediaUrl = uploadHlsToCloudinary(tempFile);
+                    mediaType = "VIDEO";
+                }
+                PostMediaServiceProto.StoryDto grpcItem = PostMediaServiceProto.StoryDto.newBuilder()
+                        .setStoryId(postId)
+                        .setMediaUrl(mediaUrl)
+                        .setMediaType(mediaType)
+                        .build();
+                postGrpcClient.saveStoryMedias(grpcItem);
+            } catch (Exception e) {
+                throw new RuntimeException(e);
             }
-            PostMediaServiceProto.StoryDto grpcItem = PostMediaServiceProto.StoryDto.newBuilder()
-                    .setStoryId(postId)
-                    .setMediaUrl(upload(file))
-                    .setMediaType(mediaType)
-                    .build();
-            postGrpcClient.saveStoryMedias(grpcItem);
         }
     }
 
     public String uploadFile(File file, String fileName) throws IOException {
-        if (FIREBASE_PRIVATE_KEY == null) {
-            throw new RuntimeException("Firebase private key is not found. " +
-                    "Please set 'app.firebase.file' in application.properties");
+        try {
+            Map uploadResult = cloudinary.uploader().upload(file,
+                    ObjectUtils.asMap(
+                            "public_id", fileName,
+                            "folder", "posts",
+                            "resource_type", "auto"));
+            return uploadResult.get("secure_url").toString();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Upload to Cloudinary failed: " + e.getMessage(), e);
         }
-        BlobId blobId = BlobId.of(BUCKET_NAME, fileName);
-        BlobInfo blobInfo = BlobInfo.newBuilder(blobId).setContentType("media").build();
-        try (InputStream inputStream = UploadFileServiceImpl.class.getClassLoader().getResourceAsStream(FIREBASE_PRIVATE_KEY)) {
-            if (inputStream == null) {
-                throw new RuntimeException("Firebase private key is not found. " +
-                        "Please check 'app.firebase.file' in application.properties");
-            }
-            // change the file name with your one
-            Credentials credentials = GoogleCredentials.fromStream(inputStream);
-            Storage storage = StorageOptions.newBuilder().setCredentials(credentials).build().getService();
-            storage.create(blobInfo, Files.readAllBytes(file.toPath()));
-        }
-        String DOWNLOAD_URL = "https://firebasestorage.googleapis.com/v0/b/" + BUCKET_NAME + "/o/%s?alt=media";
-        return String.format(DOWNLOAD_URL, URLEncoder.encode(fileName, StandardCharsets.UTF_8));
     }
 
-    public String uploadHlsToFirebase(File hlsFolder) throws IOException {
-        if (FIREBASE_PRIVATE_KEY == null) {
-            throw new RuntimeException("Firebase private key is not found. " +
-                    "Please set 'app.firebase.file' in application.properties");
+    public String uploadHlsToCloudinary(File mp4File) throws IOException {
+        if (!mp4File.exists() || !mp4File.isFile()) {
+            throw new IllegalArgumentException("File does not exist or is not a file");
         }
-        String folderName = "videos/" + UUID.randomUUID();
-        try (InputStream inputStream = UploadFileServiceImpl.class.getClassLoader().getResourceAsStream(FIREBASE_PRIVATE_KEY)) {
-            if (inputStream == null) {
-                throw new RuntimeException("Firebase private key is not found. " +
-                        "Please check 'app.firebase.file' in application.properties");
-            }
-            Credentials credentials = GoogleCredentials.fromStream(inputStream);
-            Storage storage = StorageOptions.newBuilder().setCredentials(credentials).build().getService();
-            for (File file : Objects.requireNonNull(hlsFolder.getParentFile().listFiles())) {
-                String blobName = folderName + "/" + file.getName();
-                BlobId blobId = BlobId.of(BUCKET_NAME, blobName);
-                String contentType;
 
-                if (file.getName().endsWith(".m3u8")) {
-                    contentType = "application/vnd.apple.mpegurl";
+        Transformation hlsTransformation = new Transformation()
+                .param("streaming_profile", "full_hd");
 
-                    String m3u8Content = Files.readString(file.toPath(), StandardCharsets.UTF_8);
+        Map uploadResult = cloudinary.uploader().uploadLarge(mp4File,
+                ObjectUtils.asMap(
+                        "resource_type", "video",
+                        "folder", "videos/" + UUID.randomUUID(),
+                        "public_id", "master",
+                        "eager", Arrays.asList(hlsTransformation),
+                        "eager_async", true));
 
-                    String baseUrl = "https://firebasestorage.googleapis.com/v0/b/"
-                            + BUCKET_NAME + "/o/" + URLEncoder.encode(folderName + "/", StandardCharsets.UTF_8);
+        return uploadResult.get("playback_url").toString();
+    }
 
-                    m3u8Content = m3u8Content.replaceAll("(segment_\\d+\\.ts)", baseUrl + "$1?alt=media");
+    private File zipFolder(File folder) throws IOException {
+        File zipFile = new File(folder.getParentFile(), folder.getName() + ".zip");
+        try (FileOutputStream fos = new FileOutputStream(zipFile);
+                ZipOutputStream zos = new ZipOutputStream(fos)) {
 
-                    // Upload lại file m3u8 đã chỉnh sửa
-                    BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
-                            .setContentType(contentType)
-                            .build();
-                    storage.create(blobInfo, m3u8Content.getBytes(StandardCharsets.UTF_8));
-
-                } else if (file.getName().endsWith(".ts")) {
-                    contentType = "video/MP2T";
-                    BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
-                            .setContentType(contentType)
-                            .build();
-                    storage.create(blobInfo, Files.readAllBytes(file.toPath()));
-
-                } else {
-                    contentType = Files.probeContentType(file.toPath());
-                    BlobInfo blobInfo = BlobInfo.newBuilder(blobId)
-                            .setContentType(contentType)
-                            .build();
-                    storage.create(blobInfo, Files.readAllBytes(file.toPath()));
+            Path folderPath = folder.toPath();
+            Files.walk(folderPath).forEach(path -> {
+                File file = path.toFile();
+                if (file.isFile()) {
+                    String zipEntryName = folderPath.relativize(path).toString().replace("\\", "/");
+                    try (FileInputStream fis = new FileInputStream(file)) {
+                        ZipEntry entry = new ZipEntry(zipEntryName);
+                        zos.putNextEntry(entry);
+                        byte[] buffer = new byte[4096];
+                        int len;
+                        while ((len = fis.read(buffer)) != -1) {
+                            zos.write(buffer, 0, len);
+                        }
+                        zos.closeEntry();
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
                 }
-            }
+            });
         }
-        String playlistName = Arrays.stream(Objects.requireNonNull(hlsFolder.getParentFile().listFiles()))
-                .filter(f -> f.getName().endsWith(".m3u8"))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("No .m3u8 file found"))
-                .getName();
-        String DOWNLOAD_URL = "https://firebasestorage.googleapis.com/v0/b/" + BUCKET_NAME + "/o/%s?alt=media";
-        return String.format(DOWNLOAD_URL, URLEncoder.encode(folderName + "/" + playlistName, StandardCharsets.UTF_8));
+        return zipFile;
     }
 
     public File convertToFile(MultipartFile multipartFile, String fileName) throws IOException {
@@ -235,5 +274,27 @@ public class UploadFileServiceImpl implements IUploadFileService {
             }
         }
         file.delete();
+    }
+
+    @Override
+    public String uploadAvatar(byte[] avatarData, String fileName, String contentType) {
+        try {
+            if (avatarData == null || avatarData.length == 0) {
+                throw new RuntimeException("Avatar data is empty!");
+            }
+
+            String uniqueFileName = "avatars/" + UUID.randomUUID() + "_" + fileName;
+
+            Map uploadResult = cloudinary.uploader().upload(avatarData,
+                    ObjectUtils.asMap(
+                            "public_id", uniqueFileName,
+                            "resource_type", "image",
+                            "format", contentType != null ? contentType.split("/")[1] : "jpg"));
+
+            return uploadResult.get("secure_url").toString();
+
+        } catch (Exception e) {
+            throw new RuntimeException("Avatar couldn't upload, something went wrong: " + e.getMessage(), e);
+        }
     }
 }

@@ -2,9 +2,11 @@ package org.nexo.postservice.dto.response;
 
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import lombok.Builder;
 
 import java.io.Serializable;
 
+@Builder
 public class ResponseData<T> implements Serializable {
     private final int status;
     private final String message;

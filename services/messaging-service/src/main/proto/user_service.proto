@@ -1,0 +1,219 @@
+syntax = "proto3";
+
+package org.nexo.grpc.user;
+
+option java_package = "org.nexo.grpc.user";
+option java_outer_classname = "UserServiceProto";
+
+service UserService {
+  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
+  rpc UpdateUserEmailVerification(UpdateEmailVerificationRequest) returns (UpdateEmailVerificationResponse);
+  rpc UpdateAccountStatus(UpdateAccountStatusRequest) returns (UpdateAccountStatusResponse);
+  rpc GetUserFollowees(GetUserFolloweesRequest) returns (GetUserFolloweesResponse);
+  rpc GetUserDto(KeycloakId) returns (UserDto);
+  rpc GetUserFollowings(GetUserFollowingsRequest) returns (GetUserFollowingsResponse);
+  rpc GetUserDtoById(GetUserDtoByIdRequest) returns (UserDTOResponse);
+  rpc CheckFollow(CheckMutualFollowRequest) returns (CheckFollowResponse);
+  rpc GetUsersByIds(GetUsersByIdsRequest) returns (GetUsersByIdsResponse);
+  rpc GetUserOnlineStatus(GetUserOnlineStatusRequest) returns (GetUserOnlineStatusResponse);
+  rpc CheckMutualFriends(CheckMutualFriendsRequest) returns (CheckMutualFriendsResponse);
+  rpc GetMutualFriends(GetMutualFriendsRequest) returns (GetMutualFriendsResponse);
+  rpc CheckBlock(CheckBlockRequest) returns (CheckBlockResponse);
+  rpc CheckIfBlocked(CheckIfBlockedRequest) returns (CheckIfBlockedResponse);
+  rpc GetLikeUsersByIds(GetUsersByIdsRequest2) returns (GetUsersByIdsResponse2);
+  rpc GetTotalUsers(Empty) returns (QuantityTotalUsers);
+  rpc GetPercentUsersInThisMonth(Empty) returns (UserPercentResponse);
+  rpc GetUsersByTime(DateRange) returns (GetUsersByTimeResponse);
+
+}
+
+message Empty {}
+
+message DateRange {
+  string startDate = 1;
+  string endDate = 2;
+}
+
+message UserCountByDate {
+  string date = 1;
+  int64 count = 2;
+}
+
+message GetUsersByTimeResponse {
+  repeated UserCountByDate data = 1;
+}
+
+message GetUsersByIdsRequest {
+  repeated int64 userIds = 1;
+}
+message GetUsersByIdsRequest2 {
+  int64 id = 1;
+  repeated int64 userIds = 2;
+}
+
+message GetUsersByIdsResponse {
+  repeated UserDTOResponse2 users = 1;
+}
+message GetUsersByIdsResponse2 {
+  repeated UserDTOResponse3 users = 1;
+}
+
+message UserDTOResponse2 {
+  int64 id = 1;
+  string username = 2;
+  string avatar = 3;
+  string full_name=4;
+  bool online_status = 5;
+}
+message UserDTOResponse3 {
+  int64 id = 1;
+  string username = 2;
+  string avatar = 3;
+  bool isPrivate = 4;
+  int32 isFollow = 5;
+}
+message CreateUserRequest {
+  string keycloak_user_id = 1;
+  string email = 2;
+  string username = 3;
+  string full_name = 4;
+}
+
+message UserDto {
+  int64 user_id = 1;
+  string keycloak_user_id = 2;
+  string email = 3;
+  string username = 4;
+  string full_name = 5;
+}
+
+message KeycloakId {
+  string keycloak_user_id = 1;
+}
+
+message CreateUserResponse {
+  bool success = 1;
+  string message = 2;
+  int64 user_id = 3;
+}
+
+message UpdateEmailVerificationRequest {
+  string keycloak_user_id = 1;
+  bool email_verified = 2;
+}
+
+message UpdateEmailVerificationResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message UpdateAccountStatusRequest {
+  string keycloak_user_id = 1;
+  string account_status = 2; // PENDING, ACTIVE, INACTIVE, BLOCKED
+}
+
+message UpdateAccountStatusResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetUserFolloweesRequest {
+  int64 user_id = 1;
+}
+
+message GetUserFolloweesResponse {
+  bool success = 1;
+  string message = 2;
+  repeated FolloweeInfo followees = 3;
+}
+
+message GetUserFollowingsRequest {
+  int64 user_id = 1;
+}
+
+message GetUserFollowingsResponse {
+  bool success = 1;
+  string message = 2;
+  repeated FolloweeInfo followings = 3;
+}
+
+message FolloweeInfo {
+  int64 user_id = 1;
+  string user_name = 2;
+  string avatar = 3;
+  bool is_close_friend = 4;
+}
+
+message UserDTOResponse {
+  int64 id = 1;
+  string username = 2;
+  string full_name = 3;
+  string avatar = 4;
+  string bio = 5;
+  string created_at = 7;
+}
+
+message GetUserDtoByIdRequest {
+  int64 user_id = 1;
+}
+
+message CheckMutualFollowRequest {
+  int64 user_id_1 = 1;
+  int64 user_id_2 = 2;
+}
+
+message CheckFollowResponse {
+  bool is_private = 1;
+  bool is_follow = 2;
+  bool is_close_friend = 3;
+}
+
+message QuantityTotalUsers {
+  int64 quantity = 1;
+}
+
+message UserPercentResponse {
+  double percent = 1;
+}
+
+message GetUserOnlineStatusRequest {
+  int64 user_id = 1;
+}
+
+message GetUserOnlineStatusResponse {
+  bool online_status = 1; 
+}
+message CheckMutualFriendsRequest {
+  int64 user_id1 = 1;
+  int64 user_id2 = 2;
+}
+
+message CheckMutualFriendsResponse {
+  bool are_mutual_friends = 1;
+}
+
+message GetMutualFriendsRequest {
+  int64 user_id = 1;
+}
+
+message GetMutualFriendsResponse {
+  repeated int64 user_ids = 1;
+}
+
+message CheckBlockRequest {
+    int64 requester_user_id = 1;
+    int64 target_user_id = 2;
+}
+
+message CheckBlockResponse {
+    bool is_blocked = 1;
+}
+message CheckIfBlockedRequest {
+  int64 user_id = 1;        
+  int64 target_user_id = 2; 
+}
+
+message CheckIfBlockedResponse {
+  bool is_blocked = 1;           // true = user_id bị target block hoặc ngược lại
+  int64 blocked_by_user_id = 2;  // Ai block (0 = không ai block)
+}

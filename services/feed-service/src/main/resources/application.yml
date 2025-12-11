@@ -28,6 +28,17 @@ spring:
     redis:
       port: 6379
       host: localhost
+  kafka:
+    bootstrap-servers: localhost:9097
+    consumer:
+      group-id: notificationGroup
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      properties:
+        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.value.default.type: org.nexo.feedservice.dto.MessagePostDTO
+        spring.json.trusted-packages: org.nexo
+      auto-offset-reset: earliest
 eureka:
   client:
     service-url:
@@ -40,7 +51,7 @@ eureka:
 grpc:
   client:
     posts:
-      address: static://localhost:9091
+      address: static://localhost:9094
       negotiation-type: plaintext
     users:
       address: static://localhost:9092

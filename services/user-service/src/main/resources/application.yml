@@ -21,6 +21,21 @@ spring:
       port: 6379
       timeout: 2000ms
       connect-timeout: 2000ms
+  kafka:
+    bootstrap-servers: localhost:9097
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+    consumer:
+      group-id: user-search-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.value.default.type: org.nexo.userservice.dto.UserSearchEvent
+      auto-offset-reset: earliest
   security:
     oauth2:
       resourceserver:
@@ -40,9 +55,34 @@ eureka:
 grpc:
   server:
     port: 9092
+  client:
+    upload-file-service:
+      address: "static://localhost:9093"
+      negotiationType: plaintext
+    messaging-service:
+      address: "static://localhost:9098"
+      negotiationType: plaintext
+    auth-service:
+      address: "static://localhost:9099"
+      negotiationType: plaintext
+    interaction-service:
+      address: "static://localhost:9095"
+      negotiationType: plaintext
+    post-service:
+      address: "static://localhost:9094"
+      negotiationType: plaintext
+
+meilisearch:
+  host: http://localhost:7700
+  apiKey: masterKey
+  index:
+    users: users
+
+kafka:
+  topics:
+    user-events: user-events
 
 logging:
   level:
-    org.nexo.userservice: DEBUG
-    org.hibernate.SQL: DEBUG
-    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    "org.apache.kafka": OFF
+    "org.springframework.kafka": OFF

@@ -9,6 +9,7 @@ import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.response.ResponseData;
 import org.nexo.postservice.service.IPostService;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -26,14 +27,10 @@ public class PostController {
     @PostMapping
     public ResponseData<String> addPost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
                                         @RequestPart(value = "files", required = false) List<MultipartFile> files) throws JsonProcessingException {
-
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
-
-
         return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
     }
-
 
     @PutMapping
     public ResponseData<String> updatePost(@RequestPart("postRequestDTO") @Valid String postRequestDTOJson,
@@ -41,27 +38,30 @@ public class PostController {
 
         ObjectMapper objectMapper = new ObjectMapper();
         PostRequestDTO postRequestDTO = objectMapper.readValue(postRequestDTOJson, PostRequestDTO.class);
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.savePost(postRequestDTO, files));
+        return new ResponseData<>(200, "Success", postService.savePost(postRequestDTO, files));
     }
 
     @PatchMapping("/{id}")
     public ResponseData<String> inactivePost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.inactivePost(id));
+        return new ResponseData<>(200, "Success", postService.inactivePost(id));
     }
 
     @DeleteMapping("/{id}")
     public ResponseData<String> deletePost(@PathVariable Long id) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.deletePost(id));
+        return new ResponseData<>(200, "Success", postService.deletePost(id));
+    }
+
+    @GetMapping("/users/{id}")
+    public ResponseData<?> getAllPostOfUser(@PathVariable Long id,
+                                            @RequestParam(defaultValue = "0") int pageNo,
+                                            @RequestParam(defaultValue = "20") int pageSize) {
+        return new ResponseData<>(200, "Success", postService.getAllPostOfUser(id, pageNo, pageSize));
+    }
+
+    @GetMapping("/{id}")
+    public ResponseData<?> getPost(@PathVariable Long id) {
+        return new ResponseData<>(200, "Success", postService.getPostById(id));
     }
 
 
-    @GetMapping
-    public ResponseData<String> test() {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", "Test Post Service");
-    }
-
-    @GetMapping("{id}")
-    public ResponseData<?> getAllPostOfUser(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
-        return new ResponseData<>(HttpStatus.CREATED.value(), "Success", postService.getAllPostOfUser(id, pageNo, pageSize));
-    }
 }

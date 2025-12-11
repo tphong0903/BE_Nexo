@@ -4,10 +4,23 @@ package org.nexo.grpc.post;
 
 service PostService {
   rpc GetPostById (GetPostRequest) returns (PostResponse);
+  rpc GetReelById (GetPostRequest) returns (ReelResponse);
   rpc addLikeQuantityById (GetPostRequest2) returns (PostMessageResponse);
   rpc addCommentQuantityById (GetPostRequest2) returns (PostMessageResponse);
+  rpc GetPostsByIds (GetPostsByIdsRequest) returns (GetPostsByIdsResponse);
+  rpc GetReelsByIds (GetPostsByIdsRequest) returns (GetReelsByIdsResponse);
+  rpc GetUserPostsCount (GetUserPostsCountRequest) returns (GetUserPostsCountResponse);
 }
-
+message GetPostsByIdsRequest {
+  repeated int64 postIds = 1;
+  int64 userId = 2;
+}
+message GetPostsByIdsResponse {
+  repeated PostResponse posts = 1;
+}
+message GetReelsByIdsResponse {
+  repeated ReelResponse reels = 1;
+}
 message GetPostRequest {
   int64 id = 1;
 }
@@ -32,10 +45,37 @@ message PostResponse {
   int64 quantityComment = 10;
   repeated UserTag listUserTag = 11;
   bool isActive = 12;
-  int64 createdAt = 13;
+  bool isLike = 13;
+  int64 createdAt = 14;
+  int64 updateAt = 15;
+}
+
+message ReelResponse {
+  int64 postId = 1;
+  int64 userId = 2;
+  string userName = 3;
+  string avatarUrl = 4;
+  string caption = 5;
+  string visibility = 6;
+  repeated UserTag listUserTag = 7;
+  string mediaUrl = 8;
+  int64 quantityLike = 9;
+  int64 quantityComment = 10;
+  bool isActive = 12;
+  bool isLike = 13;
+  int64 createdAt = 14;
+  int64 updateAt = 15;
 }
 
 message UserTag {
   int64 userId = 1;
   string userName = 2;
+}
+
+message GetUserPostsCountRequest {
+  int64 userId = 1;
+}
+
+message GetUserPostsCountResponse {
+  int64 postsCount = 1; // total posts + reels 
 }

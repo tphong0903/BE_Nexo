@@ -1,5 +1,6 @@
 package org.nexo.userservice.exception;
 
+import com.meilisearch.sdk.exceptions.MeilisearchException;
 import lombok.extern.slf4j.Slf4j;
 
 import org.hibernate.exception.ConstraintViolationException;
@@ -7,13 +8,14 @@ import org.nexo.userservice.dto.ResponseData;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.mapping.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.transaction.TransactionSystemException;
 import java.util.Date;
 
 @RestControllerAdvice
@@ -44,6 +46,34 @@ public class GlobalExceptionHandler {
         return errorResponse;
     }
 
+    @ExceptionHandler(TransactionSystemException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public ErrorResponse handleTransactionSystemException(TransactionSystemException e, WebRequest request) {
+        ErrorResponse errorResponse = new ErrorResponse();
+        errorResponse.setTimestamp(new Date());
+        errorResponse.setPath(request.getDescription(false).replace("uri=", ""));
+        errorResponse.setStatus(HttpStatus.BAD_REQUEST.value());
+        errorResponse.setError("Validation Failed");
+
+        // Extract the root cause to get the actual validation message
+        Throwable cause = e.getCause();
+        while (cause != null) {
+            if (cause instanceof jakarta.validation.ConstraintViolationException) {
+                jakarta.validation.ConstraintViolationException cve = (jakarta.validation.ConstraintViolationException) cause;
+                String violations = cve.getConstraintViolations().stream()
+                        .map(violation -> violation.getMessage())
+                        .collect(java.util.stream.Collectors.joining(", "));
+                errorResponse.setMessage(violations);
+                return errorResponse;
+            }
+            cause = cause.getCause();
+        }
+
+        // Fallback message if no ConstraintViolationException found
+        errorResponse.setMessage("Transaction failed due to validation error");
+        return errorResponse;
+    }
+
     @ExceptionHandler({ MethodArgumentTypeMismatchException.class })
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public ErrorResponse handlerInternalServerException(Exception e, WebRequest request) {
@@ -59,6 +89,7 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(ResourceNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
     public ResponseData<?> handleNotFoundException(ResourceNotFoundException ex) {
         return new ResponseData<>(HttpStatus.NOT_FOUND.value(), ex.getMessage());
     }
@@ -68,6 +99,26 @@ public class GlobalExceptionHandler {
     public ResponseData<?> handleDataConflict(DataIntegrityViolationException ex) {
         return new ResponseData<>(HttpStatus.CONFLICT.value(),
                 "Database constraint violation: " + ex.getMostSpecificCause().getMessage());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
+    public ResponseData<?> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+        log.warn("Access denied: {} - Path: {}", ex.getMessage(), request.getDescription(false));
+        return ResponseData.builder()
+                .status(HttpStatus.FORBIDDEN.value())
+                .message("Access denied: You don't have permission to access this resource")
+                .build();
+    }
+
+    @ExceptionHandler(MeilisearchException.class)
+    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
+    public ResponseData<?> handleMeilisearchException(MeilisearchException ex, WebRequest request) {
+        log.error("Meilisearch error: {} - Path: {}", ex.getMessage(), request.getDescription(false));
+        return ResponseData.builder()
+                .status(HttpStatus.SERVICE_UNAVAILABLE.value())
+                .message("Search service is temporarily unavailable. Please try again later.")
+                .build();
     }
 
 }

@@ -3,14 +3,24 @@ package org.nexo.interactionservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.interactionservice.dto.MessageDTO;
 import org.nexo.interactionservice.dto.request.CommentDto;
+import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.exception.CustomException;
+import org.nexo.interactionservice.mapper.CommentMapper;
 import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.repository.ICommentRepository;
 import org.nexo.interactionservice.service.ICommentMentionService;
 import org.nexo.interactionservice.service.ICommentService;
+import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
+import org.springframework.cache.annotation.Cacheable;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -21,6 +31,9 @@ public class CommentServiceImpl implements ICommentService {
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final PostGrpcClient postGrpcClient;
+    private final CommentMapper commentMapper;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final CacheService cacheService;
 
     @Override
     public String saveComment(CommentDto a) {
@@ -42,23 +55,45 @@ public class CommentServiceImpl implements ICommentService {
                     .build();
         }
 
-        if (a.getPostId() != 0) {
+        if (a.getPostId() != null && a.getPostId() != 0) {
             model.setPostId(a.getPostId());
+            cacheService.evictByPrefix("post" + a.getPostId());
         } else {
             model.setReelId(a.getReelId());
+            cacheService.evictByPrefix("reel" + a.getReelId());
         }
 
         if (a.getParentId() != 0) {
             model.setParentComment(commentRepository.findById(a.getParentId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST)));
+            cacheService.evictByPrefix("replies" + a.getParentId());
         }
         commentRepository.save(model);
-        a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
+
         if (isAdd) {
-            if (model.getPostId() != 0) {
-                postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getPostId()).setIsPost(true).setIsIncrease(true).build());
+            a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
+            String notificationType = "";
+            Long id = 0L;
+            String url = "";
+            if (a.getPostId() != null && a.getPostId() != 0) {
+                postGrpcClient.addCommentQuantityById(model.getPostId(), true, true);
+                notificationType = String.valueOf(ENotificationType.COMMENT_POST);
+                id = postGrpcClient.getPostById(model.getPostId()).getUserId();
+                url = "/posts/" + model.getPostId();
             } else {
-                postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getReelId()).setIsPost(false).setIsIncrease(true).build());
+                postGrpcClient.addCommentQuantityById(model.getReelId(), false, true);
+                notificationType = String.valueOf(ENotificationType.COMMENT_REEL);
+                id = postGrpcClient.getReelById(model.getReelId()).getUserId();
+                url = "/reels/" + model.getReelId();
             }
+            MessageDTO messageDTO = MessageDTO.builder()
+                    .actorId(response.getUserId())
+                    .recipientId(id)
+                    .notificationType(notificationType)
+                    .targetUrl(url)
+                    .build();
+            kafkaTemplate.send("notification", messageDTO);
+        } else {
+            cacheService.evictByPrefix("replies" + model.getId());
         }
 
         return "Success";
@@ -70,16 +105,101 @@ public class CommentServiceImpl implements ICommentService {
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
         CommentModel model = commentRepository.findById(id).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
-        if (response.getUserId() != model.getUserId())
-            throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
-        commentRepository.delete(model);
-        if (model.getPostId() != 0) {
-            postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getPostId()).setIsPost(true).setIsIncrease(false).build());
+        Long ownerId = 0L;
+        if (model.getReelId() != null) {
+            ownerId = postGrpcClient.getReelById(model.getReelId()).getUserId();
         } else {
-            postGrpcClient.addCommentQuantityById(PostServiceOuterClass.GetPostRequest2.newBuilder().setId(model.getReelId()).setIsPost(false).setIsIncrease(false).build());
+            ownerId = postGrpcClient.getPostById(model.getPostId()).getUserId();
+        }
+        if (response.getUserId() != model.getUserId()
+                && !ownerId.equals(response.getUserId())) {
+            throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
+        }
+        commentRepository.delete(model);
+        if (model.getPostId() != null) {
+            postGrpcClient.addCommentQuantityById(model.getPostId(), true, false);
+            cacheService.evictByPrefix("post" + model.getPostId());
+        } else {
+            postGrpcClient.addCommentQuantityById(model.getReelId(), false, false);
+            cacheService.evictByPrefix("reel" + model.getReelId());
+        }
+
+        if (model.getParentComment() != null) {
+            cacheService.evictByPrefix("replies" + model.getParentComment().getId());
+        } else {
+            cacheService.evictByPrefix("replies" + model.getId());
         }
         return "Success";
     }
 
+    @Override
+//    @Cacheable(value = "comments", key = "'post'+ #postId + '_' + #pageNo + '_' + #pageSize")
+    public ListCommentResponse getCommentOfPost(Long postId, int pageNo, int pageSize) {
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        PostServiceOuterClass.PostResponse model = postGrpcClient.getPostById(postId);
 
+        boolean isAllow = false;
+        if (model.getUserId() == response.getUserId()) {
+            isAllow = true;
+        } else {
+            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());
+            if (!response2.getIsPrivate() || response2.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get Comment", HttpStatus.BAD_REQUEST);
+
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+
+        Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
+        return commentMapper.toListResponse(postId, commentsPage, response.getUserId());
+
+    }
+
+    @Override
+//    @Cacheable(value = "comments", key = "'reel'+ #reelId + '_' + #pageNo + '_' + #pageSize")
+    public ListCommentResponse getCommentOfReel(Long reelId, int pageNo, int pageSize) {
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+
+        PostServiceOuterClass.ReelResponse model = postGrpcClient.getReelById(reelId);
+
+        boolean isAllow = false;
+        if (model.getUserId() == response.getUserId()) {
+            isAllow = true;
+        } else {
+            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());
+            if (!response2.getIsPrivate() || response2.getIsFollow()) {
+                isAllow = true;
+            }
+        }
+        if (!isAllow)
+            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+
+        Page<CommentModel> commentsPage = commentRepository.findByReelIdAndParentComment(reelId, pageable, null);
+        return commentMapper.toListResponse(reelId, commentsPage, response.getUserId());
+    }
+
+    @Override
+//    @Cacheable(value = "comments", key = "'replies'+ #commentId + '_' + #pageNo + '_' + #pageSize")
+    public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+        Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(commentId, pageable);
+
+        CommentModel model = commentRepository.findById(commentId).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
+
+        Long id;
+        if (model.getPostId() != null)
+            id = model.getPostId();
+        else
+            id = model.getReelId();
+
+        return commentMapper.toListResponse(id, repliesPage, response.getUserId());
+    }
 }

@@ -2,45 +2,42 @@ package org.nexo.feedservice.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.ReactiveSubscription;
-import org.springframework.stereotype.Component;
-import reactor.core.publisher.Flux;
+import org.nexo.feedservice.dto.MessagePostDTO;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-@Component
+@Service
 @RequiredArgsConstructor
 @Slf4j
 public class PostCreatedListener {
 
-    private final Flux<ReactiveSubscription.Message<String, String>> postCreatedStream;
     private final FeedService feedService;
+    private final ObjectMapper mapper = new ObjectMapper();
 
-    @PostConstruct
-    public void subscribe() {
-        postCreatedStream
-                .map(ReactiveSubscription.Message::getMessage)
-                .flatMap(this::handleMessage)
-                .subscribe();
-    }
-
-    private Mono<Void> handleMessage(String message) {
+    @KafkaListener(topics = "post-created", groupId = "feed-service-group")
+    public void handlePostCreated(MessagePostDTO messageDTO) {
         try {
-            log.info("Raw message (string): '{}'", message);
-            ObjectMapper mapper = new ObjectMapper();
-            JsonNode node = mapper.readTree(message);
+            log.info("Received message from Kafka (post-created): {}", messageDTO.getPostId());
 
-            Long postId = node.get("postId").asLong();
-            Long authorId = node.get("authorId").asLong();
-            Long createdAt = node.get("createdAt").asLong();
-
-            return feedService.handleNewPost(authorId, postId, createdAt);
+            feedService.handleNewPost(messageDTO.getAuthorId(), messageDTO.getPostId(), messageDTO.getCreatedAt()).subscribe();
 
         } catch (Exception e) {
-            return Mono.error(e);
+            log.error("Error while handling post-created event", e);
+        }
+    }
+
+    @KafkaListener(topics = "reel-created", groupId = "feed-service-group")
+    public void handleReelCreated(MessagePostDTO messageDTO) {
+        try {
+            log.info("Received message from Kafka (post-deleted): {}", messageDTO.getPostId());
+
+            feedService.handleNewReel(messageDTO.getAuthorId(), messageDTO.getPostId(), messageDTO.getCreatedAt()).subscribe();
+
+        } catch (Exception e) {
+            log.error("Error while handling post-deleted event", e);
         }
     }
 }
-

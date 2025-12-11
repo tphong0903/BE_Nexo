@@ -5,6 +5,8 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.nexo.feedservice.dto.UserTagDTO;
+
 @Data
 @Getter
 @NoArgsConstructor
@@ -23,5 +25,7 @@ public class PostResponseDTO {
     private Long quantityComment;
     private List<UserTagDTO> listUserTag;
     private Boolean isActive;
+    private Boolean isLike;
     private LocalDateTime createdAt;
+    private LocalDateTime updatedAt;
 }

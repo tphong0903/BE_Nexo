@@ -5,6 +5,11 @@ import org.nexo.grpc.user.UserServiceGrpc;
 import org.nexo.grpc.user.UserServiceProto;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @Service
 public class UserGrpcClient {
 
@@ -42,5 +47,35 @@ public class UserGrpcClient {
                 .build();
 
         return userStub.checkFollow(request);
+    }
+
+    public Map<Long, UserServiceProto.UserDTOResponse2> getUsersByIds(Set<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return Map.of();
+        }
+
+        UserServiceProto.GetUsersByIdsRequest request = UserServiceProto.GetUsersByIdsRequest.newBuilder()
+                .addAllUserIds(userIds)
+                .build();
+
+        UserServiceProto.GetUsersByIdsResponse response = userStub.getUsersByIds(request);
+
+        return response.getUsersList().stream()
+                .collect(Collectors.toMap(UserServiceProto.UserDTOResponse2::getId, u -> u));
+    }
+
+    public List<UserServiceProto.UserDTOResponse3> getLikeUsersByIds(Long id, List<Long> userIds) {
+        if (userIds == null || userIds.isEmpty()) {
+            return List.of();
+        }
+
+        UserServiceProto.GetUsersByIdsRequest2 request = UserServiceProto.GetUsersByIdsRequest2.newBuilder()
+                .setId(id)
+                .addAllUserIds(userIds)
+                .build();
+
+        UserServiceProto.GetUsersByIdsResponse2 response = userStub.getLikeUsersByIds(request);
+
+        return response.getUsersList();
     }
 }

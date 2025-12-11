@@ -4,8 +4,16 @@ import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
+import java.util.Map;
+
+import org.nexo.authservice.dto.CallBackRequest;
+import org.nexo.authservice.dto.ForgotPasswordRequest;
 import org.nexo.authservice.dto.LoginRequest;
+import org.nexo.authservice.dto.OAuthCallbackRequest;
+import org.nexo.authservice.dto.OAuthLoginResponse;
 import org.nexo.authservice.dto.RegisterRequest;
+import org.nexo.authservice.dto.RegisterResponse;
+import org.nexo.authservice.dto.ResendVerifyEmailRequest;
 import org.nexo.authservice.dto.ResponseData;
 import org.nexo.authservice.dto.TokenResponse;
 import org.nexo.authservice.service.AuthService;
@@ -43,11 +51,16 @@ public class AuthController {
         @PostMapping("/register")
         public Mono<ResponseData<?>> register(@Valid @RequestBody RegisterRequest registerRequest) {
                 return authService.register(registerRequest)
-                                .map(tokenResponse -> {
-                                        log.info("Registration successful for user: {}", registerRequest.getEmail());
-                                        return ResponseData.<TokenResponse>builder()
+                                .map(userId -> {
+                                        log.info("Registration successful for user: {}, userId: {}",
+                                                        registerRequest.getEmail(), userId);
+                                        RegisterResponse registerResponse = RegisterResponse.builder()
+                                                        .userId(userId)
+                                                        .build();
+                                        return ResponseData.<RegisterResponse>builder()
                                                         .status(HttpStatus.OK.value())
-                                                        .message("Registration successful")
+                                                        .message("User registered successfully. Please check your email for verification.")
+                                                        .data(registerResponse)
                                                         .build();
                                 });
         }
@@ -81,8 +94,8 @@ public class AuthController {
         }
 
         @PostMapping("/resend-verify-email")
-        public Mono<ResponseData<?>> resendVerifyEmail(@Valid @RequestBody String userId) {
-                return authService.resendVerifyEmail(userId)
+        public Mono<ResponseData<?>> resendVerifyEmail(@Valid @RequestBody ResendVerifyEmailRequest request) {
+                return authService.resendVerifyEmail(request.getID())
                                 .then(Mono.just(ResponseData.<Void>builder()
                                                 .status(HttpStatus.OK.value())
                                                 .message("Verification email resent successfully")
@@ -90,11 +103,35 @@ public class AuthController {
         }
 
         @PostMapping("forgot-password")
-        public Mono<ResponseData<?>> forgotPassword(@Valid @RequestBody String EMAIL) {
-                return authService.forgotPassword(EMAIL)
+        public Mono<ResponseData<?>> forgotPassword(@Valid @RequestBody ForgotPasswordRequest request) {
+                return authService.forgotPassword(request.getEMAIL())
                                 .then(Mono.just(ResponseData.<Void>builder()
                                                 .status(HttpStatus.OK.value())
                                                 .message("If the email exists, a password reset link has been sent")
                                                 .build()));
         }
+
+        @PostMapping("verify-email")
+        public Mono<ResponseData<?>> verifyEmail(
+                        @Valid @RequestBody CallBackRequest request) {
+                return authService.callBack(request)
+                                .map(success -> ResponseData.<Void>builder()
+                                                .status(HttpStatus.OK.value())
+                                                .message("Email verified and updated successfully")
+                                                .build());
+        }
+
+        @PostMapping("oauth/callback")
+        public Mono<ResponseData<?>> oauthCallback(@Valid @RequestBody OAuthCallbackRequest request) {
+                return authService.oauthCallback(request)
+                                .map(tokenResponse -> {
+                                        log.info("OAuth callback successful");
+                                        return ResponseData.<OAuthLoginResponse>builder()
+                                                        .status(HttpStatus.OK.value())
+                                                        .message("OAuth authentication successful")
+                                                        .data(tokenResponse)
+                                                        .build();
+                                });
+        }
+
 }

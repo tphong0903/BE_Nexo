@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package org.nexo.grpc.auth;
+
+option java_package = "org.nexo.grpc.auth";
+option java_outer_classname = "AuthServiceProto";
+
+service AuthService {
+  rpc ChangeUserRole(ChangeUserRoleRequest) returns (ChangeUserRoleResponse);
+  rpc BanUser(BanUserRequest) returns (BanUserResponse);
+  rpc UnBanUser(UnBanUserRequest) returns (UnBanUserResponse);
+
+  rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+}
+
+message ChangeUserRoleRequest {
+  string user_id = 1;
+  string role_name = 2;
+}
+
+message ChangeUserRoleResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message BanUserRequest {
+  string user_id = 1;
+}
+
+message BanUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+message UnBanUserRequest {
+  string user_id = 1;
+}
+
+message UnBanUserResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message ChangePasswordRequest {
+  string user_id = 1;
+  string old_password = 2;
+  string new_password = 3;
+}
+
+message ChangePasswordResponse {
+  bool success = 1;
+  string message = 2;
+}

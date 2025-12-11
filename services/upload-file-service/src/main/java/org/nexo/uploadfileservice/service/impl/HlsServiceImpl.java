@@ -2,6 +2,7 @@ package org.nexo.uploadfileservice.service.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.uploadfileservice.service.IHlsService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import java.io.BufferedReader;
@@ -12,6 +13,9 @@ import java.io.InputStreamReader;
 @Service
 @Slf4j
 public class HlsServiceImpl implements IHlsService {
+    @Value("${hls.ffmpeg.path}")
+    private String ffmpegPath;
+
     @Override
     public File convertToHls(File inputFile, String outputDir) throws IOException, InterruptedException {
         File outDir = new File(outputDir);
@@ -41,7 +45,7 @@ public class HlsServiceImpl implements IHlsService {
 //        } else {
 //            cmd = new String[]{"bash", "-c", command};
 //        }
-        String ffmpegPath = "D:\\App_1\\ffmage\\ffmpeg-8.0-full_build\\ffmpeg-8.0-full_build\\bin\\ffmpeg.exe";
+        String ffmpegPath2 = "D:\\App_1\\ffmage\\ffmpeg-8.0-full_build\\ffmpeg-8.0-full_build\\bin\\ffmpeg.exe";
         String inputFilePath = inputFile.getAbsolutePath();
         File outputM3u8File = new File(outDir, "index.m3u8");
         String outputM3u8Path = outputM3u8File.getAbsolutePath();
@@ -50,18 +54,23 @@ public class HlsServiceImpl implements IHlsService {
         String[] cmd = {
                 "cmd.exe", "/c",
                 ffmpegPath,
+                "-y",
                 "-i", inputFilePath,
                 "-c:v", "libx264",
-                "-c:a", "aac",
-                "-profile:v", "baseline",
-                "-level", "3.0",
-                "-s", "640x360",
+                "-preset", "ultrafast",
+                "-crf", "28",
+                "-profile:v", "main",
+                "-level", "3.1",
+                "-pix_fmt", "yuv420p",
+                "-c:a", "copy",
+                "-threads", "0",
                 "-start_number", "0",
-                "-hls_time", "6",
+                "-hls_time", "5",
                 "-hls_list_size", "0",
                 "-hls_segment_filename", segmentPattern,
                 outputM3u8Path
         };
+
         ProcessBuilder pb = new ProcessBuilder(cmd);
         pb.redirectErrorStream(true);
         Process process = pb.start();

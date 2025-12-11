@@ -27,7 +27,7 @@
 		<url/>
 	</scm>
 	<properties>
-		<java.version>17</java.version>
+		<java.version>21</java.version>
 		<spring-cloud.version>2025.0.0</spring-cloud.version>
 		<grpc.version>1.68.0</grpc.version>
 		<protobuf.version>3.25.5</protobuf.version>
@@ -57,6 +57,11 @@
 		<dependency>
 			<groupId>net.devh</groupId>
 			<artifactId>grpc-server-spring-boot-starter</artifactId>
+			<version>3.1.0.RELEASE</version>
+		</dependency>
+		<dependency>
+			<groupId>net.devh</groupId>
+			<artifactId>grpc-client-spring-boot-starter</artifactId>
 			<version>3.1.0.RELEASE</version>
 		</dependency>
 		
@@ -124,6 +129,16 @@
 			<artifactId>spring-security-oauth2-jose</artifactId>
 		</dependency>
 
+		<dependency>
+			<groupId>org.springframework.kafka</groupId>
+			<artifactId>spring-kafka</artifactId>
+		</dependency>
+		
+		<dependency>
+			<groupId>com.meilisearch.sdk</groupId>
+			<artifactId>meilisearch-java</artifactId>
+			<version>0.11.5</version>
+		</dependency>
 		
 		<!-- JWT -->
 		<dependency>
@@ -189,16 +204,27 @@
 				<version>0.6.1</version>
 				<configuration>
 					<protocArtifact>com.google.protobuf:protoc:${protobuf.version}:exe:${os.detected.classifier}</protocArtifact>
-					<pluginId>grpc-java</pluginId>
-					<pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
 					<protoSourceRoot>${project.basedir}/src/main/proto</protoSourceRoot>
 				</configuration>
 				<executions>
 					<execution>
-						<goals>							
+						<id>protobuf-java</id>
+						<goals>
 							<goal>compile</goal>
+						</goals>
+						<configuration>
+							<pluginId>java</pluginId>
+						</configuration>
+					</execution>
+					<execution>
+						<id>grpc-java</id>
+						<goals>							
 							<goal>compile-custom</goal>
 						</goals>
+						<configuration>
+							<pluginId>grpc-java</pluginId>
+							<pluginArtifact>io.grpc:protoc-gen-grpc-java:${grpc.version}:exe:${os.detected.classifier}</pluginArtifact>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>

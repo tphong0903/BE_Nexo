@@ -12,6 +12,14 @@ services:
     depends_on:
       - eureka-server
       - redis
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
+        reservations:
+          cpus: "0.15"
+          memory: 128M
     networks:
       - nexo-network
 
@@ -20,11 +28,13 @@ services:
     build: ./services/auth-service
     ports:
       - "8081:8081"
+      - "9099:9099"
     restart: unless-stopped
     environment:
       KEYCLOAK_SERVERURL: http://keycloak:8080
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      GRPC_CLIENT_USER-SERVICE_ADDRESS: static://user-service:9092
+      GRPC_SERVER_PORT: 9099
+      GRPC_CLIENT_USER_SERVICE_ADDRESS: static://user-service:9092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
     depends_on:
@@ -32,6 +42,14 @@ services:
       - redis
       - keycloak
       - user-service
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
+        reservations:
+          cpus: "0.15"
+          memory: 128M
     networks:
       - nexo-network
   user-service:
@@ -47,8 +65,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GRPC_SERVER_PORT: 9092
       GRPC_CLIENT_UPLOAD-FILE-SERVICE_ADDRESS: static://upload-file-service:9093
@@ -62,6 +80,14 @@ services:
       - eureka-server
       - kafka
       - meilisearch
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
   post-service:
@@ -78,8 +104,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
       SPRING_KAFKA_PRODUCER_KEY-SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
       SPRING_KAFKA_PRODUCER_VALUE-SERIALIZER: org.springframework.kafka.support.serializer.JsonSerializer
@@ -87,6 +113,12 @@ services:
       SPRING_KAFKA_PRODUCER_PROPERTIES_ENABLE_IDEMPOTENCE: true
       SPRING_KAFKA_PRODUCER_PROPERTIES_MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION: 5
       SPRING_KAFKA_PRODUCER_PROPERTIES_SPRING_JSON_ADD_TYPE_HEADERS: false
+      SPRING_KAFKA_CONSUMER_KEY-DESERIALIZER: org.apache.kafka.common.serialization.StringDeserializer
+      SPRING_KAFKA_CONSUMER_VALUE-DESERIALIZER: org.springframework.kafka.support.serializer.JsonDeserializer
+      SPRING_KAFKA_CONSUMER_GROUP-ID: post-service-group
+      SPRING_KAFKA_CONSUMER_AUTO-OFFSET-RESET: earliest
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_TRUSTED_PACKAGES: "*"
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_ADD_TYPE_HEADERS: false
       GRPC_SERVER_PORT: 9094
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
     depends_on:
@@ -97,6 +129,14 @@ services:
       - kafka
       - user-service
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
     networks:
       - nexo-network
 
@@ -106,11 +146,13 @@ services:
     ports:
       - "8086:8086"
       - "9093:9093"
+    env_file:
+      - ./services/upload-file-service/.env
     environment:
       SERVER_PORT: 8086
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       GRPC_SERVER_PORT: 9093
       GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
     depends_on:
@@ -118,6 +160,14 @@ services:
       - keycloak
       - post-service
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
     networks:
       - nexo-network
 
@@ -127,6 +177,14 @@ services:
     ports:
       - "8761:8761"
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
     networks:
       - nexo-network
 
@@ -144,8 +202,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
     depends_on:
@@ -155,6 +213,14 @@ services:
       - keycloak
       - post-service
       - user-service
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
     networks:
       - nexo-network
 
@@ -173,8 +239,8 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: http://keycloak:8080/realms/nexo-network
-      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: http://keycloak:8080/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
       SPRING_KAFKA_PRODUCER_KEY-SERIALIZER: org.apache.kafka.common.serialization.StringSerializer
       SPRING_KAFKA_PRODUCER_VALUE-SERIALIZER: org.springframework.kafka.support.serializer.JsonSerializer
@@ -192,6 +258,91 @@ services:
       - kafka
       - user-service
       - post-service
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
+    networks:
+      - nexo-network
+
+  messaging-service:
+    container_name: messaging-service
+    build: ./services/messaging-service
+    ports:
+      - "8095:8095"
+      - "9098:9098"
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8095
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
+      GRPC_SERVER_PORT: 9098
+      GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
+    depends_on:
+      - eureka-server
+      - user-db
+      - redis
+      - keycloak
+      - user-service
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
+    networks:
+      - nexo-network
+
+  notification-service:
+    container_name: notification-service
+    build: ./services/notification-service
+    ports:
+      - "8088:8088"
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8088
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
+      SPRING_DATASOURCE_USERNAME: user
+      SPRING_DATASOURCE_PASSWORD: pass
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_DATA_REDIS_PORT: 6379
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
+      SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
+      SPRING_KAFKA_CONSUMER_GROUP-ID: notificationGroup
+      SPRING_KAFKA_CONSUMER_KEY-DESERIALIZER: org.apache.kafka.common.serialization.StringDeserializer
+      SPRING_KAFKA_CONSUMER_VALUE-DESERIALIZER: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_DESERIALIZER_VALUE_DELEGATE_CLASS: org.springframework.kafka.support.serializer.JsonDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_VALUE_DEFAULT_TYPE: org.nexo.notificationservice.dto.MessageDTO
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_TRUSTED_PACKAGES: org.nexo
+      SPRING_KAFKA_CONSUMER_AUTO-OFFSET-RESET: earliest
+    depends_on:
+      - eureka-server
+      - user-db
+      - redis
+      - keycloak
+      - kafka
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
     networks:
       - nexo-network
 
@@ -201,32 +352,56 @@ services:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: password
+      POSTGRES_MAX_CONNECTIONS: 100
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    command: postgres -c max_connections=50 -c shared_buffers=128MB
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 384M
+        reservations:
+          cpus: "0.15"
+          memory: 192M
     networks:
       - nexo-network
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.0
-    command: start-dev
+    command: start
     environment:
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: 9090
-      KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HOSTNAME: nexo.keycloak.nayamishop.id.vn
+      KC_HOSTNAME_STRICT: false
+      KC_HTTP_ENABLED: true
+      KC_HTTP_PORT: 8080
+      KC_PROXY_HEADERS: xforwarded
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: password
+      KC_DB_POOL_INITIAL_SIZE: 5
+      KC_DB_POOL_MIN_SIZE: 5
+      KC_DB_POOL_MAX_SIZE: 20
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
+      JAVA_OPTS_APPEND: "-Xms256m -Xmx1280m -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=256m"
     ports:
       - "9090:8080"
     depends_on:
       - postgres
     volumes:
       - ./themes:/opt/keycloak/themes
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 1792M
+        reservations:
+          cpus: "0.25"
+          memory: 512M
     networks:
       - nexo-network
 
@@ -258,6 +433,14 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 256M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
     networks:
       - nexo-network
 
@@ -276,6 +459,14 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -290,6 +481,14 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    deploy:
+      resources:
+        limits:
+          cpus: "0.2"
+          memory: 128M
+        reservations:
+          cpus: "0.1"
+          memory: 64M
     networks:
       - nexo-network
   meilisearch:
@@ -302,6 +501,14 @@ services:
       MEILI_ENV: development
     volumes:
       - meilisearch_data:/meili_data
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 256M
+        reservations:
+          cpus: "0.15"
+          memory: 128M
     networks:
       - nexo-network
 

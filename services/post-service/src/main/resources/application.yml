@@ -45,6 +45,14 @@ spring:
         enable.idempotence: true
         max.in.flight.requests.per.connection: 5
         spring.json.add.type.headers: false
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      group-id: post-service-group
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.add.type.headers: false
 
 eureka:
   client:
@@ -76,4 +84,3 @@ grpc:
     interactions:
       address: static://localhost:9095
       negotiation-type: plaintext
-

@@ -1,5 +1,6 @@
 server:
   port: 8080
+  forward-headers-strategy: native
 
 spring:
   servlet:
@@ -15,92 +16,98 @@ spring:
 
   cloud:
     gateway:
-      server:
-        webflux:
-          httpclient:
-            websocket:
-              max-frame-payload-length: 65536
-          globalcors:
-            cors-configurations:
-              "[/api/**]":
-                allowedOriginPatterns:
-                  - "*"
-                allowedMethods: "*"
-                allowedHeaders: "*"
-                allowCredentials: true
+      globalcors:
+        cors-configurations:
+          "[/**]":
+            allowedOrigins:
+              - "https://nexo.nayamishop.id.vn"
+              - "http://localhost:3000"
+              - "https://nexo.keycloak.nayamishop.id.vn"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - PATCH
+              - OPTIONS
+            allowedHeaders:
+              - "*"
+            exposedHeaders:
+              - "*"
+            allowCredentials: true
+            maxAge: 3600
+      routes:
+        - id: user-service
+          uri: lb://users
+          predicates:
+            - Path=/api/users/**
+          filters:
+            - StripPrefix=2
 
-          routes:
-            - id: user-service
-              uri: lb://users
-              predicates:
-                - Path=/api/users/**
-              filters:
-                - StripPrefix=2
+        - id: post-service
+          uri: lb://posts
+          predicates:
+            - Path=/api/posts/**
+          filters:
+            - StripPrefix=2
 
-            - id: post-service
-              uri: lb://posts
-              predicates:
-                - Path=/api/posts/**
-              filters:
-                - StripPrefix=2
+        - id: feed-service
+          uri: lb://feeds
+          predicates:
+            - Path=/api/feeds/**
+          filters:
+            - StripPrefix=2
+        #                - name: RequestRateLimiter
+        #                  args:
+        #                    redis-rate-limiter.replenishRate: 20
+        #                    redis-rate-limiter.burstCapacity: 20
+        #                    redis-rate-limiter.key-resolver: "#{@userKeyResolver}"
 
-            - id: feed-service
-              uri: lb://feeds
-              predicates:
-                - Path=/api/feeds/**
-              filters:
-                - StripPrefix=2
-            #                - name: RequestRateLimiter
-            #                  args:
-            #                    redis-rate-limiter.replenishRate: 20
-            #                    redis-rate-limiter.burstCapacity: 20
-            #                    redis-rate-limiter.key-resolver: "#{@userKeyResolver}"
+        - id: auth-service
+          uri: lb://auth
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=2
 
-            - id: auth-service
-              uri: lb://auth
-              predicates:
-                - Path=/api/auth/**
-              filters:
-                - StripPrefix=2
+        - id: interaction-service
+          uri: lb://interaction
+          predicates:
+            - Path=/api/interaction/**
+          filters:
+            - StripPrefix=2
 
-            - id: interaction-service
-              uri: lb://interaction
-              predicates:
-                - Path=/api/interaction/**
-              filters:
-                - StripPrefix=2
+        - id: notification-service
+          uri: lb://notifications
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=2
+        - id: notification-websocket-route
+          uri: lb://notifications
+          predicates:
+            - Path=/ws/**
+          metadata:
+            websocket: true
 
-            - id: notification-service
-              uri: lb://notifications
-              predicates:
-                - Path=/api/notifications/**
-              filters:
-                - StripPrefix=2
-            - id: notification-websocket-route
-              uri: lb://notifications
-              predicates:
-                - Path=/ws/**
-              metadata:
-                websocket: true
+        - id: messaging-service-ws
+          uri: lb:ws://messaging
+          predicates:
+            - Path=/messaging/ws/**
+          filters:
+            - StripPrefix=1
 
-            - id: messaging-service-ws
-              uri: lb:ws://messaging
-              predicates:
-                - Path=/messaging/ws/**
-              filters:
-                - StripPrefix=1
+        - id: upload-file-service
+          uri: lb://files
+          predicates:
+            - Path=/api/files/**
+          filters:
+            - StripPrefix=2
 
-            - id: upload-file-service
-              uri: lb://files
-              predicates:
-                - Path=/api/files/**
-              filters:
-                - StripPrefix=2
-
-            - id: messaging-service
-              uri: lb://messaging
-              predicates:
-                - Path=/api/**
+        - id: messaging-service
+          uri: lb://messaging
+          predicates:
+            - Path=/api/**
 
 eureka:
   client:

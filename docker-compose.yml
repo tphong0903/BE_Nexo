@@ -15,11 +15,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 256M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 128M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -45,11 +45,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 256M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 128M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
   user-service:
@@ -83,11 +83,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "0.75"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.35"
+          memory: 384M
     networks:
       - nexo-network
   post-service:
@@ -121,6 +121,7 @@ services:
       SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_ADD_TYPE_HEADERS: false
       GRPC_SERVER_PORT: 9094
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
+      GRPC_CLIENT_INTERACTIONS_ADDRESS: static://interaction-service:9095
     depends_on:
       - eureka-server
       - user-db
@@ -132,11 +133,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 192M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -163,13 +164,15 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.4"
+          memory: 512M
+        reservations:
           cpus: "0.2"
           memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
     networks:
-      - nexo-network
+      nexo-network:
+        aliases:
+          - files
 
   eureka-server:
     container_name: eureka-server
@@ -180,11 +183,11 @@ services:
     deploy:
       resources:
         limits:
+          cpus: "0.4"
+          memory: 512M
+        reservations:
           cpus: "0.2"
           memory: 256M
-        reservations:
-          cpus: "0.1"
-          memory: 128M
     networks:
       - nexo-network
 
@@ -204,23 +207,33 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
+      SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
+      SPRING_KAFKA_CONSUMER_GROUP-ID: feed-service-group
+      SPRING_KAFKA_CONSUMER_KEY-DESERIALIZER: org.apache.kafka.common.serialization.StringDeserializer
+      SPRING_KAFKA_CONSUMER_VALUE-DESERIALIZER: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      SPRING_KAFKA_CONSUMER_AUTO-OFFSET-RESET: earliest
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_DESERIALIZER_VALUE_DELEGATE_CLASS: org.springframework.kafka.support.serializer.JsonDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_VALUE_DEFAULT_TYPE: org.nexo.feedservice.dto.MessagePostDTO
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_TRUSTED-PACKAGES: org.nexo
       GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
+      GRPC_CLIENT_POSTS_NEGOTIATION_TYPE: plaintext
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
     depends_on:
       - eureka-server
       - user-db
       - redis
       - keycloak
+      - kafka
       - post-service
       - user-service
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 192M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -250,6 +263,7 @@ services:
       GRPC_SERVER_PORT: 9095
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
       GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
+      GRPC_CLIENT_POSTS_NEGOTIATION_TYPE: plaintext
     depends_on:
       - eureka-server
       - user-db
@@ -261,11 +275,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 192M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -297,11 +311,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 192M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -338,11 +352,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 192M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -357,15 +371,15 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    command: postgres -c max_connections=50 -c shared_buffers=128MB
+    command: postgres -c max_connections=50 -c shared_buffers=256MB
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 192M
+          cpus: "0.25"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -397,11 +411,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 1792M
+          cpus: "0.75"
+          memory: 1280M
         reservations:
-          cpus: "0.25"
-          memory: 512M
+          cpus: "0.35"
+          memory: 640M
     networks:
       - nexo-network
 
@@ -436,11 +450,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.2"
-          memory: 256M
+          cpus: "0.3"
+          memory: 384M
         reservations:
-          cpus: "0.1"
-          memory: 128M
+          cpus: "0.15"
+          memory: 192M
     networks:
       - nexo-network
 
@@ -462,11 +476,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "0.75"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.35"
+          memory: 384M
     networks:
       - nexo-network
 
@@ -484,11 +498,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.2"
-          memory: 128M
+          cpus: "0.3"
+          memory: 256M
         reservations:
-          cpus: "0.1"
-          memory: 64M
+          cpus: "0.15"
+          memory: 128M
     networks:
       - nexo-network
   meilisearch:
@@ -504,11 +518,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 256M
+          cpus: "0.4"
+          memory: 384M
         reservations:
-          cpus: "0.15"
-          memory: 128M
+          cpus: "0.2"
+          memory: 192M
     networks:
       - nexo-network
 

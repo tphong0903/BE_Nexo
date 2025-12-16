@@ -6,6 +6,8 @@ services:
       - "8080:8080"
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
@@ -31,6 +33,8 @@ services:
       - "9099:9099"
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       KEYCLOAK_SERVERURL: http://keycloak:8080
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GRPC_SERVER_PORT: 9099
@@ -60,6 +64,8 @@ services:
       - "9092:9092"
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
       SPRING_DATASOURCE_USERNAME: user
       SPRING_DATASOURCE_PASSWORD: pass
@@ -70,6 +76,7 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       GRPC_SERVER_PORT: 9092
       GRPC_CLIENT_UPLOAD-FILE-SERVICE_ADDRESS: static://upload-file-service:9093
+      GRPC_CLIENT_AUTH-SERVICE_ADDRESS: static://auth-service:9099
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_APIKEY: masterKey
@@ -97,6 +104,8 @@ services:
       - "8087:8087"
       - "9094:9094"
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8087
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
@@ -122,6 +131,7 @@ services:
       GRPC_SERVER_PORT: 9094
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
       GRPC_CLIENT_INTERACTIONS_ADDRESS: static://interaction-service:9095
+      GRPC_CLIENT_INTERACTIONS_NEGOTIATION_TYPE: plaintext
     depends_on:
       - eureka-server
       - user-db
@@ -150,6 +160,8 @@ services:
     env_file:
       - ./services/upload-file-service/.env
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8086
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
@@ -180,6 +192,9 @@ services:
     ports:
       - "8761:8761"
     restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
     deploy:
       resources:
         limits:
@@ -198,6 +213,8 @@ services:
       - "8084:8084"
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8084
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
@@ -245,6 +262,8 @@ services:
       - "9095:9095"
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8083
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
@@ -291,6 +310,8 @@ services:
       - "9098:9098"
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8095
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb
@@ -326,6 +347,8 @@ services:
       - "8088:8088"
     restart: unless-stopped
     environment:
+      TZ: Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8088
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       SPRING_DATASOURCE_URL: jdbc:postgresql://user-db:5432/userdb

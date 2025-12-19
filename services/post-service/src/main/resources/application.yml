@@ -33,6 +33,7 @@ spring:
     redis:
       port: 6379
       host: localhost
+      password: Admin@123
 
   kafka:
     bootstrap-servers: localhost:9097

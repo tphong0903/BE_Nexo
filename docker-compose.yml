@@ -9,8 +9,6 @@ services:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      SPRING_DATA_REDIS_HOST: redis
-      SPRING_DATA_REDIS_PORT: 6379
     depends_on:
       - eureka-server
       - redis
@@ -41,6 +39,7 @@ services:
       GRPC_CLIENT_USER_SERVICE_ADDRESS: static://user-service:9092
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: Admin@123
     depends_on:
       - eureka-server
       - redis
@@ -71,6 +70,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: Admin@123
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
@@ -113,6 +113,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: Admin@123
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
@@ -222,6 +223,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: Admin@123
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
@@ -271,6 +273,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: Admin@123
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
@@ -319,6 +322,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: Admin@123
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       GRPC_SERVER_PORT: 9098
@@ -356,6 +360,7 @@ services:
       SPRING_DATASOURCE_PASSWORD: pass
       SPRING_DATA_REDIS_HOST: redis
       SPRING_DATA_REDIS_PORT: 6379
+      SPRING_DATA_REDIS_PASSWORD: Admin@123
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9092
@@ -444,10 +449,12 @@ services:
 
   redis:
     image: redis:7-alpine
+    command: redis-server --requirepass Admin@123 --appendonly yes --notify-keyspace-events Ex
     ports:
       - "6379:6379"
     networks:
       - nexo-network
+    restart: unless-stopped
   user-db:
     container_name: user-db
     image: postgres:15-alpine

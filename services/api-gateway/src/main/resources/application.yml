@@ -18,7 +18,7 @@ spring:
     gateway:
       globalcors:
         cors-configurations:
-          "[/**]":
+          "[/api/**]":
             allowedOrigins:
               - "https://nexo.nayamishop.id.vn"
               - "http://localhost:3000"
@@ -96,6 +96,9 @@ spring:
             - Path=/messaging/ws/**
           filters:
             - StripPrefix=1
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
+          metadata:
+            websocket: true
 
         - id: upload-file-service
           uri: lb://files

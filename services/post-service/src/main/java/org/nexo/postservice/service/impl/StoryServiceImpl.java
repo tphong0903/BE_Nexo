@@ -46,6 +46,7 @@ public class StoryServiceImpl implements IStoryService {
     private final IStoryViewRepository storyViewRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
+    
     private final RedisTemplate<String, Object> redisTemplate;
     private final ICollectionRepository collectionRepository;
     private final ICollectionItemRepository collectionItemRepository;

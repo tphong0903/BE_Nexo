@@ -1,5 +1,6 @@
 package org.nexo.messagingservice.repository;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.nexo.messagingservice.model.ConversationModel;
@@ -21,6 +22,21 @@ public interface ConversationRepository extends JpaRepository<ConversationModel,
         Optional<ConversationModel> findDirectConversationBetweenUsers(
                         @Param("userId1") Long userId1,
                         @Param("userId2") Long userId2);
+
+        @Query("SELECT c FROM ConversationModel c " +
+                        "JOIN c.participants p1 " +
+                        "JOIN c.participants p2 " +
+                        "WHERE p1.userId = :userId1 " +
+                        "AND p2.userId = :userId2 " +
+                        "AND p1.userId != p2.userId")
+        List<ConversationModel> findListConversations(@Param("userId1") Long userId1,
+                        @Param("userId2") Long userId2);
+
+        default ConversationModel findFirstDirectConversationBetweenUsers(Long userId1, Long userId2) {
+                List<ConversationModel> list = findListConversations(userId1, userId2);
+
+                return list.isEmpty() ? null : list.get(0);
+        }
 
         // lay danh sach tat ca inbox
         @Query("SELECT c FROM ConversationModel c " +

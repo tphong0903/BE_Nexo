@@ -44,3 +44,6 @@ grpc:
     users:
       address: static://localhost:9092
       negotiation-type: plaintext
+    post-service:
+      address: static://localhost:9094
+      negotiation-type: plaintext

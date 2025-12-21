@@ -42,6 +42,9 @@ public class MessageModel {
     @JoinColumn(name = "reply_to_message_id")
     private MessageModel replyToMessage;
 
+    @Column(name = "story_id")
+    private Long storyId;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

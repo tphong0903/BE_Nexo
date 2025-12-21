@@ -332,6 +332,8 @@ services:
       SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK-SET-URI: https://nexo.keycloak.nayamishop.id.vn/realms/nexo-network/protocol/openid-connect/certs
       GRPC_SERVER_PORT: 9098
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
+      GRPC_CLIENT_POST-SERVICE_ADDRESS: static://post-service:9094
+      GRPC_CLIENT_POST_NEGOTIATION_TYPE: plaintext
     depends_on:
       - eureka-server
       - user-db
@@ -502,6 +504,8 @@ services:
       - "9097:9097"
     depends_on:
       - zookeeper
+    volumes:
+      - kafka-data:/var/lib/kafka/data
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
@@ -510,6 +514,8 @@ services:
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
     deploy:
       resources:
         limits:
@@ -571,3 +577,4 @@ volumes:
   postgres_data:
   user-db:
   meilisearch_data:
+  kafka-data:

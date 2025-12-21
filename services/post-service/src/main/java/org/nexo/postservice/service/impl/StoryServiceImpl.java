@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.CollectionRequestDto;
+import org.nexo.postservice.dto.StoryDeletionEvent;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.dto.response.*;
 import org.nexo.postservice.exception.CustomException;
@@ -71,7 +72,7 @@ public class StoryServiceImpl implements IStoryService {
         }
         model.setAuthorName(userDTOResponse.getUsername());
         storyRepository.save(model);
-        
+
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty() && dto.getStoryId() == 0) {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
@@ -489,15 +490,15 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @KafkaListener(topics = "story-deletion-topic", groupId = "story-deleter-group")
-    public void consumeStoryDeletion(String storyId) {
+    public void consumeStoryDeletion(StoryDeletionEvent event) {
+        Long storyId = event.getStoryId();
         log.info("Received story ID from Kafka to delete: " + storyId);
         try {
-            Long id = Long.parseLong(storyId.replaceAll("^\"|\"$", ""));
-            StoryModel storyModel = storyRepository.findById(id).orElse(null);
+            StoryModel storyModel = storyRepository.findById(storyId).orElse(null);
             if (storyModel != null) {
                 storyModel.setIsActive(false);
                 storyRepository.save(storyModel);
-                log.info("Successfully deleted story with ID: " + id);
+                log.info("Successfully deleted story with ID: " + storyId);
             }
         } catch (NumberFormatException e) {
             log.error("Invalid story ID received: " + storyId);

@@ -19,6 +19,7 @@ public class ConversationResponseDTO {
     private Long id;
     private String fullname;
     private String avatarUrl;
+    private String username;
     private Long senderUserId;
     private List<UserDTO> participants;
     private MessageDTO lastMessage;

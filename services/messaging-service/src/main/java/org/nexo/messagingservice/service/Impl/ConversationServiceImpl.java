@@ -20,6 +20,7 @@ import org.nexo.messagingservice.model.MessageModel;
 import org.nexo.messagingservice.repository.ConversationParticipantRepository;
 import org.nexo.messagingservice.repository.ConversationRepository;
 import org.nexo.messagingservice.repository.MessageRepository;
+import org.nexo.messagingservice.service.ConversationService;
 import org.nexo.messagingservice.service.MessageService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -89,6 +90,40 @@ public class ConversationServiceImpl implements ConversationService {
 
         log.info("Created {} conversation between {} and {}", initialStatus, user1, recipientUserId);
         return mapToDto(conversation, user1);
+    }
+
+    public ConversationResponseDTO findDirectConversationBetweenUsers(long senderUserId, Long recipientUserId) {
+        Optional<ConversationModel> existing = conversationRepository.findDirectConversationBetweenUsers(senderUserId,
+                recipientUserId);
+        if (existing.isPresent()) {
+            ConversationModel conv = existing.get();
+            if (conv.getStatus() == EConversationStatus.BLOCKED) {
+                throw new SecurityException("Conversation is blocked");
+            }
+
+            if (conv.getStatus() == EConversationStatus.PENDING) {
+                boolean areMutualFriends = userGrpcClient.areMutualFriends(senderUserId, recipientUserId);
+                if (areMutualFriends) {
+                    conv.setStatus(EConversationStatus.NORMAL);
+                    conv = conversationRepository.save(conv);
+                }
+            }
+            return mapToDto(conv, senderUserId);
+        }
+
+        boolean areMutualFriends = userGrpcClient.areMutualFriends(senderUserId, recipientUserId);
+        EConversationStatus initialStatus = areMutualFriends ? EConversationStatus.NORMAL : EConversationStatus.PENDING;
+
+        ConversationModel conversation = ConversationModel.builder()
+                .status(initialStatus)
+                .build();
+        conversation = conversationRepository.save(conversation);
+
+        addParticipant(conversation, senderUserId);
+        addParticipant(conversation, recipientUserId);
+
+        log.info("Created {} conversation between {} and {}", initialStatus, senderUserId, recipientUserId);
+        return mapToDto(conversation, senderUserId);
     }
 
     @Transactional
@@ -237,7 +272,7 @@ public class ConversationServiceImpl implements ConversationService {
                 displayName = otherUser.getFullName();
             }
         }
-
+        String displayUsername = otherUser != null ? otherUser.getUsername() : null;
         String displayAvatar = otherUser != null ? otherUser.getAvatarUrl() : null;
         Boolean displayOnlineStatus = otherUser != null ? otherUser.getOnlineStatus() : null;
 
@@ -255,6 +290,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .id(conversation.getId())
                 .senderUserId(requestingUserId)
                 .fullname(displayName)
+                .username(displayUsername)
                 .avatarUrl(displayAvatar)
                 .onlineStatus(displayOnlineStatus)
                 .participants(participantDTOs)

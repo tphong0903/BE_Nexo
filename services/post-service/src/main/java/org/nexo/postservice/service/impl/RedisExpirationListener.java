@@ -1,6 +1,5 @@
 package org.nexo.postservice.service.impl;
 
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.postservice.dto.StoryDeletionEvent;
 import org.springframework.data.redis.connection.Message;
@@ -18,14 +17,16 @@ public class RedisExpirationListener extends KeyExpirationEventMessageListener {
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
     public RedisExpirationListener(RedisMessageListenerContainer listenerContainer,
-                                   KafkaTemplate<String, Object> kafkaTemplate) {
+            KafkaTemplate<String, Object> kafkaTemplate) {
         super(listenerContainer);
         this.kafkaTemplate = kafkaTemplate;
+        log.info("RedisExpirationListener initialized successfully");
     }
 
     @Override
     public void onMessage(Message message, byte[] pattern) {
-        String expiredKey = new String(message.getBody(), StandardCharsets.UTF_8);
+        try {
+            String expiredKey = new String(message.getBody(), StandardCharsets.UTF_8);
 
         if (expiredKey.startsWith("story:expire:")) {
             String storyId = expiredKey.substring("story:expire:".length());
@@ -35,6 +36,8 @@ public class RedisExpirationListener extends KeyExpirationEventMessageListener {
             } catch (Exception e) {
                 log.error("Failed to publish story ID [{}] to Kafka", storyId, e);
             }
+        } catch (Exception e) {
+            log.error("Error processing Redis expiration message", e);
         }
     }
 }

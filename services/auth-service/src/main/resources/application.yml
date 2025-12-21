@@ -6,6 +6,8 @@ spring:
     name: auth
   main:
     allow-bean-definition-overriding: true
+  webflux:
+    base-path: /
   data:
     redis:
       host: localhost
@@ -13,7 +15,7 @@ spring:
       timeout: 2000ms
       connect-timeout: 2000ms
 keycloak:
-  serverUrl: http://localhost:9090
+  serverUrl: ${KEYCLOAK_SERVERURL:http://localhost:9090}
   realm: nexo-network
   clientId: auth-service-client
   adminUsername: admin
@@ -25,13 +27,16 @@ logging:
     org.springframework.web.reactive: DEBUG
     org.springframework.web: DEBUG
     org.springframework.boot.web: DEBUG
+    org.springframework.web.reactive.function.client.ExchangeFunctions: DEBUG
+    reactor.netty.http.client: DEBUG
+    io.netty: INFO
 
 grpc:
   server:
     port: 9099
   client:
     user-service:
-      address: "static://localhost:9092"
+      address: ${GRPC_CLIENT_USER_SERVICE_ADDRESS:static://localhost:9092}
       negotiationType: plaintext
 eureka:
   client:

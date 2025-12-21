@@ -501,6 +501,10 @@ public class PostServiceImpl implements IPostService {
 
         Long likes = likesStr != null ? Long.valueOf(likesStr.toString()) : 0L;
         Long comments = commentsStr != null ? Long.valueOf(commentsStr.toString()) : 0L;
+        if (likes == 0L || comments == 0L) {
+            likes = model.getLikeQuantity();
+            comments = model.getCommentQuantity();
+        }
 
         return PostResponseDTO.builder()
                 .postId(model.getId())

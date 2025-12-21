@@ -1,3 +1,4 @@
+
 package org.nexo.messagingservice.controller;
 
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,19 @@ public class MessageController {
                                 .status(200)
                                 .message("Messages retrieved successfully")
                                 .data(messages)
+                                .build();
+        }
+
+        @PostMapping
+        public ResponseData<?> sendMessage(@RequestBody ReplyStoryRequsestDTO request, Authentication authentication) {
+                String keycloakUserId = (String) authentication.getName();
+                UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+                Long userId = userDto.getUserId();
+                MessageDTO message = messageService.replyStory(request, userId);
+                return ResponseData.builder()
+                                .status(200)
+                                .message("Message sent successfully")
+                                .data(message)
                                 .build();
         }
 

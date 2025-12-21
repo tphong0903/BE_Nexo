@@ -2,22 +2,27 @@ package org.nexo.messagingservice.service.Impl;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.grpc.user.UserServiceProto.CheckIfBlockedResponse;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse2;
+import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.MessageMediaDTO;
 import org.nexo.messagingservice.dto.ReactionDTO;
 import org.nexo.messagingservice.dto.ReactionDetailDTO;
 import org.nexo.messagingservice.dto.ReactionUpdateDTO;
+import org.nexo.messagingservice.dto.ReplyStoryRequsestDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.dto.UserDTO;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.enums.EMessageType;
 import org.nexo.messagingservice.enums.EReactionType;
+import org.nexo.messagingservice.grpc.StoryGrpcClient;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.ConversationModel;
 import org.nexo.messagingservice.model.ConversationParticipantModel;
@@ -49,6 +54,7 @@ public class MessageServiceImpl implements MessageService {
     private final MessageReactionRepository reactionRepository;
     private final MessageMediaRepository mediaRepository;
     private final UserGrpcClient userGrpcClient;
+    private final StoryGrpcClient storyGrpcClient;
     private final SimpMessagingTemplate messagingTemplate;
 
     public MessageDTO sendMessage(SendMessageRequest request, Long senderUserId) {
@@ -111,6 +117,83 @@ public class MessageServiceImpl implements MessageService {
         conversationRepository.save(conversation);
 
         return mapToDto(messageModel);
+    }
+
+    public MessageDTO replyStory(ReplyStoryRequsestDTO request, Long senderUserId) {
+        Long recipientUserId = request.getUserId();
+
+        ConversationModel existing = conversationRepository.findFirstDirectConversationBetweenUsers(senderUserId,
+                recipientUserId);
+        if (existing != null) {
+            ConversationModel conv = existing;
+            if (conv.getStatus() == EConversationStatus.BLOCKED) {
+                throw new SecurityException("Conversation is blocked");
+            }
+
+            if (conv.getStatus() == EConversationStatus.PENDING) {
+                boolean areMutualFriends = userGrpcClient.areMutualFriends(senderUserId, recipientUserId);
+                if (areMutualFriends) {
+                    conv.setStatus(EConversationStatus.NORMAL);
+                    conv = conversationRepository.save(conv);
+                }
+            }
+            return mapToDto(sendMessage(senderUserId, recipientUserId, conv, request));
+        }
+        boolean areMutualFriends = userGrpcClient.areMutualFriends(senderUserId, recipientUserId);
+        EConversationStatus initialStatus = areMutualFriends ? EConversationStatus.NORMAL : EConversationStatus.PENDING;
+
+        ConversationModel conversation = ConversationModel.builder()
+                .status(initialStatus)
+                .build();
+        conversation = conversationRepository.save(conversation);
+
+        addParticipant(conversation, senderUserId);
+        addParticipant(conversation, recipientUserId);
+
+        log.info("Created {} conversation between {} and {}", initialStatus, senderUserId, recipientUserId);
+
+        return mapToDto(sendMessage(senderUserId, recipientUserId, conversation, request));
+    }
+
+    private MessageModel sendMessage(long senderUserId, long recipientUserId, ConversationModel conversation,
+            ReplyStoryRequsestDTO request) {
+        UserServiceProto.CheckIfBlockedResponse blockResponse = userGrpcClient.checkIfBlocked(senderUserId,
+                recipientUserId);
+        if (blockResponse.getIsBlocked()) {
+            Long blockedBy = blockResponse.getBlockedByUserId();
+            if (blockedBy == recipientUserId) {
+                throw new SecurityException("You cannot send messages to this user. They may have blocked you.");
+            } else if (blockedBy == senderUserId) {
+                throw new SecurityException("You have blocked this user. Unblock them to send messages.");
+            }
+        }
+
+        if (conversation.getStatus() == EConversationStatus.DECLINED) {
+            conversation.setStatus(EConversationStatus.PENDING);
+        }
+        if (!isParticipant(conversation.getId(), senderUserId)) {
+            throw new SecurityException("User is not a participant in this conversation");
+        }
+
+        MessageModel messageModel = MessageModel.builder()
+                .conversation(conversation)
+                .senderUserId(senderUserId)
+                .content(request.getContent())
+                .messageType(request.getMessageType() != null ? request.getMessageType() : EMessageType.TEXT)
+                .storyId(request.getStoryId())
+                .build();
+        messageModel = messageRepository.save(messageModel);
+        conversation.setLastMessageId(messageModel.getId());
+        conversation.setLastMessageAt(messageModel.getCreatedAt());
+        conversationRepository.save(conversation);
+        return messageModel;
+    }
+
+    private void addParticipant(ConversationModel conversation, Long userId) {
+        ConversationParticipantModel participant = new ConversationParticipantModel();
+        participant.setConversation(conversation);
+        participant.setUserId(userId);
+        participantRepository.save(participant);
     }
 
     public Page<MessageDTO> getMessages(Long conversationId, Pageable pageable, Long requestingUserId, String search) {
@@ -253,7 +336,24 @@ public class MessageServiceImpl implements MessageService {
         if (message.getReplyToMessage() != null) {
             replyToMessage = mapToDto(message.getReplyToMessage());
         }
-
+        if (message.getStoryId() != null) {
+            String storyMediaUrl = storyGrpcClient.getStoryMediaIfActive(message.getStoryId());
+            return MessageDTO.builder()
+                    .id(message.getId())
+                    .conversationId(message.getConversation().getId())
+                    .status(message.getConversation().getStatus())
+                    .sender(senderUserDTO)
+                    .content(message.getContent())
+                    .messageType(message.getMessageType())
+                    .replyToMessageId(message.getReplyToMessage() != null ? message.getReplyToMessage().getId() : null)
+                    .replyToMessage(replyToMessage)
+                    .mediaList(mediaList)
+                    .reactions(reactions)
+                    .createdAt(message.getCreatedAt())
+                    .storyId(message.getStoryId())
+                    .storyMediaUrl(storyMediaUrl)
+                    .build();
+        }
         return MessageDTO.builder()
                 .id(message.getId())
                 .conversationId(message.getConversation().getId())
@@ -266,6 +366,8 @@ public class MessageServiceImpl implements MessageService {
                 .mediaList(mediaList)
                 .reactions(reactions)
                 .createdAt(message.getCreatedAt())
+                .storyId(null)
+                .storyMediaUrl(null)
                 .build();
     }
 

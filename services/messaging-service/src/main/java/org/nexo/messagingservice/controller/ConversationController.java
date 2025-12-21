@@ -3,7 +3,7 @@ package org.nexo.messagingservice.controller;
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.NicknameRequest;
 import org.nexo.messagingservice.dto.ResponseData;
-import org.nexo.messagingservice.service.Impl.ConversationService;
+import org.nexo.messagingservice.service.ConversationService;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;

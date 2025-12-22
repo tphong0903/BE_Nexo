@@ -334,14 +334,14 @@ public class StoryServiceImpl implements IStoryService {
     public PageModelResponse<StoryResponse> getAllStoryOfFriend(Long id, int pageNo, int pageSize) {
         securityUtil.checkOwner(id);
         Long userId = securityUtil.getUserIdFromToken();
-        UserServiceProto.GetUserFolloweesResponse response = userGrpcClient.getUserFollowees(userId);
+        UserServiceProto.GetUserFollowingsResponse response = userGrpcClient.getUserFollowing(userId);
 
         if (!response.getSuccess()) {
             throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
         }
 
         List<StoryResponse> storyResponseList = new ArrayList<>();
-        for (UserServiceProto.FolloweeInfo followeeInfo : response.getFolloweesList()) {
+        for (UserServiceProto.FolloweeInfo followeeInfo : response.getFollowingsList()) {
             Long friendId = followeeInfo.getUserId();
             List<StoryResponse.Story> storyList = new ArrayList<>();
             List<StoryModel> listStory1 = storyRepository.findAllByUserIdAndIsActiveAndIsClosedFriend(friendId, true, false);

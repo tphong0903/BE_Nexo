@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package org.nexo.grpc.story;
+
+option java_multiple_files = true;
+option java_package = "org.nexo.grpc.story";
+option java_outer_classname = "StoryServiceProto";
+
+service StoryService {
+  rpc GetStoryMediaIfActive (GetStoryMediaRequest) returns (GetStoryMediaResponse);
+}
+
+message GetStoryMediaRequest {
+  int64 story_id = 1;
+}
+
+message GetStoryMediaResponse {
+  string media_url = 1; 
+}

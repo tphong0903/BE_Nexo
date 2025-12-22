@@ -243,14 +243,14 @@
                         } catch (e) {}
                     }
                     if (userId && userEmail) {
-                        fetch('http://localhost:8080/api/auth/verify-email', {
+                        fetch('https://api.nexo.nayamishop.id.vn/api/auth/verify-email', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: userEmail, keycloakId: userId })
                         })
                         .then(res => res.json())
                         .then(data => {
-                            window.location.href = '${client.rootUrl!"http://localhost:3000"}/auth/login';
+                            window.location.href = '${client.rootUrl!"https://nexo.nayamishop.id.vn"}/auth/login';
                         })
                         .catch(err => {
                             alert('Lỗi xác thực!');

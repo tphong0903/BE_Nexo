@@ -3,7 +3,7 @@ package org.nexo.messagingservice.grpc;
 import org.nexo.grpc.messaging.BlockStatusChangeRequest;
 import org.nexo.grpc.messaging.BlockStatusChangeResponse;
 import org.nexo.grpc.messaging.MessagingServiceGrpc;
-import org.nexo.messagingservice.service.Impl.ConversationService;
+import org.nexo.messagingservice.service.ConversationService;
 
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;

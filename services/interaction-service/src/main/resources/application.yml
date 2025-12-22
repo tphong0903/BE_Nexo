@@ -35,6 +35,7 @@ spring:
     redis:
       port: 6379
       host: localhost
+      password: Admin@123
   kafka:
     bootstrap-servers: localhost:9097
     producer:
@@ -74,4 +75,3 @@ grpc:
     posts:
       address: static://localhost:9094
       negotiation-type: plaintext
-

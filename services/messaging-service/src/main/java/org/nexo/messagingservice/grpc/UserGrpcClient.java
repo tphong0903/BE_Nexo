@@ -9,9 +9,6 @@ import java.util.List;
 import org.nexo.grpc.user.UserServiceGrpc;
 import org.springframework.stereotype.Service;
 
-/**
- * gRPC client service for communicating with User Service
- */
 @Service
 @Slf4j
 public class UserGrpcClient {

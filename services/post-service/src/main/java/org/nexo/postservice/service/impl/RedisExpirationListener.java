@@ -14,10 +14,10 @@ import java.nio.charset.StandardCharsets;
 @Component
 public class RedisExpirationListener extends KeyExpirationEventMessageListener {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final KafkaTemplate<String, StoryDeletionEvent> kafkaTemplate;
 
     public RedisExpirationListener(RedisMessageListenerContainer listenerContainer,
-            KafkaTemplate<String, Object> kafkaTemplate) {
+                                   KafkaTemplate<String, StoryDeletionEvent> kafkaTemplate) {
         super(listenerContainer);
         this.kafkaTemplate = kafkaTemplate;
         log.info("RedisExpirationListener initialized successfully");

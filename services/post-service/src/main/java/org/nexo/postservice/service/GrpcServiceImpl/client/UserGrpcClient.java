@@ -31,6 +31,14 @@ public class UserGrpcClient {
         return userStub.getUserFollowees(request);
     }
 
+    public UserServiceProto.GetUserFollowingsResponse getUserFollowing(Long userId) {
+        UserServiceProto.GetUserFollowingsRequest request = UserServiceProto.GetUserFollowingsRequest.newBuilder()
+                .setUserId(userId)
+                .build();
+
+        return userStub.getUserFollowings(request);
+    }
+
     public UserServiceProto.UserDTOResponse getUserDTOById(Long userId) {
         UserServiceProto.GetUserDtoByIdRequest request = UserServiceProto.GetUserDtoByIdRequest.newBuilder()
                 .setUserId(userId)

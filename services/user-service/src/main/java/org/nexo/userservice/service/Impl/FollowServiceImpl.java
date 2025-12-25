@@ -403,7 +403,7 @@ public class FollowServiceImpl implements FollowService {
         Set<String> cached = redis.opsForSet().members(key);
 
         if (cached != null && !cached.isEmpty()) {
-            List<FollowModel> rows = followRepository.findAllByFollowing(user);
+            List<FollowModel> rows = followRepository.findAllByFollower(user);
             return rows.stream()
                     .map(f -> FolloweeDTO.builder()
                             .userId(f.getFollowing().getId())
@@ -414,7 +414,7 @@ public class FollowServiceImpl implements FollowService {
                     .collect(Collectors.toSet());
         }
 
-        List<FollowModel> rows = followRepository.findAllByFollowing(user);
+        List<FollowModel> rows = followRepository.findAllByFollower(user);
         Set<FolloweeDTO> followings = rows.stream()
                 .map(f -> FolloweeDTO.builder()
                         .userId(f.getFollowing().getId())

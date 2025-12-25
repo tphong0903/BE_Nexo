@@ -4,11 +4,15 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.dto.PageModelResponse;
+import org.nexo.userservice.dto.PublicUserDTOResponse;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.service.FollowService;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -153,4 +157,20 @@ public class FollowController {
                                 .data(mutualFollowers)
                                 .build();
         }
+
+        @GetMapping("/suggestions")
+        public ResponseEntity<?> getSuggestedFriends(
+                        @RequestHeader("Authorization") String token,
+                        @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(defaultValue = "5") int size) {
+
+                String accessToken = token.substring(7);
+                Pageable pageable = PageRequest.of(page, size);
+
+                PageModelResponse<PublicUserDTOResponse> result = followService.getSuggestedFriends(accessToken,
+                                pageable);
+
+                return ResponseEntity.ok(new ResponseData<>(HttpStatus.OK.value(), "Get suggestions success", result));
+        }
+
 }

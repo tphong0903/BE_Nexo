@@ -1,4 +1,4 @@
-package org.nexo.messagingservice.service.Impl;
+package org.nexo.messagingservice.service;
 
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.NicknameRequest;

@@ -146,4 +146,35 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
                         "WHERE f.following.id = :userId " +
                         "AND f.status = 'ACTIVE'")
         Long countTotalFollowersByUserId(@Param("userId") Long userId);
+
+        @Query("SELECT f2.following FROM FollowModel f1 " +
+                        "JOIN FollowModel f2 ON f1.following.id = f2.follower.id " +
+                        "WHERE f1.follower.id = :userId " +
+                        "AND f1.status = 'ACTIVE' " +
+                        "AND f2.status = 'ACTIVE' " +
+                        "AND f2.following.id <> :userId " +
+                        "AND f2.following.id NOT IN (" +
+                        "    SELECT f3.following.id FROM FollowModel f3 " +
+                        "    WHERE f3.follower.id = :userId AND f3.status = 'ACTIVE'" +
+                        ") " +
+                        "AND f2.following.id NOT IN (" +
+                        "    SELECT b.id.blockedId FROM UserBlockModel b WHERE b.id.blockerId = :userId" +
+                        ") " +
+                        "AND f2.following.id NOT IN (" +
+                        "    SELECT b.id.blockerId FROM UserBlockModel b WHERE b.id.blockedId = :userId" +
+                        ") " +
+                        "GROUP BY f2.following " +
+                        "ORDER BY COUNT(f2.follower) DESC")
+        Page<UserModel> findSuggestedUsersBasedOnMutualFollows(@Param("userId") Long userId, Pageable pageable);
+
+        @Query("SELECT u FROM UserModel u " +
+                        "WHERE u.id <> :userId " +
+                        "AND u.accountStatus = 'ACTIVE' " +
+                        "AND u.id NOT IN (" +
+                        "    SELECT f.following.id FROM FollowModel f " +
+                        "    WHERE f.follower.id = :userId AND f.status = 'ACTIVE'" +
+                        ") " +
+                        "ORDER BY u.createdAt DESC")
+        Page<UserModel> findNewUsersSuggestion(@Param("userId") Long userId, Pageable pageable);
+
 }

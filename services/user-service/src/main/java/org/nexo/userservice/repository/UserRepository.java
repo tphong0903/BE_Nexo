@@ -1,6 +1,7 @@
 package org.nexo.userservice.repository;
 
 import org.nexo.userservice.enums.EAccountStatus;
+import org.nexo.userservice.enums.ERole;
 import org.nexo.userservice.model.UserModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -13,7 +14,7 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserModel, Long> {
-    List<UserModel> findAllByAccountStatus(EAccountStatus status);
+    List<UserModel> findAllByAccountStatusAndRole(EAccountStatus status,ERole role);
 
     Optional<UserModel> findByUsername(String username);
     

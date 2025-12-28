@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.CollectionRequestDto;
+import org.nexo.postservice.dto.StoryDeletionEvent;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.dto.response.*;
 import org.nexo.postservice.exception.CustomException;
@@ -45,6 +46,7 @@ public class StoryServiceImpl implements IStoryService {
     private final IStoryViewRepository storyViewRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
+
     private final RedisTemplate<String, Object> redisTemplate;
     private final ICollectionRepository collectionRepository;
     private final ICollectionItemRepository collectionItemRepository;
@@ -71,7 +73,7 @@ public class StoryServiceImpl implements IStoryService {
         }
         model.setAuthorName(userDTOResponse.getUsername());
         storyRepository.save(model);
-        
+
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty() && dto.getStoryId() == 0) {
             Authentication auth = SecurityContextHolder.getContext().getAuthentication();
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
@@ -81,13 +83,13 @@ public class StoryServiceImpl implements IStoryService {
         String redisKey = "story:expire:" + model.getId();
         redisTemplate.opsForValue().set(redisKey, model.getId().toString(), 24, TimeUnit.HOURS);
 
-
         return "Success";
     }
 
     @Override
     public String deleteStory(Long id) {
-        StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        StoryModel model = storyRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
         storyRepository.delete(model);
         return "Success";
@@ -95,14 +97,14 @@ public class StoryServiceImpl implements IStoryService {
 
     @Override
     public String likeStory(Long id) {
-        StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        StoryModel model = storyRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
         Long userId = securityUtil.getUserIdFromToken();
         boolean isAllow = false;
         if (model.getUserId().equals(userId)) {
             isAllow = false;
         } else {
-            UserServiceProto.CheckFollowResponse followResponse =
-                    userGrpcClient.checkFollow(userId, model.getUserId());
+            UserServiceProto.CheckFollowResponse followResponse = userGrpcClient.checkFollow(userId, model.getUserId());
             if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
                 isAllow = true;
             }
@@ -166,8 +168,7 @@ public class StoryServiceImpl implements IStoryService {
         if (id.equals(userId)) {
             isAllow = true;
         } else {
-            UserServiceProto.CheckFollowResponse followResponse =
-                    userGrpcClient.checkFollow(userId, id);
+            UserServiceProto.CheckFollowResponse followResponse = userGrpcClient.checkFollow(userId, id);
             if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
                 isAllow = true;
             }
@@ -234,13 +235,15 @@ public class StoryServiceImpl implements IStoryService {
         Long ownerId = collectionModel.getUserId();
 
         if (viewerId.equals(ownerId)) {
-            throw new CustomException("Please use the /collections/my/{id} endpoint for your own collections", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Please use the /collections/my/{id} endpoint for your own collections",
+                    HttpStatus.BAD_REQUEST);
         }
 
         UserServiceProto.CheckFollowResponse followStatus = userGrpcClient.checkFollow(viewerId, ownerId);
 
         if (followStatus.getIsPrivate() && !followStatus.getIsFollow()) {
-            throw new CustomException("This account is private. Follow them to see their collections.", HttpStatus.FORBIDDEN);
+            throw new CustomException("This account is private. Follow them to see their collections.",
+                    HttpStatus.FORBIDDEN);
         }
 
         boolean isCloseFriendWithOwner = followStatus.getIsCloseFriend();
@@ -260,7 +263,8 @@ public class StoryServiceImpl implements IStoryService {
 
     @Override
     public String deleteCollection(Long id) {
-        CollectionModel collectionModel = collectionRepository.findById(id).orElseThrow(() -> new CustomException("Collection is not exist", HttpStatus.BAD_REQUEST));
+        CollectionModel collectionModel = collectionRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Collection is not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(collectionModel.getUserId());
         collectionRepository.delete(collectionModel);
         return "Success";
@@ -268,7 +272,8 @@ public class StoryServiceImpl implements IStoryService {
 
     @Override
     public String archiveStory(Long id) {
-        StoryModel model = storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
+        StoryModel model = storyRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
         model.setIsArchive(true);
         model.setIsActive(false);
@@ -308,15 +313,15 @@ public class StoryServiceImpl implements IStoryService {
 
         List<ViewDetailStoryResponse> viewDetailStoryResponses = new ArrayList<>();
         for (StoryViewModel storyViewModel : page.getContent()) {
-            UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(storyViewModel.getSeenUserId());
+            UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient
+                    .getUserDTOById(storyViewModel.getSeenUserId());
             viewDetailStoryResponses.add(
                     ViewDetailStoryResponse.builder()
                             .avatarUrl(userDTOResponse.getAvatar())
                             .isLike(storyViewModel.getIsLike())
                             .userName(userDTOResponse.getUsername())
                             .createdAt(storyViewModel.getCreatedAt())
-                            .build()
-            );
+                            .build());
         }
 
         return PageModelResponse.<ViewDetailStoryResponse>builder()
@@ -328,26 +333,28 @@ public class StoryServiceImpl implements IStoryService {
                 .build();
     }
 
-
     @Override
     public PageModelResponse<StoryResponse> getAllStoryOfFriend(Long id, int pageNo, int pageSize) {
         securityUtil.checkOwner(id);
         Long userId = securityUtil.getUserIdFromToken();
-        UserServiceProto.GetUserFolloweesResponse response = userGrpcClient.getUserFollowees(userId);
+        UserServiceProto.GetUserFollowingsResponse response = userGrpcClient.getUserFollowing(userId);
 
         if (!response.getSuccess()) {
-            throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(), HttpStatus.BAD_REQUEST);
+            throw new CustomException("Không lấy được danh sách followees: " + response.getMessage(),
+                    HttpStatus.BAD_REQUEST);
         }
 
         List<StoryResponse> storyResponseList = new ArrayList<>();
-        for (UserServiceProto.FolloweeInfo followeeInfo : response.getFolloweesList()) {
+        for (UserServiceProto.FolloweeInfo followeeInfo : response.getFollowingsList()) {
             Long friendId = followeeInfo.getUserId();
             List<StoryResponse.Story> storyList = new ArrayList<>();
-            List<StoryModel> listStory1 = storyRepository.findAllByUserIdAndIsActiveAndIsClosedFriend(friendId, true, false);
+            List<StoryModel> listStory1 = storyRepository.findAllByUserIdAndIsActiveAndIsClosedFriend(friendId, true,
+                    false);
             listStory1.forEach(model -> storyList.add(toStoryResponse(model, userId)));
 
             if (followeeInfo.getIsCloseFriend()) {
-                List<StoryModel> listStory2 = storyRepository.findAllByUserIdAndIsActiveAndIsClosedFriend(friendId, true, true);
+                List<StoryModel> listStory2 = storyRepository.findAllByUserIdAndIsActiveAndIsClosedFriend(friendId,
+                        true, true);
                 listStory2.forEach(model -> storyList.add(toStoryResponse(model, userId)));
             }
 
@@ -414,7 +421,6 @@ public class StoryServiceImpl implements IStoryService {
                     .build();
         }
 
-
         UserServiceProto.UserDTOResponse ownerInfo = userGrpcClient.getUserDTOById(ownerId);
         List<StoryResponse.Story> storyList = storyPage.getContent().stream()
                 .map(model -> toStoryResponse(model, viewerId))
@@ -435,7 +441,6 @@ public class StoryServiceImpl implements IStoryService {
                 .totalPages(storyPage.getTotalPages())
                 .build();
     }
-
 
     @Override
     public PageModelResponse<StoryResponse> getAllStoriesOfUser(Long id, int pageNo, int pageSize) {
@@ -465,12 +470,12 @@ public class StoryServiceImpl implements IStoryService {
                 .build();
     }
 
-
     private StoryResponse.Story toStoryResponse(StoryModel model, Long currentUserId) {
         boolean isLike = false;
         boolean isSeen = false;
         if (!Objects.equals(model.getUserId(), currentUserId)) {
-            StoryViewModel storyViewModel = storyViewRepository.findByStoryModel_IdAndSeenUserId(model.getId(), currentUserId).orElse(null);
+            StoryViewModel storyViewModel = storyViewRepository
+                    .findByStoryModel_IdAndSeenUserId(model.getId(), currentUserId).orElse(null);
             isLike = storyViewModel != null && storyViewModel.getIsLike();
             isSeen = storyViewModel != null;
         }
@@ -479,7 +484,7 @@ public class StoryServiceImpl implements IStoryService {
                 .createdAt(model.getCreatedAt())
                 .storyId(model.getId())
                 .mediaUrl(model.getMediaURL())
-//                .mediaType(model.getMediaType().name())
+                // .mediaType(model.getMediaType().name())
                 .isLike(isLike)
                 .isSeen(isSeen)
                 .isActive(model.getIsActive())
@@ -489,15 +494,15 @@ public class StoryServiceImpl implements IStoryService {
     }
 
     @KafkaListener(topics = "story-deletion-topic", groupId = "story-deleter-group")
-    public void consumeStoryDeletion(String storyId) {
+    public void consumeStoryDeletion(StoryDeletionEvent event) {
+        Long storyId = event.getStoryId();
         log.info("Received story ID from Kafka to delete: " + storyId);
         try {
-            Long id = Long.parseLong(storyId.replaceAll("^\"|\"$", ""));
-            StoryModel storyModel = storyRepository.findById(id).orElse(null);
+            StoryModel storyModel = storyRepository.findById(storyId).orElse(null);
             if (storyModel != null) {
                 storyModel.setIsActive(false);
                 storyRepository.save(storyModel);
-                log.info("Successfully deleted story with ID: " + id);
+                log.info("Successfully deleted story with ID: " + storyId);
             }
         } catch (NumberFormatException e) {
             log.error("Invalid story ID received: " + storyId);

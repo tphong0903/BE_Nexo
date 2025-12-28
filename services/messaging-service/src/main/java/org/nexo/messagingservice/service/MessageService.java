@@ -2,6 +2,7 @@ package org.nexo.messagingservice.service;
 
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.ReactionDetailDTO;
+import org.nexo.messagingservice.dto.ReplyStoryRequsestDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.enums.EReactionType;
 import org.springframework.data.domain.Page;
@@ -11,6 +12,8 @@ import java.util.List;
 
 public interface MessageService {
     MessageDTO sendMessage(SendMessageRequest request, Long senderUserId);
+
+    MessageDTO replyStory(ReplyStoryRequsestDTO request, Long senderUserId);
 
     Page<MessageDTO> getMessages(Long conversationId, Pageable pageable, Long requestingUserId, String search);
 

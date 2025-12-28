@@ -29,4 +29,6 @@ public class MessageDTO {
     private Boolean isEdited;
     private LocalDateTime editedAt;
     private LocalDateTime createdAt;
+    private Long storyId;
+    private String storyMediaUrl;
 }

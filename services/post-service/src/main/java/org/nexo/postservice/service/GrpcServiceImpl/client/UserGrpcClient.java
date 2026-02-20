@@ -67,12 +67,14 @@ public class UserGrpcClient {
     }
 
     public Long getTotalUsers() {
-        UserServiceProto.QuantityTotalUsers response = userStub.getTotalUsers(UserServiceProto.Empty.newBuilder().build());
+        UserServiceProto.QuantityTotalUsers response = userStub
+                .getTotalUsers(UserServiceProto.Empty.newBuilder().build());
         return response.getQuantity();
     }
 
     public Double getPercentUsersInThisMonth() {
-        UserServiceProto.UserPercentResponse response = userStub.getPercentUsersInThisMonth(UserServiceProto.Empty.newBuilder().build());
+        UserServiceProto.UserPercentResponse response = userStub
+                .getPercentUsersInThisMonth(UserServiceProto.Empty.newBuilder().build());
         return response.getPercent();
     }
 
@@ -87,5 +89,12 @@ public class UserGrpcClient {
         return response.getDataList();
     }
 
+    public UserServiceProto.GetUserFollowingsResponse getUserFollowing(Long userId) {
+        UserServiceProto.GetUserFollowingsRequest request = UserServiceProto.GetUserFollowingsRequest.newBuilder()
+                .setUserId(userId)
+                .build();
+
+        return userStub.getUserFollowings(request);
+    }
 
 }

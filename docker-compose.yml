@@ -433,6 +433,8 @@ services:
       KC_HTTP_ENABLED: true
       KC_HTTP_PORT: 8080
       KC_PROXY_HEADERS: xforwarded
+      KC_PROXY: edge
+      KC_HOSTNAME_URL: https://nexo.keycloak.nayamishop.id.vn
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
@@ -463,6 +465,8 @@ services:
   redis:
     image: redis:7-alpine
     command: redis-server --requirepass Admin@123 --appendonly yes --notify-keyspace-events Ex
+    volumes:
+      - redis_data:/data
     ports:
       - "6379:6379"
     networks:
@@ -622,3 +626,4 @@ volumes:
   kafka-data:
   zookeeper-data:
   zookeeper-log:
+  redis_data:

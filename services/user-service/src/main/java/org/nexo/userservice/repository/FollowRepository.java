@@ -1,6 +1,7 @@
 package org.nexo.userservice.repository;
 
 import org.nexo.userservice.enums.EStatusFollow;
+import org.nexo.userservice.dto.RecommendationFollowExportDTO;
 import org.nexo.userservice.model.FollowId;
 import org.nexo.userservice.model.FollowModel;
 import org.nexo.userservice.model.UserModel;
@@ -176,5 +177,14 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
                         ") " +
                         "ORDER BY u.createdAt DESC")
         Page<UserModel> findNewUsersSuggestion(@Param("userId") Long userId, Pageable pageable);
+
+        @Query("SELECT " +
+                        "f.follower.id AS followerId, " +
+                        "f.following.id AS followingId, " +
+                        "f.status AS status, " +
+                        "f.isCloseFriend AS isCloseFriend, " +
+                        "f.createdAt AS createdAt " +
+                        "FROM FollowModel f")
+        List<RecommendationFollowExportDTO> findAllForRecommendationExport();
 
 }

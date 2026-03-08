@@ -6,6 +6,7 @@ import org.mapstruct.BeanMapping;
 import org.mapstruct.Mapper;
 import org.mapstruct.MappingTarget;
 import org.mapstruct.NullValuePropertyMappingStrategy;
+import org.nexo.userservice.dto.PublicUserDTOResponse;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
@@ -29,4 +30,5 @@ public interface UserMapper {
 
     UserProfileMeDTO toUserProfileMeDTO(UserModel userModel);
 
+    PublicUserDTOResponse toPublicUserDTOResponse(UserModel userModel);
 }

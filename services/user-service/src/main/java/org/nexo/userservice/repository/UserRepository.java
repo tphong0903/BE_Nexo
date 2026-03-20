@@ -2,6 +2,7 @@ package org.nexo.userservice.repository;
 
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.enums.ERole;
+import org.nexo.userservice.dto.RecommendationUserExportDTO;
 import org.nexo.userservice.model.UserModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -55,5 +56,17 @@ public interface UserRepository extends JpaRepository<UserModel, Long> {
             "GROUP BY DATE(u.createdAt) " +
             "ORDER BY DATE(u.createdAt)")
     List<Object[]> countUsersByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
+
+    @Query("SELECT " +
+            "u.id AS id, " +
+            "u.username AS username, " +
+            "u.fullName AS fullName, " +
+            "u.bio AS bio, " +
+            "u.isPrivate AS isPrivate, " +
+            "u.onlineStatus AS onlineStatus, " +
+            "u.accountStatus AS accountStatus, " +
+            "u.createdAt AS createdAt " +
+            "FROM UserModel u")
+    List<RecommendationUserExportDTO> findAllForRecommendationExport();
 
 }

@@ -1,14 +1,20 @@
 package org.nexo.userservice.service.Impl;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.nexo.userservice.client.RecommendationClient;
 import org.nexo.userservice.dto.FolloweeDTO;
 import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.dto.PublicUserDTOResponse;
+import org.nexo.userservice.dto.RecommendationFollowedEvent;
+import org.nexo.userservice.dto.RecommendationResponseDTO;
 import org.nexo.userservice.enums.EStatusFollow;
 import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.nexo.userservice.mapper.UserMapper;
@@ -20,6 +26,7 @@ import org.nexo.userservice.repository.UserBlockRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.BlockService;
 import org.nexo.userservice.service.FollowService;
+import org.nexo.userservice.service.UserEventProducer;
 import org.nexo.userservice.util.JwtUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -41,6 +48,8 @@ public class FollowServiceImpl implements FollowService {
         private final BlockService blockService;
         private final UserBlockRepository userBlockRepository;
         private final UserMapper userMapper;
+        private final RecommendationClient recommendationClient;
+        private final UserEventProducer userEventProducer;
 
         private String followsKey(Long userId) {
                 return "follows:" + userId;
@@ -270,6 +279,13 @@ public class FollowServiceImpl implements FollowService {
 
                 redis.opsForSet().add(followsKey(followerId), followingId.toString());
                 redis.opsForSet().add(followersKey(followingId), followerId.toString());
+
+                userEventProducer.sendRecommendationFollowedEvent(RecommendationFollowedEvent.builder()
+                                .eventType("USER_FOLLOWED")
+                                .followerId(followerId)
+                                .followingId(followingId)
+                                .timestamp(Instant.now())
+                                .build());
         }
 
         @Transactional
@@ -291,6 +307,13 @@ public class FollowServiceImpl implements FollowService {
 
                 redis.opsForSet().add(followsKey(followerUser.getId()), followingUser.getId().toString());
                 redis.opsForSet().add(followersKey(followingUser.getId()), followerUser.getId().toString());
+
+                userEventProducer.sendRecommendationFollowedEvent(RecommendationFollowedEvent.builder()
+                                .eventType("USER_FOLLOWED")
+                                .followerId(followerUser.getId())
+                                .followingId(followingUser.getId())
+                                .timestamp(Instant.now())
+                                .build());
         }
 
         @Transactional
@@ -523,6 +546,62 @@ public class FollowServiceImpl implements FollowService {
                                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
                 Long currentUserId = currentUser.getId();
 
+                try {
+                        RecommendationResponseDTO recommendationResponse = recommendationClient.recommendFriends(currentUserId);
+                        List<Long> recommendedIds = recommendationResponse != null
+                                        && recommendationResponse.getSuggestedFriendIds() != null
+                                                        ? recommendationResponse.getSuggestedFriendIds()
+                                                        : List.of();
+
+                        if (recommendedIds.isEmpty()) {
+                                return PageModelResponse.<PublicUserDTOResponse>builder()
+                                                .content(List.of())
+                                                .pageNo(pageable.getPageNumber())
+                                                .pageSize(pageable.getPageSize())
+                                                .totalElements(0)
+                                                .totalPages(0)
+                                                .build();
+                        }
+
+                        List<UserModel> users = userRepository.findAllById(recommendedIds).stream()
+                                        .filter(user -> user.getAccountStatus() == org.nexo.userservice.enums.EAccountStatus.ACTIVE)
+                                        .collect(Collectors.toList());
+
+                        Map<Long, UserModel> userById = users.stream()
+                                        .collect(Collectors.toMap(UserModel::getId, u -> u, (a, b) -> a, LinkedHashMap::new));
+
+                        List<PublicUserDTOResponse> orderedDtos = recommendedIds.stream()
+                                        .map(userById::get)
+                                        .filter(user -> user != null)
+                                        .filter(user -> !user.getId().equals(currentUserId))
+                                        .filter(user -> !userBlockRepository.existsByIdBlockerIdAndIdBlockedId(currentUserId,
+                                                        user.getId()))
+                                        .filter(user -> !userBlockRepository.existsByIdBlockerIdAndIdBlockedId(user.getId(),
+                                                        currentUserId))
+                                        .map(userMapper::toPublicUserDTOResponse)
+                                        .collect(Collectors.toList());
+
+                        int page = pageable.getPageNumber();
+                        int size = pageable.getPageSize();
+                        int fromIndex = Math.min(page * size, orderedDtos.size());
+                        int toIndex = Math.min(fromIndex + size, orderedDtos.size());
+
+                        List<PublicUserDTOResponse> pageContent = orderedDtos.subList(fromIndex, toIndex);
+                        int totalPages = size == 0 ? 0 : (int) Math.ceil((double) orderedDtos.size() / size);
+
+                        return PageModelResponse.<PublicUserDTOResponse>builder()
+                                        .content(pageContent)
+                                        .pageNo(page)
+                                        .pageSize(size)
+                                        .totalElements(orderedDtos.size())
+                                        .totalPages(totalPages)
+                                        .build();
+                } catch (Exception ex) {
+                        return getSuggestedFriendsFallback(currentUserId, pageable);
+                }
+        }
+
+        private PageModelResponse<PublicUserDTOResponse> getSuggestedFriendsFallback(Long currentUserId, Pageable pageable) {
                 Page<UserModel> suggestedPage = followRepository.findSuggestedUsersBasedOnMutualFollows(currentUserId,
                                 pageable);
 

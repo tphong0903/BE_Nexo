@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+redis
+kafka-python
+requests
+numpy
+faiss-cpu
+celery
+torch
+torch-geometric

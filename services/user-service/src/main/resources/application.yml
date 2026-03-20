@@ -85,6 +85,11 @@ kafka:
   topics:
     user-events: user-events
 
+recommendation:
+  service:
+    url: http://localhost:8000
+  internal-token: change-me-in-env
+
 logging:
   level:
     "org.apache.kafka": OFF

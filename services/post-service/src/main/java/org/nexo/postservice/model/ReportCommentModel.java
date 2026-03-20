@@ -25,4 +25,6 @@ public class ReportCommentModel extends AbstractEntity<Long> {
     private String reporterName;
     private String ownerCommentName;
     private String note;
+    private String predictAI;
+    private Double confidence;
 }

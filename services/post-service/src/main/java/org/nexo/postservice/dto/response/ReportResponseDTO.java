@@ -27,4 +27,6 @@ public class ReportResponseDTO {
     private String caption;
     private Boolean isActive;
     private String note;
+    private String predictAI;
+    private Double confidence;
 }

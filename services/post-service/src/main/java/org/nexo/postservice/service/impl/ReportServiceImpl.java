@@ -3,9 +3,10 @@ package org.nexo.postservice.service.impl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import moderation.Moderation;
-import org.nexo.grpc.interaction.InteractionServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
-import org.nexo.postservice.dto.response.*;
+import org.nexo.postservice.dto.response.ReportInfoDTO;
+import org.nexo.postservice.dto.response.ReportResponseDTO;
+import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.*;
 import org.nexo.postservice.repository.*;
@@ -207,7 +208,7 @@ public class ReportServiceImpl implements IReportService {
 
         if (decision == EReportStatus.APPROVED) {
             interactionGrpcClient.deleteCommentById(report.getCommentId());
-            report.setCommentId(0L); // Đánh dấu comment đã bị xóa
+            report.setCommentId(0L);
         }
 
         report.setReportStatus(decision);

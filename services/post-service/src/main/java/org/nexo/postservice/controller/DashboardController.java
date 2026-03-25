@@ -5,7 +5,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.postservice.dto.DashBoardDateDTO;
 import org.nexo.postservice.dto.response.ChartDataDto;
 import org.nexo.postservice.dto.response.ResponseData;
-import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.service.IDashboardService;
 import org.nexo.postservice.service.IPostService;
 import org.springframework.http.HttpStatus;
@@ -88,7 +87,7 @@ public class DashboardController {
     @DeleteMapping("/posts/{type}/{id}")
     public ResponseData<?> deletePostByIdAndType(@PathVariable String type, @PathVariable Long id) {
         if (type.equals("reel"))
-            return new ResponseData<>(200, "Success", postService.deleteReel2(id));
-        return new ResponseData<>(200, "Success", postService.deletePost2(id));
+            return new ResponseData<>(200, "Success", postService.deleteReel(id));
+        return new ResponseData<>(200, "Success", postService.deletePost(id));
     }
 }

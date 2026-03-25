@@ -20,7 +20,6 @@ public class RedisExpirationListener extends KeyExpirationEventMessageListener {
                                    KafkaTemplate<String, StoryDeletionEvent> kafkaTemplate) {
         super(listenerContainer);
         this.kafkaTemplate = kafkaTemplate;
-        log.info("RedisExpirationListener initialized successfully");
     }
 
     @Override
@@ -30,12 +29,15 @@ public class RedisExpirationListener extends KeyExpirationEventMessageListener {
 
             if (expiredKey.startsWith("story:expire:")) {
                 String storyId = expiredKey.substring("story:expire:".length());
-                try {
-                    kafkaTemplate.send("story-deletion-topic", new StoryDeletionEvent(Long.parseLong(storyId))).get();
-                    log.info("Published story ID [{}] to Kafka for deletion", storyId);
-                } catch (Exception e) {
-                    log.error("Failed to publish story ID [{}] to Kafka", storyId, e);
-                }
+
+                kafkaTemplate.send("story-deletion-topic", new StoryDeletionEvent(Long.parseLong(storyId)))
+                        .whenComplete((result, ex) -> {
+                            if (ex == null) {
+                                log.info("Published story ID [{}] to Kafka for deletion", storyId);
+                            } else {
+                                log.error("Failed to publish story ID [{}] to Kafka", storyId, ex);
+                            }
+                        });
             }
         } catch (Exception e) {
             log.error("Error processing Redis expiration message", e);

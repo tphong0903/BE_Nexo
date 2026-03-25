@@ -1,7 +1,9 @@
 package org.nexo.postservice.service.GrpcServiceImpl;
 
+import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.nexo.postservice.dto.PostMediaDTO;
 import org.nexo.postservice.exception.CustomException;
@@ -16,9 +18,9 @@ import org.nexo.postservice.service.IPostMediaService;
 import org.nexo.postservice.util.Enum.EMediaType;
 import org.springframework.http.HttpStatus;
 
-import java.util.ArrayList;
 import java.util.List;
 
+@Slf4j
 @GrpcService
 @RequiredArgsConstructor
 public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMediaGrpcServiceImplBase {
@@ -29,81 +31,99 @@ public class PostMediaGrpcServiceImpl extends PostMediaGrpcServiceGrpc.PostMedia
     @Override
     public void savePostMedias(PostMediaServiceProto.PostMediaListRequest request,
                                StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
-        List<PostMediaDTO> list = new ArrayList<>();
-        request.getPostsList().forEach(post -> {
-            list.add(PostMediaDTO.builder()
-                    .postId(post.getPostID())
-                    .mediaUrl(post.getMediaUrl())
-                    .mediaType(post.getMediaType())
-                    .mediaOrder(post.getMediaOrder())
-                    .build());
-        });
-        postMediaService.savePostMedia(list);
-        PostMediaServiceProto.PostMediaResponse response =
-                PostMediaServiceProto.PostMediaResponse.newBuilder()
-                        .setSuccess(true)
-                        .setMessage("Posts saved successfully")
-                        .build();
+        try {
+            List<PostMediaDTO> list = request.getPostsList().stream()
+                    .map(post -> PostMediaDTO.builder()
+                            .postId(post.getPostID())
+                            .mediaUrl(post.getMediaUrl())
+                            .mediaType(post.getMediaType())
+                            .mediaOrder(post.getMediaOrder())
+                            .build())
+                    .toList();
 
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
+            postMediaService.savePostMedia(list);
+            sendSuccessResponse(responseObserver, "Posts saved successfully");
+        } catch (Exception e) {
+            handleGrpcError("savePostMedias", e, responseObserver);
+        }
     }
 
     @Override
     public void saveReelMedias(PostMediaServiceProto.ReelDto request,
                                StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
-        ReelModel model = reelRepository.findById(request.getPostId()).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
-        model.setVideoUrl(request.getMediaUrl());
-        reelRepository.save(model);
-        PostMediaServiceProto.PostMediaResponse response =
-                PostMediaServiceProto.PostMediaResponse.newBuilder()
-                        .setSuccess(true)
-                        .setMessage("Reel saved successfully")
-                        .build();
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
+        try {
+            ReelModel model = reelRepository.findById(request.getPostId())
+                    .orElseThrow(() -> new CustomException("Reel does not exist", HttpStatus.BAD_REQUEST));
+
+            model.setVideoUrl(request.getMediaUrl());
+            reelRepository.save(model);
+
+            sendSuccessResponse(responseObserver, "Reel saved successfully");
+        } catch (Exception e) {
+            handleGrpcError("saveReelMedias", e, responseObserver);
+        }
     }
 
     @Override
     public void saveStoryMedias(PostMediaServiceProto.StoryDto request,
                                 StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
-        StoryModel model = storyRepository.findById(request.getStoryId()).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
-        model.setMediaURL(request.getMediaUrl());
-        model.setMediaType(Enum.valueOf(EMediaType.class, request.getMediaType()));
-        storyRepository.save(model);
-        PostMediaServiceProto.PostMediaResponse response =
-                PostMediaServiceProto.PostMediaResponse.newBuilder()
-                        .setSuccess(true)
-                        .setMessage("Story saved successfully")
-                        .build();
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
+        try {
+            StoryModel model = storyRepository.findById(request.getStoryId())
+                    .orElseThrow(() -> new CustomException("Story does not exist", HttpStatus.BAD_REQUEST));
+
+            model.setMediaURL(request.getMediaUrl());
+            model.setMediaType(EMediaType.valueOf(request.getMediaType()));
+            storyRepository.save(model);
+
+            sendSuccessResponse(responseObserver, "Story saved successfully");
+        } catch (Exception e) {
+            handleGrpcError("saveStoryMedias", e, responseObserver);
+        }
     }
 
     @Override
     public void findPostMediasOfPost(PostMediaServiceProto.PostId request,
                                      StreamObserver<PostMediaServiceProto.PostMediaListRequest> responseObserver) {
-        List<PostMediaRequestDTO> list = postMediaService.findPostMediasOfPost(request.getPostId());
+        try {
+            List<PostMediaRequestDTO> list = postMediaService.findPostMediasOfPost(request.getPostId());
 
-        PostMediaServiceProto.PostMediaListRequest response =
-                PostMediaServiceProto.PostMediaListRequest.newBuilder().addAllPosts(list).build();
+            PostMediaServiceProto.PostMediaListRequest response = PostMediaServiceProto.PostMediaListRequest.newBuilder()
+                    .addAllPosts(list)
+                    .build();
 
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            handleGrpcError("findPostMediasOfPost", e, responseObserver);
+        }
     }
 
     @Override
     public void deletePostMedia(PostMediaServiceProto.PostId request,
                                 StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver) {
-        postMediaService.deletePostMedia(request.getPostId());
+        try {
+            postMediaService.deletePostMedia(request.getPostId());
+            sendSuccessResponse(responseObserver, "Post Media deleted successfully");
+        } catch (Exception e) {
+            handleGrpcError("deletePostMedia", e, responseObserver);
+        }
+    }
 
-        PostMediaServiceProto.PostMediaResponse response =
-                PostMediaServiceProto.PostMediaResponse.newBuilder()
-                        .setSuccess(true)
-                        .setMessage("Post Media deleted successfully")
-                        .build();
 
+    private void sendSuccessResponse(StreamObserver<PostMediaServiceProto.PostMediaResponse> responseObserver, String message) {
+        PostMediaServiceProto.PostMediaResponse response = PostMediaServiceProto.PostMediaResponse.newBuilder()
+                .setSuccess(true)
+                .setMessage(message)
+                .build();
         responseObserver.onNext(response);
         responseObserver.onCompleted();
+    }
+
+    private void handleGrpcError(String methodName, Exception e, StreamObserver<?> responseObserver) {
+        log.error("Error in {}: {}", methodName, e.getMessage(), e);
+        responseObserver.onError(Status.INTERNAL
+                .withDescription(e.getMessage())
+                .withCause(e)
+                .asRuntimeException());
     }
 }

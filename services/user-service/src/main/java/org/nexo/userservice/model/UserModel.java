@@ -59,11 +59,15 @@ public class UserModel {
     @Builder.Default
     private Boolean onlineStatus = true;
 
+    @Column(name = "is_KOL")
+    @Builder.Default
+    private Boolean isKOL = false;
+
     @Column(name = "account_status")
     @Enumerated(EnumType.STRING)
     private EAccountStatus accountStatus;
 
-    @Column(name="role")
+    @Column(name = "role")
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private ERole role = ERole.USER;

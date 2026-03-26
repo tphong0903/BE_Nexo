@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 @RequiredArgsConstructor
 @Slf4j
 public class CommentServiceImpl implements ICommentService {
+    private static final long SCORE_COMMENT = 3L;
     private final ICommentRepository commentRepository;
     private final ICommentMentionService commentMentionService;
     private final SecurityUtil securityUtil;
@@ -107,6 +108,8 @@ public class CommentServiceImpl implements ICommentService {
             url = "/reels/" + model.getReelId();
         }
 
+        updateAffinityScore(currentUserId, authorId, SCORE_COMMENT);
+
         if (!currentUserId.equals(authorId)) {
             MessageDTO messageDTO = MessageDTO.builder()
                     .actorId(currentUserId)
@@ -127,15 +130,12 @@ public class CommentServiceImpl implements ICommentService {
         CommentModel model = commentRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
 
-        boolean isOwnerOfComment = currentUserId.equals(model.getUserId());
-        boolean isPostOwner = false;
+        Long postAuthorId = (model.getPostId() != null)
+                ? postGrpcClient.getPostById(model.getPostId()).getUserId()
+                : postGrpcClient.getReelById(model.getReelId()).getUserId();
 
-        if (!isOwnerOfComment) {
-            Long postAuthorId = (model.getPostId() != null)
-                    ? postGrpcClient.getPostById(model.getPostId()).getUserId()
-                    : postGrpcClient.getReelById(model.getReelId()).getUserId();
-            isPostOwner = currentUserId.equals(postAuthorId);
-        }
+        boolean isOwnerOfComment = currentUserId.equals(model.getUserId());
+        boolean isPostOwner = currentUserId.equals(postAuthorId);
 
         if (!isOwnerOfComment && !isPostOwner) {
             throw new CustomException("Don't have permission to delete this comment", HttpStatus.FORBIDDEN);
@@ -152,6 +152,8 @@ public class CommentServiceImpl implements ICommentService {
         } else if (model.getReelId() != null) {
             postGrpcClient.addCommentQuantityById(model.getReelId(), false, false);
         }
+
+        updateAffinityScore(model.getUserId(), postAuthorId, -SCORE_COMMENT);
 
         return "Success";
     }
@@ -197,6 +199,13 @@ public class CommentServiceImpl implements ICommentService {
         return commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
     }
 
+    private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {
+        if (followerId.equals(authorId)) return;
+
+        String affinityKey = "affinity:" + followerId;
+        redisTemplate.opsForHash().increment(affinityKey, String.valueOf(authorId), scoreDelta);
+        log.info("Updated affinity score for follower {} -> author {} by delta {} (Comment)", followerId, authorId, scoreDelta);
+    }
 
     private void checkVisibilityAccess(Long authorId, Long viewerId) {
         if (authorId.equals(viewerId)) return;

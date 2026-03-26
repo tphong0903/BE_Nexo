@@ -36,6 +36,8 @@ import java.util.List;
 @Slf4j
 public class LikeServiceImpl implements ILikeService {
 
+    private static final long SCORE_LIKE_POST_REEL = 2L;
+    private static final long SCORE_LIKE_COMMENT = 1L;
     private final ILikeCommentRepository likeCommentRepository;
     private final ICommentRepository commentRepository;
     private final ILikeRepository likeRepository;
@@ -50,14 +52,15 @@ public class LikeServiceImpl implements ILikeService {
     public String saveLikeComment(Long id) {
         Long currentUserId = securityUtil.getUserIdFromToken();
         LikeCommentModel likeCommentModel = likeCommentRepository.findByCommentModelIdAndAndUserId(id, currentUserId);
+        CommentModel commentModel = commentRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
+        Long authorId = commentModel.getUserId();
 
         if (likeCommentModel != null) {
             likeCommentRepository.delete(likeCommentModel);
             redisTemplate.opsForSet().remove("comment:" + id + ":likes", String.valueOf(currentUserId));
+            updateAffinityScore(currentUserId, authorId, -SCORE_LIKE_COMMENT);
         } else {
-            CommentModel commentModel = commentRepository.findById(id)
-                    .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
-
             LikeCommentModel model = LikeCommentModel.builder()
                     .commentModel(commentModel)
                     .userId(currentUserId)
@@ -65,6 +68,8 @@ public class LikeServiceImpl implements ILikeService {
             likeCommentRepository.save(model);
 
             redisTemplate.opsForSet().add("comment:" + id + ":likes", String.valueOf(currentUserId));
+
+            updateAffinityScore(currentUserId, authorId, SCORE_LIKE_COMMENT);
 
             if (!currentUserId.equals(commentModel.getUserId())) {
                 String targetUrl = commentModel.getPostId() != null ? "/posts/" + commentModel.getPostId() : "/reels/" + commentModel.getReelId();
@@ -80,6 +85,8 @@ public class LikeServiceImpl implements ILikeService {
         Long currentUserId = securityUtil.getUserIdFromToken();
         LikeModel model = likeRepository.findByPostIdAndUserId(id, currentUserId);
 
+        PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
+        Long authorId = postResponse.getUserId();
         if (model != null) {
             likeRepository.delete(model);
             postGrpcClient.addLikeQuantityById(id, true, false);
@@ -88,6 +95,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().decrement("global:likes:total");
             redisTemplate.opsForValue().decrement("user:" + currentUserId + ":likes:total");
 
+            updateAffinityScore(currentUserId, authorId, -SCORE_LIKE_POST_REEL);
         } else {
             model = LikeModel.builder().postId(id).userId(currentUserId).build();
             likeRepository.save(model);
@@ -97,7 +105,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().increment("global:likes:total");
             redisTemplate.opsForValue().increment("user:" + currentUserId + ":likes:total");
 
-            PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
+            updateAffinityScore(currentUserId, authorId, SCORE_LIKE_POST_REEL);
 
             if (!currentUserId.equals(postResponse.getUserId())) {
                 sendNotification(currentUserId, postResponse.getUserId(), ENotificationType.LIKE_POST, "/posts/" + id);
@@ -112,6 +120,9 @@ public class LikeServiceImpl implements ILikeService {
         Long currentUserId = securityUtil.getUserIdFromToken();
         LikeModel model = likeRepository.findByReelIdAndUserId(id, currentUserId);
 
+        PostServiceOuterClass.ReelResponse reelResponse = postGrpcClient.getReelById(id);
+        Long authorId = reelResponse.getUserId();
+
         if (model != null) {
             likeRepository.delete(model);
             postGrpcClient.addLikeQuantityById(id, false, false);
@@ -120,6 +131,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().decrement("global:likes:total");
             redisTemplate.opsForValue().decrement("user:" + currentUserId + ":likes:total");
 
+            updateAffinityScore(currentUserId, authorId, -SCORE_LIKE_POST_REEL);
         } else {
             model = LikeModel.builder().reelId(id).userId(currentUserId).build();
             likeRepository.save(model);
@@ -129,7 +141,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().increment("global:likes:total");
             redisTemplate.opsForValue().increment("user:" + currentUserId + ":likes:total");
 
-            PostServiceOuterClass.ReelResponse reelResponse = postGrpcClient.getReelById(id);
+            updateAffinityScore(currentUserId, authorId, SCORE_LIKE_POST_REEL);
 
             if (!currentUserId.equals(reelResponse.getUserId())) {
                 sendNotification(currentUserId, reelResponse.getUserId(), ENotificationType.LIKE_REEL, "/reels/" + id);
@@ -227,5 +239,13 @@ public class LikeServiceImpl implements ILikeService {
         response.setTotalPages(0);
         response.setLast(true);
         return response;
+    }
+
+    private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {
+        if (followerId.equals(authorId)) return;
+
+        String affinityKey = "affinity:" + followerId;
+        redisTemplate.opsForHash().increment(affinityKey, String.valueOf(authorId), scoreDelta);
+        log.info("Updated affinity score for follower {} -> author {} by delta {}", followerId, authorId, scoreDelta);
     }
 }

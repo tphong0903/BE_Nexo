@@ -20,7 +20,6 @@ import java.util.regex.Pattern;
 @RequiredArgsConstructor
 public class HashTagServiceImpl implements IHashTagService {
 
-    // Compile pattern 1 lần tĩnh để tối ưu RAM thay vì compile lại mỗi lần gọi hàm
     private static final Pattern HASHTAG_PATTERN = Pattern.compile("(#\\w+)");
     private final IPostHashTagRepository postHashTagRepository;
     private final IHashTagRepository hashTagRepository;

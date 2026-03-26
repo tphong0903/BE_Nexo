@@ -9,7 +9,9 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
+import java.util.Set;
 
 @Repository
 public interface ILikeRepository extends JpaRepository<LikeModel, Long> {
@@ -35,5 +37,10 @@ public interface ILikeRepository extends JpaRepository<LikeModel, Long> {
     List<Object[]> countLikesByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     long countByUserId(Long userId);
+
+    Set<Long> findPostIdsByUserIdAndPostIdIn(Long userId, Collection<Long> postId);
+
+    Set<Long> findReelIdsByUserIdAndReelIdIn(Long userId, Collection<Long> postId);
+
 
 }

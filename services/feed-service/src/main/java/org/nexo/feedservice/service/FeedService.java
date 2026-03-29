@@ -228,14 +228,12 @@ public class FeedService {
     }
 
     private Mono<ResponseData<?>> buildPostResponse(List<PostResponseDTO> posts, int page, Long limit, Page<Long> pageResult) {
-        List<PostResponseDTO> sorted = (pageResult != null) ?
-                posts.stream().sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())).toList() : posts;
+        List<PostResponseDTO> sorted = posts.stream().sorted(Comparator.comparing(PostResponseDTO::getCreatedAt).reversed()).toList();
         return createResponseData(sorted, page, limit, pageResult);
     }
 
     private Mono<ResponseData<?>> buildReelResponse(List<ReelResponseDTO> posts, int page, Long limit, Page<Long> pageResult) {
-        List<ReelResponseDTO> sorted = (pageResult != null) ?
-                posts.stream().sorted((a, b) -> b.getCreatedAt().compareTo(a.getCreatedAt())).toList() : posts;
+        List<ReelResponseDTO> sorted = posts.stream().sorted(Comparator.comparing(ReelResponseDTO::getCreatedAt).reversed()).toList();
         return createResponseData(sorted, page, limit, pageResult);
     }
 

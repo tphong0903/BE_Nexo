@@ -38,4 +38,8 @@ public interface IPostService {
     List<PostResponseDTO> getPostsByIds(List<Long> postIds, Long viewerId);
 
     List<ReelResponseDTO> getReelsByIds(List<Long> postIds, Long viewerId);
+
+    PostResponseDTO getPostByIdGrpc(Long id);
+
+    ReelResponseDTO getReelByIdGrpc(Long id);
 }

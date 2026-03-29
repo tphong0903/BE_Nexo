@@ -10,7 +10,9 @@ import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.exception.CustomException;
 import org.nexo.interactionservice.mapper.CommentMapper;
 import org.nexo.interactionservice.model.CommentModel;
+import org.nexo.interactionservice.model.UserPostScores;
 import org.nexo.interactionservice.repository.ICommentRepository;
+import org.nexo.interactionservice.repository.IUserPostScoresRepository;
 import org.nexo.interactionservice.service.ICommentMentionService;
 import org.nexo.interactionservice.service.ICommentService;
 import org.nexo.interactionservice.util.Enum.ENotificationType;
@@ -32,6 +34,7 @@ public class CommentServiceImpl implements ICommentService {
     private static final long SCORE_COMMENT = 3L;
     private final ICommentRepository commentRepository;
     private final ICommentMentionService commentMentionService;
+    private final IUserPostScoresRepository userPostScoresRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final PostGrpcClient postGrpcClient;
@@ -109,6 +112,7 @@ public class CommentServiceImpl implements ICommentService {
         }
 
         updateAffinityScore(currentUserId, authorId, SCORE_COMMENT);
+        updateUserPostScore(currentUserId, model.getPostId(), model.getReelId(), (double) SCORE_COMMENT);
 
         if (!currentUserId.equals(authorId)) {
             MessageDTO messageDTO = MessageDTO.builder()
@@ -154,6 +158,7 @@ public class CommentServiceImpl implements ICommentService {
         }
 
         updateAffinityScore(model.getUserId(), postAuthorId, -SCORE_COMMENT);
+        updateUserPostScore(model.getUserId(), model.getPostId(), model.getReelId(), (double) -SCORE_COMMENT);
 
         return "Success";
     }
@@ -204,7 +209,29 @@ public class CommentServiceImpl implements ICommentService {
 
         String affinityKey = "affinity:" + followerId;
         redisTemplate.opsForHash().increment(affinityKey, String.valueOf(authorId), scoreDelta);
-        log.info("Updated affinity score for follower {} -> author {} by delta {} (Comment)", followerId, authorId, scoreDelta);
+    }
+
+    private void updateUserPostScore(Long userId, Long postId, Long reelId, Double scoreDelta) {
+        UserPostScores userPostScores = null;
+        if (postId != null) {
+            userPostScores = userPostScoresRepository.findByUserIdAndPostId(userId, postId);
+        } else if (reelId != null) {
+            userPostScores = userPostScoresRepository.findByUserIdAndReelId(userId, reelId);
+        }
+
+        if (userPostScores == null) {
+            userPostScores = UserPostScores.builder()
+                    .userId(userId)
+                    .postId(postId)
+                    .reelId(reelId)
+                    .scores(scoreDelta > 0 ? scoreDelta : 0.0)
+                    .build();
+        } else {
+            double newScore = (userPostScores.getScores() != null ? userPostScores.getScores() : 0.0) + scoreDelta;
+            userPostScores.setScores(Math.max(newScore, 0.0));
+        }
+
+        userPostScoresRepository.save(userPostScores);
     }
 
     private void checkVisibilityAccess(Long authorId, Long viewerId) {

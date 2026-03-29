@@ -38,9 +38,11 @@ public interface ILikeRepository extends JpaRepository<LikeModel, Long> {
 
     long countByUserId(Long userId);
 
-    Set<Long> findPostIdsByUserIdAndPostIdIn(Long userId, Collection<Long> postId);
+    @Query("SELECT l.postId FROM LikeModel l WHERE l.userId = :userId AND l.postId IN :postIds")
+    Set<Long> findPostIdsByUserIdAndPostIdIn(@Param("userId") Long userId, @Param("postIds") Collection<Long> postIds);
 
-    Set<Long> findReelIdsByUserIdAndReelIdIn(Long userId, Collection<Long> postId);
+    @Query("SELECT l.reelId FROM LikeModel l WHERE l.userId = :userId AND l.reelId IN :reelIds")
+    Set<Long> findReelIdsByUserIdAndReelIdIn(@Param("userId") Long userId, @Param("reelIds") Collection<Long> reelIds);
 
 
 }

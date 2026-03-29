@@ -12,9 +12,11 @@ import org.nexo.interactionservice.mapper.FolloweeMapper;
 import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.model.LikeCommentModel;
 import org.nexo.interactionservice.model.LikeModel;
+import org.nexo.interactionservice.model.UserPostScores;
 import org.nexo.interactionservice.repository.ICommentRepository;
 import org.nexo.interactionservice.repository.ILikeCommentRepository;
 import org.nexo.interactionservice.repository.ILikeRepository;
+import org.nexo.interactionservice.repository.IUserPostScoresRepository;
 import org.nexo.interactionservice.service.ILikeService;
 import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
@@ -41,6 +43,7 @@ public class LikeServiceImpl implements ILikeService {
     private final ILikeCommentRepository likeCommentRepository;
     private final ICommentRepository commentRepository;
     private final ILikeRepository likeRepository;
+    private final IUserPostScoresRepository userPostScoresRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final PostGrpcClient postGrpcClient;
@@ -70,6 +73,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForSet().add("comment:" + id + ":likes", String.valueOf(currentUserId));
 
             updateAffinityScore(currentUserId, authorId, SCORE_LIKE_COMMENT);
+            updateUserPostScore(currentUserId, commentModel.getPostId(), commentModel.getReelId(), (double) SCORE_LIKE_COMMENT);
 
             if (!currentUserId.equals(commentModel.getUserId())) {
                 String targetUrl = commentModel.getPostId() != null ? "/posts/" + commentModel.getPostId() : "/reels/" + commentModel.getReelId();
@@ -96,6 +100,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().decrement("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, -SCORE_LIKE_POST_REEL);
+            updateUserPostScore(currentUserId, id, null, (double) -SCORE_LIKE_POST_REEL);
         } else {
             model = LikeModel.builder().postId(id).userId(currentUserId).build();
             likeRepository.save(model);
@@ -106,6 +111,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().increment("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, SCORE_LIKE_POST_REEL);
+            updateUserPostScore(currentUserId, id, null, (double) SCORE_LIKE_POST_REEL);
 
             if (!currentUserId.equals(postResponse.getUserId())) {
                 sendNotification(currentUserId, postResponse.getUserId(), ENotificationType.LIKE_POST, "/posts/" + id);
@@ -132,6 +138,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().decrement("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, -SCORE_LIKE_POST_REEL);
+            updateUserPostScore(currentUserId, null, id, (double) -SCORE_LIKE_POST_REEL);
         } else {
             model = LikeModel.builder().reelId(id).userId(currentUserId).build();
             likeRepository.save(model);
@@ -142,6 +149,7 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForValue().increment("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, SCORE_LIKE_POST_REEL);
+            updateUserPostScore(currentUserId, null, id, (double) SCORE_LIKE_POST_REEL);
 
             if (!currentUserId.equals(reelResponse.getUserId())) {
                 sendNotification(currentUserId, reelResponse.getUserId(), ENotificationType.LIKE_REEL, "/reels/" + id);
@@ -247,5 +255,28 @@ public class LikeServiceImpl implements ILikeService {
         String affinityKey = "affinity:" + followerId;
         redisTemplate.opsForHash().increment(affinityKey, String.valueOf(authorId), scoreDelta);
         log.info("Updated affinity score for follower {} -> author {} by delta {}", followerId, authorId, scoreDelta);
+    }
+
+    private void updateUserPostScore(Long userId, Long postId, Long reelId, Double scoreDelta) {
+        UserPostScores userPostScores = null;
+        if (postId != null) {
+            userPostScores = userPostScoresRepository.findByUserIdAndPostId(userId, postId);
+        } else if (reelId != null) {
+            userPostScores = userPostScoresRepository.findByUserIdAndReelId(userId, reelId);
+        }
+
+        if (userPostScores == null) {
+            userPostScores = UserPostScores.builder()
+                    .userId(userId)
+                    .postId(postId)
+                    .reelId(reelId)
+                    .scores(scoreDelta > 0 ? scoreDelta : 0.0)
+                    .build();
+        } else {
+            double newScore = (userPostScores.getScores() != null ? userPostScores.getScores() : 0.0) + scoreDelta;
+            userPostScores.setScores(Math.max(newScore, 0.0));
+        }
+
+        userPostScoresRepository.save(userPostScores);
     }
 }

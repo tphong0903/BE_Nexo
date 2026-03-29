@@ -220,15 +220,11 @@ public class PostServiceImpl implements IPostService {
         reelRepository.delete(model);
         clearReelCache(id);
 
-        // Ghi chú: Đảm bảo Feed Key của bạn cho Reel dùng tiền tố nào (feed: hay feed:reel:)
         redisTemplate.opsForZSet().remove("feed:" + model.getUserId(), id);
 
         return "Success";
     }
 
-    // =========================================================================
-    // 2. LUỒNG READ (GET ONE / GET MANY / POPULAR)
-    // =========================================================================
 
     @Override
     public PostResponseDTO getPostById(Long id) {
@@ -254,6 +250,21 @@ public class PostServiceImpl implements IPostService {
         Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId, List.of(id));
 
         return convertToReelResponseDTO(model, authorInfo, likedMap.getOrDefault(id, false));
+    }
+
+    @Override
+    public PostResponseDTO getPostByIdGrpc(Long id) {
+        PostModel model = getPostWithCache(id);
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(model.getUserId());
+        return convertToPostResponseDTO(model, authorInfo, false);
+    }
+
+    @Override
+    public ReelResponseDTO getReelByIdGrpc(Long id) {
+        ReelModel model = getReelWithCache(id);
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(model.getUserId());
+
+        return convertToReelResponseDTO(model, authorInfo, false);
     }
 
     @Override
@@ -362,28 +373,28 @@ public class PostServiceImpl implements IPostService {
 
 
     private PostModel getPostWithCache(Long id) {
-        String cacheKey = "post_cache:" + id;
-        PostModel cachedPost = (PostModel) redisTemplate.opsForValue().get(cacheKey);
+//        String cacheKey = "post_cache:" + id;
+//        PostModel cachedPost = (PostModel) redisTemplate.opsForValue().get(cacheKey);
 
-        if (cachedPost != null) return cachedPost;
+//        if (cachedPost != null) return cachedPost;
 
         PostModel dbPost = postRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
 
-        redisTemplate.opsForValue().set(cacheKey, dbPost, CACHE_TTL);
+//        redisTemplate.opsForValue().set(cacheKey, dbPost, CACHE_TTL);
         return dbPost;
     }
 
     private ReelModel getReelWithCache(Long id) {
-        String cacheKey = "reel_cache:" + id;
-        ReelModel cachedReel = (ReelModel) redisTemplate.opsForValue().get(cacheKey);
-
-        if (cachedReel != null) return cachedReel;
+//        String cacheKey = "reel_cache:" + id;
+//        ReelModel cachedReel = (ReelModel) redisTemplate.opsForValue().get(cacheKey);
+//
+//        if (cachedReel != null) return cachedReel;
 
         ReelModel dbReel = reelRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.BAD_REQUEST));
 
-        redisTemplate.opsForValue().set(cacheKey, dbReel, CACHE_TTL);
+//        redisTemplate.opsForValue().set(cacheKey, dbReel, CACHE_TTL);
         return dbReel;
     }
 

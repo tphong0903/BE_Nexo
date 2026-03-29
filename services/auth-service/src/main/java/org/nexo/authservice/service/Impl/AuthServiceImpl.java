@@ -7,17 +7,12 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.authservice.config.KeycloakConfig;
-import org.nexo.authservice.dto.CallBackRequest;
-import org.nexo.authservice.dto.KeycloakErrorResponse;
-import org.nexo.authservice.dto.LoginRequest;
-import org.nexo.authservice.dto.OAuthCallbackRequest;
-import org.nexo.authservice.dto.OAuthLoginResponse;
-import org.nexo.authservice.dto.RegisterRequest;
-import org.nexo.authservice.dto.TokenResponse;
+import org.nexo.authservice.dto.*;
 import org.nexo.authservice.exception.KeycloakClientException;
 import org.nexo.authservice.service.AuthService;
 import org.nexo.authservice.service.UserGrpcClient;
 import org.nexo.authservice.util.JwtUtil;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -27,10 +22,9 @@ import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.reactive.function.BodyInserters;
 import org.springframework.web.reactive.function.client.ClientResponse;
-import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -88,10 +82,10 @@ public class AuthServiceImpl implements AuthService {
                             .bodyToMono(TokenResponse.class)
                             .flatMap(tokenResponse -> {
                                 return tokenCacheService.cacheToken(
-                                        loginRequest.getEmail(),
-                                        tokenResponse.getAccessToken(),
-                                        tokenResponse.getRefreshToken(),
-                                        tokenResponse.getExpiresIn())
+                                                loginRequest.getEmail(),
+                                                tokenResponse.getAccessToken(),
+                                                tokenResponse.getRefreshToken(),
+                                                tokenResponse.getExpiresIn())
                                         .thenReturn(tokenResponse);
                             });
                 });
@@ -130,10 +124,10 @@ public class AuthServiceImpl implements AuthService {
         }
 
         return userGrpcClient.createUser(
-                userId,
-                registerRequest.getEmail(),
-                registerRequest.getFullname(),
-                registerRequest.getUsername())
+                        userId,
+                        registerRequest.getEmail(),
+                        registerRequest.getFullname(),
+                        registerRequest.getUsername())
                 .doOnSuccess(grpcResponse -> {
                     if (grpcResponse.getSuccess()) {
                         Mono.fromRunnable(() -> sendVerifyEmail(userId, adminToken)
@@ -341,7 +335,7 @@ public class AuthServiceImpl implements AuthService {
                         + "/execute-actions-email")
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .bodyValue(new String[] { "UPDATE_PASSWORD" })
+                .bodyValue(new String[]{"UPDATE_PASSWORD"})
                 .retrieve()
                 .bodyToMono(Void.class);
     }
@@ -454,7 +448,7 @@ public class AuthServiceImpl implements AuthService {
     public Mono<List<Map<String, Object>>> getAllUserRoles(String userId, String clientUUID, String adminToken) {
         return webClient.get()
                 .uri(keycloakConfig.getServerUrl()
-                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                                + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
                         keycloakConfig.getRealm(), userId, clientUUID)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                 .retrieve()
@@ -467,7 +461,7 @@ public class AuthServiceImpl implements AuthService {
         return getAllUserRoles(userId, clientUUID, adminToken)
                 .flatMap(roles -> webClient.method(HttpMethod.DELETE)
                         .uri(keycloakConfig.getServerUrl()
-                                + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
                                 keycloakConfig.getRealm(), userId, clientUUID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
@@ -479,7 +473,7 @@ public class AuthServiceImpl implements AuthService {
     public Mono<Map<String, Object>> getClientRole(String clientUUID, String roleName, String adminToken) {
         return webClient.get()
                 .uri(keycloakConfig.getServerUrl()
-                        + "/admin/realms/{realm}/clients/{clientUUID}/roles/{roleName}",
+                                + "/admin/realms/{realm}/clients/{clientUUID}/roles/{roleName}",
                         keycloakConfig.getRealm(), clientUUID, roleName)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                 .retrieve()
@@ -494,7 +488,7 @@ public class AuthServiceImpl implements AuthService {
                         .then(getClientRole(clientUUID, newRoleName, adminToken))
                         .flatMap(newRole -> webClient.post()
                                 .uri(keycloakConfig.getServerUrl()
-                                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                                                + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
                                         keycloakConfig.getRealm(), userId, clientUUID)
                                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
@@ -628,4 +622,46 @@ public class AuthServiceImpl implements AuthService {
                 });
     }
 
+    public Mono<List<SyncUserResponse>> syncUsersToKeycloak(List<SyncUserRequest> users) {
+        return getAdminToken()
+                .flatMap(adminToken -> Flux.fromIterable(users)
+                        .flatMap(user -> syncSingleUser(user, adminToken))
+                        .collectList());
+    }
+
+    private Mono<SyncUserResponse> syncSingleUser(SyncUserRequest request, String adminToken) {
+        ObjectNode userNode = objectMapper.createObjectNode();
+        userNode.put("email", request.getEmail());
+        userNode.put("username", request.getUsername());
+        userNode.put("lastName", request.getFullname());
+        userNode.put("enabled", true);
+        userNode.put("emailVerified", true);
+
+        ArrayNode credentialsArray = objectMapper.createArrayNode();
+        ObjectNode credentialNode = objectMapper.createObjectNode();
+        credentialNode.put("type", "password");
+        credentialNode.put("value", request.getDefaultPassword() != null ? request.getDefaultPassword() : "Nexo@123456");
+        credentialNode.put("temporary", false);
+        credentialsArray.add(credentialNode);
+
+        userNode.set("credentials", credentialsArray);
+
+        return webClient.post()
+                .uri(keycloakConfig.getUsersUrl())
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(userNode)
+                .exchangeToMono(response -> {
+                    if (response.statusCode().is2xxSuccessful()) {
+                        String location = response.headers().asHttpHeaders().getFirst(HttpHeaders.LOCATION);
+                        String userId = location != null ? location.substring(location.lastIndexOf("/") + 1) : null;
+                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "SUCCESS", userId));
+                    } else if (response.statusCode().value() == 409) {
+                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "CONFLICT_EXISTS", null));
+                    } else {
+                        return response.bodyToMono(String.class)
+                                .map(errorBody -> new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: " + response.statusCode(), null));
+                    }
+                });
+    }
 }

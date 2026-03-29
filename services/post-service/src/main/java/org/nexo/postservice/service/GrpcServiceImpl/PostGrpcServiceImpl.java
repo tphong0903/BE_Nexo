@@ -72,7 +72,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     public void getPostById(PostServiceOuterClass.GetPostRequest request,
                             StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {
         try {
-            PostResponseDTO dto = postService.getPostById(request.getId());
+            PostResponseDTO dto = postService.getPostByIdGrpc(request.getId());
             responseObserver.onNext(mapToPostResponse(dto));
             responseObserver.onCompleted();
         } catch (Exception e) {
@@ -84,7 +84,7 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     public void getReelById(PostServiceOuterClass.GetPostRequest request,
                             StreamObserver<PostServiceOuterClass.ReelResponse> responseObserver) {
         try {
-            ReelResponseDTO dto = postService.getReelById(request.getId());
+            ReelResponseDTO dto = postService.getReelByIdGrpc(request.getId());
             responseObserver.onNext(mapToReelResponse(dto));
             responseObserver.onCompleted();
         } catch (Exception e) {

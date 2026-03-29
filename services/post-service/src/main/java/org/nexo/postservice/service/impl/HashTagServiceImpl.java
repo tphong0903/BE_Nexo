@@ -10,26 +10,36 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class HashTagServiceImpl implements IHashTagService {
+
+    private static final Pattern HASHTAG_PATTERN = Pattern.compile("(#\\w+)");
     private final IPostHashTagRepository postHashTagRepository;
     private final IHashTagRepository hashTagRepository;
-
 
     @Override
     public void findAndAddHashTagFromCaption(AbstractPost post) {
         String caption = post.getCaption();
-        Pattern pattern = Pattern.compile("(#\\w+)");
-        Matcher matcher = pattern.matcher(caption);
+        if (caption == null || caption.trim().isEmpty()) {
+            return;
+        }
+
+        Set<String> uniqueHashtags = extractUniqueHashtags(caption);
+
         postHashTagRepository.deleteByPostId(post.getId());
-        while (matcher.find()) {
-            String name = matcher.group();
+
+        List<HashTagModel> tagsToSave = new ArrayList<>();
+
+        for (String name : uniqueHashtags) {
             HashTagModel hashTagModel = hashTagRepository.findByName(name);
+
             if (hashTagModel == null) {
                 hashTagModel = HashTagModel.builder()
                         .name(name)
@@ -40,24 +50,37 @@ public class HashTagServiceImpl implements IHashTagService {
             } else {
                 hashTagModel.setUsageCount(hashTagModel.getUsageCount() + 1);
             }
+
             PostHashTagModel postHashTagModel = PostHashTagModel.builder()
                     .hashTagModel(hashTagModel)
                     .build();
-            if (post.getClass() == PostModel.class) {
-                postHashTagModel.setPostModel((PostModel) post);
 
-            } else {
-                postHashTagModel.setReelModel((ReelModel) post);
+            if (post instanceof PostModel postModel) {
+                postHashTagModel.setPostModel(postModel);
+            } else if (post instanceof ReelModel reelModel) {
+                postHashTagModel.setReelModel(reelModel);
             }
 
             hashTagModel.getPostHashTagModel().add(postHashTagModel);
+            tagsToSave.add(hashTagModel);
+        }
 
-            hashTagRepository.save(hashTagModel);
+        if (!tagsToSave.isEmpty()) {
+            hashTagRepository.saveAll(tagsToSave);
         }
     }
 
     public List<HashTagModel> getTrendingHashtags(int topN) {
         Pageable pageable = PageRequest.of(0, topN);
         return hashTagRepository.findTopTrendingHashtags(pageable);
+    }
+
+    private Set<String> extractUniqueHashtags(String caption) {
+        Set<String> tags = new HashSet<>();
+        Matcher matcher = HASHTAG_PATTERN.matcher(caption);
+        while (matcher.find()) {
+            tags.add(matcher.group().toLowerCase());
+        }
+        return tags;
     }
 }

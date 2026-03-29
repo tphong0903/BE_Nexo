@@ -1,16 +1,20 @@
 package org.nexo.postservice.repository;
 
+import jakarta.transaction.Transactional;
 import org.nexo.postservice.model.PostModel;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 @Repository
 public interface IPostRepository extends JpaRepository<PostModel, Long> {
@@ -18,6 +22,19 @@ public interface IPostRepository extends JpaRepository<PostModel, Long> {
 
     Page<PostModel> findByUserIdAndIsActiveAndVisibility(Long id, Boolean isActive, EVisibilityPost status,
                                                          Pageable pageable);
+
+    @EntityGraph(attributePaths = {"postMediaModels"})
+    Optional<PostModel> findById(Long id);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE PostModel p SET p.likeQuantity = p.likeQuantity + :count WHERE p.id = :id")
+    void updateLikeQuantity(@Param("id") Long id, @Param("count") int count);
+
+    @Modifying
+    @Transactional
+    @Query("UPDATE PostModel p SET p.commentQuantity = p.commentQuantity + :count WHERE p.id = :id")
+    void updateCommentQuantity(@Param("id") Long id, @Param("count") int count);
 
     @Query(value = """
             SELECT p.* FROM post_model p

@@ -1,13 +1,10 @@
 package org.nexo.feedservice.service;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.feedservice.dto.MessagePostDTO;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
-import reactor.core.publisher.Mono;
 
 @Service
 @RequiredArgsConstructor
@@ -15,7 +12,6 @@ import reactor.core.publisher.Mono;
 public class PostCreatedListener {
 
     private final FeedService feedService;
-    private final ObjectMapper mapper = new ObjectMapper();
 
     @KafkaListener(topics = "post-created", groupId = "feed-service-group")
     public void handlePostCreated(MessagePostDTO messageDTO) {

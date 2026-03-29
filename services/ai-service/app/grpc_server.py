@@ -8,12 +8,14 @@ from app.predictor import predict
 class ModerationService(moderation_pb2_grpc.ModerationServiceServicer):
 
     def Predict(self, request, context):
+        result = predict(request.text)
 
-        label, confidence = predict(request.text)
+        res_label = result["label"]
+        res_confidence = result["confidence"]
 
         return moderation_pb2.PredictionResponse(
-            label=label,
-            confidence=confidence
+            label=str(res_label),
+            confidence=float(res_confidence)
         )
 
 

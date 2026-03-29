@@ -3,216 +3,222 @@ package org.nexo.uploadfileservice.service.impl;
 import com.cloudinary.Cloudinary;
 import com.cloudinary.Transformation;
 import com.cloudinary.utils.ObjectUtils;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.uploadfile.grpc.PostMediaServiceProto;
+import org.nexo.uploadfileservice.dto.UploadResult;
 import org.nexo.uploadfileservice.grpc.PostGrpcClient;
-import org.nexo.uploadfileservice.service.IHlsService;
 import org.nexo.uploadfileservice.service.IUploadFileService;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.*;
+import java.io.File;
+import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.zip.ZipEntry;
-import java.util.zip.ZipOutputStream;
+import java.util.stream.IntStream;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class UploadFileServiceImpl implements IUploadFileService {
     private final PostGrpcClient postGrpcClient;
-    private final IHlsService hlsService;
     private final Cloudinary cloudinary;
+
+    private final ExecutorService sharedExecutor =
+            Executors.newFixedThreadPool(
+                    Runtime.getRuntime().availableProcessors() * 2
+            );
+
+    @PreDestroy
+    public void destroy() {
+        if (sharedExecutor != null && !sharedExecutor.isShutdown()) {
+            sharedExecutor.shutdown();
+        }
+    }
 
     @Override
     public String upload(MultipartFile multipartFile) {
-        try {
-            String fileName = multipartFile.getOriginalFilename();
-            File file = this.convertToFile(multipartFile, fileName);
-            String URL = this.uploadFile(file, fileName);
-            if (file.delete()) {
-                System.out.println("File deleted successfully");
-            } else {
-                System.err.println("Failed to delete file");
-            }
-            return URL;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return "Image couldn't upload, Something went wrong";
-        }
+        return uploadToCloudinary(multipartFile).getUrl();
     }
 
     @Override
     public List<String> uploadFileMessage(List<MultipartFile> multipartFiles) {
-        List<String> urls = new ArrayList<>();
-        try {
-            for (MultipartFile file : multipartFiles) {
-                String fileName = file.getOriginalFilename();
-                File convertedFile = this.convertToFile(file, fileName);
-                String URL = this.uploadFile(convertedFile, fileName);
-                urls.add(URL);
-                if (convertedFile.delete()) {
-                    System.out.println("File deleted successfully");
-                } else {
-                    System.err.println("Failed to delete file");
-                }
-            }
-            return urls;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return Collections.emptyList();
-        }
+        List<CompletableFuture<String>> futures = multipartFiles.stream()
+                .map(file -> CompletableFuture.supplyAsync(() -> upload(file), sharedExecutor))
+                .toList();
+
+        return futures.stream()
+                .map(future -> future.exceptionally(ex -> {
+                    log.error("Upload failed", ex);
+                    return null;
+                }))
+                .map(CompletableFuture::join)
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     @Override
-    public void savePostMedia(List<MultipartFile> files, Long postId) throws InterruptedException, ExecutionException {
-        List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = Collections.synchronizedList(new ArrayList<>());
-
+    public void savePostMedia(List<MultipartFile> files, Long postId) {
         PostMediaServiceProto.PostMediaListRequest postMediaListRequests = postGrpcClient
                 .findPostMediasOfPost(PostMediaServiceProto.PostId.newBuilder().setPostId(postId).build());
         int mediaOrderStart = postMediaListRequests.getPostsList().size();
+        List<UploadResult> successfulUploads = Collections.synchronizedList(new ArrayList<>());
+        try {
+            List<CompletableFuture<PostMediaServiceProto.PostMediaRequestDTO>> futures = IntStream.range(0, files.size())
+                    .mapToObj(index -> CompletableFuture.supplyAsync(() -> {
+                        MultipartFile file = files.get(index);
+                        boolean isImage = file.getContentType() != null && file.getContentType().startsWith("image");
+                        String mediaType = isImage ? "PICTURE" : "VIDEO";
 
-        ExecutorService executor = Executors.newFixedThreadPool(Math.min(files.size(), 8));
+                        UploadResult result = isImage ? uploadToCloudinary(file) : handleVideoUpload(file);
+                        successfulUploads.add(result); // Ghi nhận đã lên Cloudinary thành công
 
-        List<CompletableFuture<Void>> futures = new ArrayList<>();
+                        return PostMediaServiceProto.PostMediaRequestDTO.newBuilder()
+                                .setPostID(postId)
+                                .setMediaType(mediaType)
+                                .setMediaOrder(mediaOrderStart + index)
+                                .setMediaUrl(result.getUrl())
+                                .build();
+                    }, sharedExecutor))
+                    .toList();
 
-        for (int i = 0; i < files.size(); i++) {
-            final int index = i;
-            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-                try {
-                    MultipartFile file = files.get(index);
-                    String contentType = file.getContentType();
-                    String mediaUrl = "";
-                    String mediaType;
+            List<PostMediaServiceProto.PostMediaRequestDTO> grpcRequests = futures.stream()
+                    .map(CompletableFuture::join)
+                    .toList();
 
-                    if (contentType.startsWith("image")) {
-                        mediaType = "PICTURE";
-                        mediaUrl = upload(file);
-                    } else {
-                        mediaType = "VIDEO";
-                        File tempFile = File.createTempFile("video", ".mp4");
-                        // String hlsOutputDir = tempFile.getParent() + "/hls_" + index + "_" +
-                        // System.currentTimeMillis();
-                        file.transferTo(tempFile);
-                        // File hlsFolder = hlsService.convertToHls(tempFile, hlsOutputDir);
-                        // mediaUrl = uploadHlsToCloudinary(hlsFolder);
-                        mediaUrl = uploadHlsToCloudinary(tempFile);
-                    }
+            PostMediaServiceProto.PostMediaListRequest request = PostMediaServiceProto.PostMediaListRequest.newBuilder()
+                    .addAllPosts(grpcRequests)
+                    .build();
 
-                    PostMediaServiceProto.PostMediaRequestDTO grpcItem = PostMediaServiceProto.PostMediaRequestDTO
-                            .newBuilder()
-                            .setPostID(postId)
-                            .setMediaType(mediaType)
-                            .setMediaOrder(mediaOrderStart + index)
-                            .setMediaUrl(mediaUrl)
-                            .build();
+            postGrpcClient.savePostMedias(request);
 
-                    grpcRequests.add(grpcItem);
-
-                } catch (Exception e) {
-                    throw new RuntimeException(e);
-                }
-            }, executor);
-
-            futures.add(future);
+        } catch (Exception e) {
+            log.error("Error during Post Media upload. Initiating rollback to clean up orphaned files...", e);
+            rollbackCloudinaryUploads(successfulUploads);
+            throw new RuntimeException("Failed to save post media. Rollback initiated.", e);
         }
-
-        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).get();
-
-        executor.shutdown();
-
-        PostMediaServiceProto.PostMediaListRequest request = PostMediaServiceProto.PostMediaListRequest.newBuilder()
-                .addAllPosts(grpcRequests)
-                .build();
-        postGrpcClient.savePostMedias(request);
     }
 
     @Override
     public void saveReelMedia(List<MultipartFile> files, Long postId) {
+        List<UploadResult> successfulUploads = Collections.synchronizedList(new ArrayList<>());
+
         try {
-            for (MultipartFile file : files) {
-                String contentType = file.getContentType();
-                String mediaType;
-                if (contentType.startsWith("image")) {
-                    mediaType = "PICTURE";
-                } else {
-                    mediaType = "VIDEO";
-                }
-                if (mediaType.equals("VIDEO")) {
-                    File tempFile = File.createTempFile("video", ".mp4");
-                    file.transferTo(tempFile);
-                    // File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() +
-                    // "/hls");
-                    // String m3u8Url = uploadHlsToCloudinary(hlsFolder);
-                    String m3u8Url = uploadHlsToCloudinary(tempFile);
+            List<CompletableFuture<Void>> futures = files.stream()
+                    .filter(file -> file.getContentType() != null && !file.getContentType().startsWith("image"))
+                    .map(file -> CompletableFuture.runAsync(() -> {
+                        UploadResult result = handleVideoUpload(file);
+                        successfulUploads.add(result);
 
-                    PostMediaServiceProto.ReelDto grpcItem = PostMediaServiceProto.ReelDto.newBuilder()
-                            .setPostId(postId)
-                            .setMediaUrl(m3u8Url)
-                            .build();
-                    postGrpcClient.saveReelMedias(grpcItem);
+                        PostMediaServiceProto.ReelDto grpcItem = PostMediaServiceProto.ReelDto.newBuilder()
+                                .setPostId(postId)
+                                .setMediaUrl(result.getUrl())
+                                .build();
+                        postGrpcClient.saveReelMedias(grpcItem);
+                    }, sharedExecutor))
+                    .toList();
 
-                    deleteRecursive(tempFile);
-                    // deleteRecursive(hlsFolder);
-                }
-            }
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
         } catch (Exception e) {
-            log.error("Failed: " + e.getMessage());
+            log.error("Error during Reel Media upload. Initiating rollback...", e);
+            rollbackCloudinaryUploads(successfulUploads);
+            throw new RuntimeException("Failed to save reel media", e);
         }
     }
 
     @Override
     public void saveStoryMedia(List<MultipartFile> files, Long postId) {
-        for (MultipartFile file : files) {
-            String contentType = file.getContentType();
-            String mediaUrl = "";
-            String mediaType;
-            try {
-                if (contentType.startsWith("image")) {
-                    mediaType = "PICTURE";
-                    mediaUrl = upload(file);
-                } else {
-                    File tempFile = File.createTempFile("video", ".mp4");
-                    file.transferTo(tempFile);
-                    // File hlsFolder = hlsService.convertToHls(tempFile, tempFile.getParent() +
-                    // "/hls");
-                    mediaUrl = uploadHlsToCloudinary(tempFile);
-                    mediaType = "VIDEO";
+        List<UploadResult> successfulUploads = Collections.synchronizedList(new ArrayList<>());
+
+        try {
+            List<CompletableFuture<Void>> futures = files.stream()
+                    .map(file -> CompletableFuture.runAsync(() -> {
+                        boolean isImage = file.getContentType() != null && file.getContentType().startsWith("image");
+                        String mediaType = isImage ? "PICTURE" : "VIDEO";
+
+                        UploadResult result = isImage ? uploadToCloudinary(file) : handleVideoUpload(file);
+                        successfulUploads.add(result);
+
+                        PostMediaServiceProto.StoryDto grpcItem = PostMediaServiceProto.StoryDto.newBuilder()
+                                .setStoryId(postId)
+                                .setMediaUrl(result.getUrl())
+                                .setMediaType(mediaType)
+                                .build();
+                        postGrpcClient.saveStoryMedias(grpcItem);
+                    }, sharedExecutor))
+                    .toList();
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        } catch (Exception e) {
+            log.error("Error during Story Media upload. Initiating rollback...", e);
+            rollbackCloudinaryUploads(successfulUploads);
+            throw new RuntimeException("Failed to save story media", e);
+        }
+    }
+
+    @Override
+    public String uploadAvatar(byte[] avatarData, String fileName, String contentType) {
+        try {
+            if (avatarData == null || avatarData.length == 0) {
+                throw new RuntimeException("Avatar data is empty!");
+            }
+            String uniqueFileName = "avatars/" + UUID.randomUUID() + "_" + fileName;
+            Map uploadResult = cloudinary.uploader().upload(avatarData,
+                    ObjectUtils.asMap(
+                            "public_id", uniqueFileName,
+                            "resource_type", "image",
+                            "format", contentType != null ? contentType.split("/")[1] : "jpg"));
+
+            return uploadResult.get("secure_url").toString();
+        } catch (Exception e) {
+            log.error("Avatar upload failed", e);
+            throw new RuntimeException("Avatar couldn't upload, something went wrong: " + e.getMessage(), e);
+        }
+    }
+
+    private UploadResult uploadToCloudinary(MultipartFile multipartFile) {
+        try {
+            Map uploadResult = cloudinary.uploader().upload(multipartFile.getInputStream(),
+                    ObjectUtils.asMap(
+                            "public_id", UUID.randomUUID() + "_" + multipartFile.getOriginalFilename(),
+                            "folder", "posts",
+                            "resource_type", "auto"));
+
+            return new UploadResult(
+                    uploadResult.get("secure_url").toString(),
+                    uploadResult.get("public_id").toString(),
+                    uploadResult.get("resource_type").toString()
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Image couldn't upload", e);
+        }
+    }
+
+    private UploadResult handleVideoUpload(MultipartFile file) {
+        File tempFile = null;
+        try {
+            tempFile = File.createTempFile("video_" + UUID.randomUUID(), ".mp4");
+            file.transferTo(tempFile);
+            return uploadHlsToCloudinary(tempFile);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to process video file", e);
+        } finally {
+            if (tempFile != null && tempFile.exists()) {
+                try {
+                    Files.delete(tempFile.toPath());
+                } catch (IOException e) {
+                    log.error("Failed to delete temp video file: {}", tempFile.getAbsolutePath(), e);
                 }
-                PostMediaServiceProto.StoryDto grpcItem = PostMediaServiceProto.StoryDto.newBuilder()
-                        .setStoryId(postId)
-                        .setMediaUrl(mediaUrl)
-                        .setMediaType(mediaType)
-                        .build();
-                postGrpcClient.saveStoryMedias(grpcItem);
-            } catch (Exception e) {
-                throw new RuntimeException(e);
             }
         }
     }
 
-    public String uploadFile(File file, String fileName) throws IOException {
-        try {
-            Map uploadResult = cloudinary.uploader().upload(file,
-                    ObjectUtils.asMap(
-                            "public_id", fileName,
-                            "folder", "posts",
-                            "resource_type", "auto"));
-            return uploadResult.get("secure_url").toString();
-
-        } catch (Exception e) {
-            throw new RuntimeException("Upload to Cloudinary failed: " + e.getMessage(), e);
-        }
-    }
-
-    public String uploadHlsToCloudinary(File mp4File) throws IOException {
+    private UploadResult uploadHlsToCloudinary(File mp4File) throws IOException {
         if (!mp4File.exists() || !mp4File.isFile()) {
             throw new IllegalArgumentException("File does not exist or is not a file");
         }
@@ -225,76 +231,31 @@ public class UploadFileServiceImpl implements IUploadFileService {
                         "resource_type", "video",
                         "folder", "videos/" + UUID.randomUUID(),
                         "public_id", "master",
-                        "eager", Arrays.asList(hlsTransformation),
+                        "eager", Collections.singletonList(hlsTransformation),
                         "eager_async", true));
 
-        return uploadResult.get("playback_url").toString();
+        return new UploadResult(
+                uploadResult.get("playback_url").toString(),
+                uploadResult.get("public_id").toString(),
+                uploadResult.get("resource_type").toString()
+        );
     }
 
-    private File zipFolder(File folder) throws IOException {
-        File zipFile = new File(folder.getParentFile(), folder.getName() + ".zip");
-        try (FileOutputStream fos = new FileOutputStream(zipFile);
-                ZipOutputStream zos = new ZipOutputStream(fos)) {
+    private void rollbackCloudinaryUploads(List<UploadResult> successfulUploads) {
+        if (successfulUploads == null || successfulUploads.isEmpty()) return;
 
-            Path folderPath = folder.toPath();
-            Files.walk(folderPath).forEach(path -> {
-                File file = path.toFile();
-                if (file.isFile()) {
-                    String zipEntryName = folderPath.relativize(path).toString().replace("\\", "/");
-                    try (FileInputStream fis = new FileInputStream(file)) {
-                        ZipEntry entry = new ZipEntry(zipEntryName);
-                        zos.putNextEntry(entry);
-                        byte[] buffer = new byte[4096];
-                        int len;
-                        while ((len = fis.read(buffer)) != -1) {
-                            zos.write(buffer, 0, len);
-                        }
-                        zos.closeEntry();
-                    } catch (IOException e) {
-                        throw new UncheckedIOException(e);
-                    }
+        log.warn("Initiating deletion of {} orphaned files on Cloudinary due to process failure...", successfulUploads.size());
+
+        for (UploadResult item : successfulUploads) {
+            CompletableFuture.runAsync(() -> {
+                try {
+                    cloudinary.uploader().destroy(item.getPublicId(),
+                            ObjectUtils.asMap("resource_type", item.getResourceType()));
+                    log.info("Successfully rolled back file: {}", item.getPublicId());
+                } catch (Exception e) {
+                    log.error("Failed to roll back file: {}", item.getPublicId(), e);
                 }
-            });
-        }
-        return zipFile;
-    }
-
-    public File convertToFile(MultipartFile multipartFile, String fileName) throws IOException {
-        File tempFile = new File(fileName);
-        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-            fos.write(multipartFile.getBytes());
-        }
-        return tempFile;
-    }
-
-    private void deleteRecursive(File file) {
-        if (file.isDirectory()) {
-            for (File subFile : Objects.requireNonNull(file.listFiles())) {
-                deleteRecursive(subFile);
-            }
-        }
-        file.delete();
-    }
-
-    @Override
-    public String uploadAvatar(byte[] avatarData, String fileName, String contentType) {
-        try {
-            if (avatarData == null || avatarData.length == 0) {
-                throw new RuntimeException("Avatar data is empty!");
-            }
-
-            String uniqueFileName = "avatars/" + UUID.randomUUID() + "_" + fileName;
-
-            Map uploadResult = cloudinary.uploader().upload(avatarData,
-                    ObjectUtils.asMap(
-                            "public_id", uniqueFileName,
-                            "resource_type", "image",
-                            "format", contentType != null ? contentType.split("/")[1] : "jpg"));
-
-            return uploadResult.get("secure_url").toString();
-
-        } catch (Exception e) {
-            throw new RuntimeException("Avatar couldn't upload, something went wrong: " + e.getMessage(), e);
+            }, sharedExecutor);
         }
     }
 }

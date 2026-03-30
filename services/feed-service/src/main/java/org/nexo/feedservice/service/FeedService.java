@@ -30,7 +30,6 @@ public class FeedService {
 
     private static final int MAX_REDIS_FEED_SIZE = 50;
     private static final long KOL_FOLLOWER_THRESHOLD = 10000L;
-
     private static final long AFFINITY_MULTIPLIER = 3600;
 
     private final ReactiveRedisTemplate<String, String> reactiveRedisTemplate;
@@ -44,7 +43,6 @@ public class FeedService {
                 redis.call('ZREMRANGEBYRANK', KEYS[1], 0, -ARGV[3]-1)
                 return 1
             """;
-
 
     public Mono<Void> handleNewPost(Long authorId, Long postId, Long createdAt) {
         return Mono.fromCallable(() -> userClient.countFollowerOfUser(authorId))
@@ -123,52 +121,94 @@ public class FeedService {
                 });
     }
 
-
-    public Mono<ResponseData<?>> getHybridFeed(Long userId, int page, int limit, Boolean isPost) {
-        long startOffset = (long) page * limit;
-        long endOffset = startOffset + limit - 1;
-
-        if (startOffset >= MAX_REDIS_FEED_SIZE) {
-            log.warn("User {} requested page {} which exceeds Redis limit. Fallback to DB.", userId, page);
-            return fallbackToDatabase(userId, page, limit, isPost);
-        }
-
-        long fetchEnd = Math.min(endOffset, MAX_REDIS_FEED_SIZE);
-
+    // ====== HÀM MỚI: ĐẢM BẢO LẤY ĐƯỢC BÀI CÁ NHÂN (TỪ REDIS HOẶC DB) ======
+    private Mono<List<Long>> getPersonalFeedIds(Long userId, long fetchEnd, boolean isPost) {
         String keyFeedRedis1 = isPost ? "feed:" : "feed:reel:";
         String keyFeedRedis2 = isPost ? "user_posts:" : "user_reels:";
 
         Mono<List<FeedItem>> pushDataStream = fetchFromRedisZSet(keyFeedRedis1 + userId, 0, fetchEnd);
 
-        Mono<List<Long>> followedKolsMono = Mono.fromCallable(() -> userClient.getFollowedKols(userId))
-                .subscribeOn(Schedulers.boundedElastic());
-
-        Mono<List<FeedItem>> pullDataStream = followedKolsMono
+        Mono<List<FeedItem>> pullDataStream = Mono.fromCallable(() -> userClient.getFollowedKols(userId))
+                .subscribeOn(Schedulers.boundedElastic())
                 .flatMapMany(Flux::fromIterable)
                 .flatMap(kolId -> fetchFromRedisZSet(keyFeedRedis2 + kolId, 0, fetchEnd))
                 .flatMap(Flux::fromIterable)
                 .collectList();
 
         return Mono.zip(pushDataStream, pullDataStream)
-                .map(tuple -> {
+                .flatMap(tuple -> {
                     List<FeedItem> pushItems = tuple.getT1();
                     List<FeedItem> pullItems = tuple.getT2();
 
-                    List<FeedItem> mergedList = new ArrayList<>(pushItems);
+                    // NẾU REDIS TRỐNG SẠCH -> FALLBACK XUỐNG DB LẤY 50 BÀI ĐỂ LÀM VỐN TRỘN VỚI TRENDING
+                    if (pushItems.isEmpty() && pullItems.isEmpty()) {
+                        return Mono.fromCallable(() -> {
+                            PageRequest pageRequest = PageRequest.of(0, MAX_REDIS_FEED_SIZE);
+                            if (isPost) {
+                                return feedRepository.findPostIdsByFollowerId(userId, pageRequest).getContent();
+                            } else {
+                                return feedReelRepository.findReelIdsByFollowerId(userId, pageRequest).getContent();
+                            }
+                        }).subscribeOn(Schedulers.boundedElastic());
+                    }
 
-                    mergedList.addAll(pullItems);
+                    List<FeedItem> merged = new ArrayList<>(pushItems);
+                    merged.addAll(pullItems);
+                    merged.sort(Comparator.naturalOrder());
 
-                    mergedList.sort(Comparator.naturalOrder());
+                    return Mono.just(merged.stream()
+                            .map(FeedItem::getPostId)
+                            .distinct()
+                            .collect(Collectors.toList()));
+                });
+    }
 
-                    return mergedList.stream()
+    // ====== HÀM HYBRID FEED MỚI ĐÃ ĐƯỢC CẤU TRÚC LẠI ======
+    public Mono<ResponseData<?>> getHybridFeed(Long userId, int page, int limit, Boolean isPost) {
+        long startOffset = (long) page * limit;
+
+        // Nếu user lướt quá 50 bài (vượt ngưỡng Interleave), ta trực tiếp gọi DB
+        if (startOffset >= MAX_REDIS_FEED_SIZE) {
+            return fallbackToDatabase(userId, page, limit, isPost);
+        }
+
+        long fetchEnd = MAX_REDIS_FEED_SIZE - 1; // Limit 50 bài trên Redis
+        String trendingKey = isPost ? "trending:posts" : "trending:reels";
+
+        // 1. Lấy bài cá nhân an toàn (Redis -> DB)
+        Mono<List<Long>> personalIdsMono = getPersonalFeedIds(userId, fetchEnd, isPost);
+
+        // 2. Lấy bài Trending
+        Mono<List<Long>> trendingIdsMono = fetchFromRedisZSet(trendingKey, 0, fetchEnd)
+                .map(list -> list.stream().map(FeedItem::getPostId).collect(Collectors.toList()));
+
+        // 3. Tiến hành trộn (Interleave)
+        return Mono.zip(personalIdsMono, trendingIdsMono)
+                .map(tuple -> {
+                    List<Long> personalIds = tuple.getT1();
+                    List<Long> trendIds = tuple.getT2();
+
+                    List<Long> finalIds = new ArrayList<>();
+                    int p = 0, t = 0;
+
+                    // Trộn theo tỉ lệ 2 Cá nhân : 1 Trending
+                    while (p < personalIds.size() || t < trendIds.size()) {
+                        if (p < personalIds.size()) finalIds.add(personalIds.get(p++));
+                        if (p < personalIds.size()) finalIds.add(personalIds.get(p++));
+                        if (t < trendIds.size()) finalIds.add(trendIds.get(t++));
+                    }
+
+                    // Phân trang bằng skip và limit trên list đã trộn
+                    return finalIds.stream()
+                            .distinct()
                             .skip(startOffset)
                             .limit(limit)
-                            .map(FeedItem::getPostId)
                             .collect(Collectors.toList());
                 })
                 .flatMap(finalPostIds -> {
-                    if (finalPostIds.isEmpty() || finalPostIds.size() < limit) {
-                        return fallbackToDatabase(userId, page, limit, isPost);
+                    // Nếu trộn xong vẫn rỗng (User mới tinh, DB trống, Trending chưa chạy)
+                    if (finalPostIds.isEmpty()) {
+                        return Mono.just(createEmptyResponse(page, limit));
                     }
 
                     if (isPost)
@@ -193,7 +233,10 @@ public class FeedService {
         return dbResultMono.flatMap(pageResult -> {
             List<Long> dbItemIds = pageResult.getContent();
 
-            if (dbItemIds.isEmpty()) return Mono.just(createEmptyResponse(page, limit));
+            if (dbItemIds.isEmpty()) {
+                log.info("DB feed empty for user {}, falling back to trending", userId);
+                return fallbackToTrending(userId, page, limit, isPost);
+            }
 
             if (isPost) {
                 return postGrpcClient.getPostsByIdsAsync(dbItemIds, userId)
@@ -203,6 +246,28 @@ public class FeedService {
                         .flatMap(reels -> buildReelResponse(reels, page, (long) limit, pageResult));
             }
         });
+    }
+
+    private Mono<ResponseData<?>> fallbackToTrending(Long userId, int page, int limit, boolean isPost) {
+        long startOffset = (long) page * limit;
+        long endOffset = startOffset + limit - 1;
+        String trendingKey = isPost ? "trending:posts" : "trending:reels";
+
+        return fetchFromRedisZSet(trendingKey, startOffset, endOffset)
+                .map(feedItems -> feedItems.stream().map(FeedItem::getPostId).collect(Collectors.toList()))
+                .flatMap(trendingIds -> {
+                    if (trendingIds.isEmpty()) {
+                        return Mono.just(createEmptyResponse(page, limit));
+                    }
+
+                    if (isPost) {
+                        return postGrpcClient.getPostsByIdsAsync(trendingIds, userId)
+                                .flatMap(posts -> buildPostResponse(posts, page, (long) limit, null));
+                    } else {
+                        return postGrpcClient.getReelsByIdsAsync(trendingIds, userId)
+                                .flatMap(reels -> buildReelResponse(reels, page, (long) limit, null));
+                    }
+                });
     }
 
     private Mono<Void> pushToRedisZSet(String key, Long postId, Long smartScore) {

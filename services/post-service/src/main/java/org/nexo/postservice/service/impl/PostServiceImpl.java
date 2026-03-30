@@ -65,7 +65,6 @@ public class PostServiceImpl implements IPostService {
 
 
     @Override
-    @Transactional
     public String savePost(PostRequestDTO request, List<MultipartFile> files) {
         securityUtil.checkOwner(request.getUserId());
         UserServiceProto.UserDTOResponse userDTO = userGrpcClient.getUserDTOById(request.getUserId());
@@ -100,7 +99,6 @@ public class PostServiceImpl implements IPostService {
         model.setAuthorName(userDTO.getUsername());
 
         postRepository.save(model);
-
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
             String token = ((JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication()).getToken().getTokenValue();
             fileServiceClient.savePostMedia(files, model.getId(), token);

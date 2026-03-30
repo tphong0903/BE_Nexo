@@ -225,15 +225,15 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
     }
 
     private CommentModel getCommentWithCache(Long commentId) {
-        String cacheKey = "comment_cache:" + commentId;
-        CommentModel cachedComment = (CommentModel) redisTemplate.opsForValue().get(cacheKey);
-
-        if (cachedComment != null) return cachedComment;
+//        String cacheKey = "comment_cache:" + commentId;
+//        CommentModel cachedComment = (CommentModel) redisTemplate.opsForValue().get(cacheKey);
+//
+//        if (cachedComment != null) return cachedComment;
 
         CommentModel dbComment = commentRepository.findById(commentId).orElse(null);
-        if (dbComment != null) {
-            redisTemplate.opsForValue().set(cacheKey, dbComment, CACHE_TTL);
-        }
+//        if (dbComment != null) {
+//            redisTemplate.opsForValue().set(cacheKey, dbComment, CACHE_TTL);
+//        }
         return dbComment;
     }
 }

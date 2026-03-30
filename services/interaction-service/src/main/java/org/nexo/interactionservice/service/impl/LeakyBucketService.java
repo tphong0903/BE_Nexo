@@ -1,7 +1,7 @@
 package org.nexo.interactionservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
@@ -37,14 +37,15 @@ public class LeakyBucketService {
                     return 0
                 end
             """;
-    private final RedisTemplate<String, Object> redisTemplate;
+
+    private final StringRedisTemplate stringRedisTemplate;
 
     public boolean allowRequest(String key, long bucketCapacity, long leakRateMillis) {
         String countKey = "bucket:" + key + ":count";
         String timeKey = "bucket:" + key + ":time";
         long currentTime = System.currentTimeMillis();
 
-        Long result = redisTemplate.execute(
+        Long result = stringRedisTemplate.execute(
                 RedisScript.of(LEAKY_BUCKET_SCRIPT, Long.class),
                 List.of(countKey, timeKey),
                 String.valueOf(bucketCapacity),

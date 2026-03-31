@@ -85,3 +85,6 @@ grpc:
     interactions:
       address: static://localhost:9095
       negotiation-type: plaintext
+    ai-service:
+      address: static://localhost:8000
+      negotiationType: plaintext

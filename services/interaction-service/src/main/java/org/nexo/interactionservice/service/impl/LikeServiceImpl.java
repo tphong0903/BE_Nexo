@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.interactionservice.dto.MessageDTO;
+import org.nexo.interactionservice.dto.UserActivityEvent;
 import org.nexo.interactionservice.dto.response.FolloweeDTO;
 import org.nexo.interactionservice.dto.response.PageModelResponse;
 import org.nexo.interactionservice.exception.CustomException;
@@ -90,6 +91,16 @@ public class LikeServiceImpl implements ILikeService {
                         .targetUrl("/posts/" + id)
                         .build();
                 kafkaTemplate.send("notification", messageDTO);
+
+                UserActivityEvent activityEvent = UserActivityEvent.builder()
+                        .eventType("POST_LIKED")
+                        .userId(response.getUserId())
+                        .targetId(id)
+                        .targetType("POST")
+                        .occurredAt(java.time.Instant.now())
+                        .metadata("{\"source\":\"interaction-service\"}")
+                        .build();
+                kafkaTemplate.send("user-events", String.valueOf(response.getUserId()), activityEvent);
             }
         } catch (Exception e) {
             throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);

@@ -10,6 +10,7 @@ from torch_geometric.utils import negative_sampling
 
 from config import settings
 from data_loader import FollowRecord, UserRecord, load_follows, load_users
+from feature_engineering import build_graph_stats, user_feature_vector
 from model import GraphSAGE
 from state import following_map, redis_client, user_vector_map, vector_store
 
@@ -34,24 +35,12 @@ class RecommendationEngine:
     def _artifact_path(self, filename: str) -> Path:
         return settings.artifact_dir / filename
 
-    def _feature_vector(self, user: UserRecord) -> np.ndarray:
-        text_seed = hash((user.username, user.bio[:120])) & 0xFFFFFFFF
-        rng = np.random.default_rng(text_seed)
-
-        base = rng.normal(0, 1, settings.feature_dim).astype(np.float32)
-        base[0] = np.float32(min(len(user.bio) / 500.0, 1.0))
-        base[1] = np.float32(1.0 if user.is_private else 0.0)
-
-        g = (user.gender or "UNKNOWN").upper()
-        base[2] = np.float32(1.0 if g == "MALE" else 0.0)
-        base[3] = np.float32(1.0 if g == "FEMALE" else 0.0)
-        return base
-
     def _build_graph(self, users: list[UserRecord], follows: list[FollowRecord]) -> GraphData:
         user_ids = [u.id for u in users]
         user_id_to_idx = {uid: i for i, uid in enumerate(user_ids)}
 
-        features = np.vstack([self._feature_vector(u) for u in users]).astype(np.float32) if users else np.empty(
+        stats = build_graph_stats(users, follows)
+        features = np.vstack([user_feature_vector(u, stats) for u in users]).astype(np.float32) if users else np.empty(
             (0, settings.feature_dim), dtype=np.float32
         )
         x = torch.tensor(features, dtype=torch.float32)

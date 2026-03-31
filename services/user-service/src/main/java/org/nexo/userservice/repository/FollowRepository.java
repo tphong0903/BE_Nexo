@@ -148,24 +148,32 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
                         "AND f.status = 'ACTIVE'")
         Long countTotalFollowersByUserId(@Param("userId") Long userId);
 
-        @Query("SELECT f2.following FROM FollowModel f1 " +
-                        "JOIN FollowModel f2 ON f1.following.id = f2.follower.id " +
-                        "WHERE f1.follower.id = :userId " +
-                        "AND f1.status = 'ACTIVE' " +
-                        "AND f2.status = 'ACTIVE' " +
-                        "AND f2.following.id <> :userId " +
-                        "AND f2.following.id NOT IN (" +
-                        "    SELECT f3.following.id FROM FollowModel f3 " +
-                        "    WHERE f3.follower.id = :userId AND f3.status = 'ACTIVE'" +
-                        ") " +
-                        "AND f2.following.id NOT IN (" +
-                        "    SELECT b.id.blockedId FROM UserBlockModel b WHERE b.id.blockerId = :userId" +
-                        ") " +
-                        "AND f2.following.id NOT IN (" +
-                        "    SELECT b.id.blockerId FROM UserBlockModel b WHERE b.id.blockedId = :userId" +
-                        ") " +
-                        "GROUP BY f2.following " +
-                        "ORDER BY COUNT(f2.follower) DESC")
+        @Query(value = "SELECT u.id, u.account_status, u.avatar_url, u.bio, u.created_at, u.email, u.fullname, " +
+                        "u.is_private, u.keycloak_user_id, u.last_login, u.online_status, u.role, u.username, u.violation_count " +
+                        "FROM follow fm1 " +
+                        "JOIN follow fm2 ON fm1.following_id = fm2.follower_id " +
+                        "JOIN users u ON u.id = fm2.following_id " +
+                        "WHERE fm1.follower_id = :userId " +
+                        "AND fm1.status = 'ACTIVE' " +
+                        "AND fm2.status = 'ACTIVE' " +
+                        "AND fm2.following_id <> :userId " +
+                        "AND fm2.following_id NOT IN (SELECT f3.following_id FROM follow f3 WHERE f3.follower_id = :userId AND f3.status = 'ACTIVE') " +
+                        "AND fm2.following_id NOT IN (SELECT ub.blocked_id FROM user_blocks ub WHERE ub.blocker_id = :userId) " +
+                        "AND fm2.following_id NOT IN (SELECT ub.blocker_id FROM user_blocks ub WHERE ub.blocked_id = :userId) " +
+                        "GROUP BY u.id, u.account_status, u.avatar_url, u.bio, u.created_at, u.email, u.fullname, " +
+                        "u.is_private, u.keycloak_user_id, u.last_login, u.online_status, u.role, u.username, u.violation_count " +
+                        "ORDER BY COUNT(fm2.follower_id) DESC",
+                countQuery = "SELECT COUNT(DISTINCT fm2.following_id) " +
+                        "FROM follow fm1 " +
+                        "JOIN follow fm2 ON fm1.following_id = fm2.follower_id " +
+                        "WHERE fm1.follower_id = :userId " +
+                        "AND fm1.status = 'ACTIVE' " +
+                        "AND fm2.status = 'ACTIVE' " +
+                        "AND fm2.following_id <> :userId " +
+                        "AND fm2.following_id NOT IN (SELECT f3.following_id FROM follow f3 WHERE f3.follower_id = :userId AND f3.status = 'ACTIVE') " +
+                        "AND fm2.following_id NOT IN (SELECT ub.blocked_id FROM user_blocks ub WHERE ub.blocker_id = :userId) " +
+                        "AND fm2.following_id NOT IN (SELECT ub.blocker_id FROM user_blocks ub WHERE ub.blocked_id = :userId)",
+                nativeQuery = true)
         Page<UserModel> findSuggestedUsersBasedOnMutualFollows(@Param("userId") Long userId, Pageable pageable);
 
         @Query("SELECT u FROM UserModel u " +

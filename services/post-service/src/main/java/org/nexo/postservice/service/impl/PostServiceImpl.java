@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.*;
+import org.nexo.postservice.dto.UserActivityEvent;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
 import org.nexo.postservice.dto.response.ReelResponseDTO;
@@ -109,6 +110,16 @@ public class PostServiceImpl implements IPostService {
                     .createdAt(Instant.now().toEpochMilli())
                     .build();
             kafkaTemplate.send("post-created", message);
+
+            UserActivityEvent activityEvent = UserActivityEvent.builder()
+                    .eventType("POST_CREATED")
+                    .userId(postRequestDTO.getUserId())
+                    .targetId(model.getId())
+                    .targetType("POST")
+                    .occurredAt(Instant.now())
+                    .metadata("{\"source\":\"post-service\"}")
+                    .build();
+            kafkaTemplate.send("user-events", String.valueOf(postRequestDTO.getUserId()), activityEvent);
         }
 
         hashTagService.findAndAddHashTagFromCaption(model);

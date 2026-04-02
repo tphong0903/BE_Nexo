@@ -5,7 +5,10 @@ on:
     branches: [ "develop" ]
     paths:
       - 'interaction-service/**'
-
+  pull_request:
+    branches: [ "develop" ]
+    paths:
+      - 'interaction-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest

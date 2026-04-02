@@ -5,7 +5,10 @@ on:
     branches: [ "develop" ]
     paths:
       - 'messaging-service/**'
-
+  pull_request:
+    branches: [ "develop" ]
+    paths:
+      - 'messaging-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest

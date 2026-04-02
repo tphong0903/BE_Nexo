@@ -5,7 +5,10 @@ on:
     branches: [ "develop" ]
     paths:
       - 'api-gateway/**'
-
+  pull_request:
+    branches: [ "develop" ]
+    paths:
+      - 'api-gateway/**'
 jobs:
   build:
     runs-on: ubuntu-latest

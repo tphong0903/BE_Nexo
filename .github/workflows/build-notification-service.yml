@@ -5,7 +5,10 @@ on:
     branches: [ "develop" ]
     paths:
       - 'notification-service/**'
-
+  pull_request:
+    branches: [ "develop" ]
+    paths:
+      - 'notification-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest

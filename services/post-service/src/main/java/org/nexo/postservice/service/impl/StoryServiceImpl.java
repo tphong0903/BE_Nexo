@@ -123,7 +123,6 @@ public class StoryServiceImpl implements IStoryService {
     public String viewStory(Long id) {
         Long userId = securityUtil.getUserIdFromToken();
         Optional<StoryViewModel> existingView = storyViewRepository.findByStoryModel_IdAndSeenUserId(id, userId);
-
         if (existingView.isEmpty()) {
             StoryModel story = storyRepository.findById(id)
                     .orElseThrow(() -> new CustomException("Story does not exist", HttpStatus.BAD_REQUEST));

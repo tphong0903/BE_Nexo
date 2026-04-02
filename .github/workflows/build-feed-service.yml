@@ -5,7 +5,10 @@ on:
     branches: [ "develop" ]
     paths:
       - 'feed-service/**'
-
+  pull_request:
+    branches: [ "develop" ]
+    paths:
+      - 'feed-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest

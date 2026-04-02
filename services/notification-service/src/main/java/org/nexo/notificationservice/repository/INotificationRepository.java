@@ -1,5 +1,6 @@
 package org.nexo.notificationservice.repository;
 
+import jakarta.transaction.Transactional;
 import org.nexo.notificationservice.model.NotificationModel;
 import org.nexo.notificationservice.util.ENotificationType;
 import org.springframework.data.domain.Page;
@@ -11,18 +12,22 @@ import java.util.List;
 
 @Repository
 public interface INotificationRepository extends JpaRepository<NotificationModel, Long> {
-    Page<NotificationModel> findByRecipientIdAndActorIdNot(Long recipientId, Long actorId, Pageable pageable);
+
+    Page<NotificationModel> findByRecipientIdAndActorIdNotOrderByCreatedAtDesc(Long recipientId, Long actorId, Pageable pageable);
 
     Boolean existsByRecipientIdAndActorIdAndMessageAndTargetUrl(Long recipientId, Long actorId, String msg, String url);
 
-    List<NotificationModel> getAllByRecipientIdAndIsRead(Long id, Boolean isRead);
+    List<NotificationModel> findAllByRecipientIdAndIsReadOrderByCreatedAtDesc(Long id, Boolean isRead);
 
     Long countByRecipientIdAndIsRead(Long id, Boolean isRead);
 
-    List<NotificationModel> findAllByRecipientIdAndTargetUrlAndNotificationTypeAndIsRead(
+    List<NotificationModel> findAllByRecipientIdAndTargetUrlAndNotificationTypeAndIsReadOrderByCreatedAtDesc(
             Long recipientId,
             String targetUrl,
             ENotificationType notificationType,
             boolean isRead
     );
+
+    @Transactional
+    void deleteByRecipientIdAndActorIdAndMessageAndTargetUrl(Long recipientId, Long actorId, String msg, String url);
 }

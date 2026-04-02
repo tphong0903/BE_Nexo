@@ -4,18 +4,18 @@ on:
   push:
     branches: [ "develop" ]
     paths:
-      - 'notification-service/**'
+      - 'services/notification-service/**'
   pull_request:
     branches: [ "develop" ]
     paths:
-      - 'notification-service/**'
+      - 'services/notification-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: ./notification-service
+        working-directory: ./services/notification-service
 
     steps:
       - name: Checkout source code
@@ -40,6 +40,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./notification-service
+          context: ./services/notification-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/notification-service:latest

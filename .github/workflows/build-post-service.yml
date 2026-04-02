@@ -4,18 +4,18 @@ on:
   push:
     branches: [ "develop" ]
     paths:
-      - 'post-service/**'
+      - 'services/post-service/**'
   pull_request:
     branches: [ "develop" ]
     paths:
-      - 'post-service/**'
+      - 'services/post-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: ./post-service
+        working-directory: ./services/post-service
 
     steps:
       - name: Checkout source code
@@ -40,6 +40,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./post-service
+          context: ./services/post-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/post-service:latest

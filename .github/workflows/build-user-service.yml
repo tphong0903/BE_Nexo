@@ -4,18 +4,18 @@ on:
   push:
     branches: [ "develop" ]
     paths:
-      - 'user-service/**'
+      - 'services/user-service/**'
   pull_request:
     branches: [ "develop" ]
     paths:
-      - 'user-service/**'
+      - 'services/user-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: ./user-service
+        working-directory: ./services/user-service
 
     steps:
       - name: Checkout source code
@@ -40,6 +40,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./user-service
+          context: ./services/user-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/user-service:latest

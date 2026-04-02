@@ -4,18 +4,18 @@ on:
   push:
     branches: [ "develop" ]
     paths:
-      - 'api-gateway/**'
+      - 'services/api-gateway/**'
   pull_request:
     branches: [ "develop" ]
     paths:
-      - 'api-gateway/**'
+      - 'services/api-gateway/**'
 jobs:
   build:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: ./api-gateway
+        working-directory: ./services/api-gateway
 
     steps:
       - name: Checkout source code
@@ -40,6 +40,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./api-gateway
+          context: ./services/api-gateway
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/api-gateway:latest

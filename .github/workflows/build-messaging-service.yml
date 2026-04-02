@@ -4,18 +4,18 @@ on:
   push:
     branches: [ "develop" ]
     paths:
-      - 'messaging-service/**'
+      - 'services/messaging-service/**'
   pull_request:
     branches: [ "develop" ]
     paths:
-      - 'messaging-service/**'
+      - 'services/messaging-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: ./messaging-service
+        working-directory: ./services/messaging-service
 
     steps:
       - name: Checkout source code
@@ -40,6 +40,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./messaging-service
+          context: ./services/messaging-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/messaging-service:latest

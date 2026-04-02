@@ -13,7 +13,6 @@ import org.nexo.notificationservice.repository.INotificationRepository;
 import org.nexo.notificationservice.service.INotificationService;
 import org.nexo.notificationservice.util.ENotificationType;
 import org.nexo.notificationservice.util.SecurityUtil;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
@@ -40,7 +39,7 @@ public class NotificationService implements INotificationService {
     @Override
     public PageModelResponse<?> getNotifications(Pageable pageable) {
         Long userId = securityUtil.getUserIdFromToken();
-        Page<NotificationModel> notificationPage = notificationRepository.findByRecipientIdAndActorIdNot(userId, userId, pageable);
+        Page<NotificationModel> notificationPage = notificationRepository.findByRecipientIdAndActorIdNotOrderByCreatedAtDesc(userId, userId, pageable);
         List<NotificationModel> rawNotifications = notificationPage.getContent();
 
         if (rawNotifications.isEmpty()) {
@@ -135,7 +134,7 @@ public class NotificationService implements INotificationService {
     @Override
     public String readAllNotification() {
         Long userId = securityUtil.getUserIdFromToken();
-        List<NotificationModel> list = notificationRepository.getAllByRecipientIdAndIsRead(userId, false);
+        List<NotificationModel> list = notificationRepository.findAllByRecipientIdAndIsReadOrderByCreatedAtDesc(userId, false);
         if (!list.isEmpty() && !Objects.equals(list.getFirst().getRecipientId(), userId)) {
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
         }
@@ -157,7 +156,7 @@ public class NotificationService implements INotificationService {
             throw new CustomException("Notification type is not valid", HttpStatus.BAD_REQUEST);
         }
 
-        List<NotificationModel> notificationsToUpdate = notificationRepository.findAllByRecipientIdAndTargetUrlAndNotificationTypeAndIsRead(userId, targetUrl, type, false);
+        List<NotificationModel> notificationsToUpdate = notificationRepository.findAllByRecipientIdAndTargetUrlAndNotificationTypeAndIsReadOrderByCreatedAtDesc(userId, targetUrl, type, false);
 
         if (!notificationsToUpdate.isEmpty()) {
             for (NotificationModel model : notificationsToUpdate) {
@@ -198,7 +197,7 @@ public class NotificationService implements INotificationService {
 
             case COMMENT_POST -> actor.getUsername() + " đã bình luận vào bài viết của bạn";
             case COMMENT_REEL -> actor.getUsername() + " đã bình luận vào reel của bạn";
-            case COMMENT_MENTION -> actor.getUsername() + " đã nhắc đến bạn trong một bình luận";
+            case MENTION_COMMENT, COMMENT_MENTION -> "đã nhắc đến bạn trong một bình luận";
 
             case FOLLOW -> actor.getUsername() + " đã theo dõi bạn";
             case TAG -> actor.getUsername() + " đã gắn thẻ bạn trong một bài viết";
@@ -207,20 +206,37 @@ public class NotificationService implements INotificationService {
             default -> "Có một thông báo mới";
         };
         if (notificationRepository.existsByRecipientIdAndActorIdAndMessageAndTargetUrl(recipient.getId(), actor.getId(), message, messageDTO.getTargetUrl())) {
-            log.info("Notification sent to {}: {} is exist", recipient.getUsername(), message);
+            notificationRepository.deleteByRecipientIdAndActorIdAndMessageAndTargetUrl(
+                    recipient.getId(),
+                    actor.getId(),
+                    message,
+                    messageDTO.getTargetUrl()
+            );
+            log.info("Đã xóa thông báo tồn tại của {}: {}", recipient.getUsername(), message);
         } else {
-            notificationRepository.save(NotificationModel.builder()
+            NotificationModel newModel = NotificationModel.builder()
                     .notificationType(ENotificationType.valueOf(messageDTO.getNotificationType()))
                     .targetUrl(messageDTO.getTargetUrl())
                     .isRead(false)
                     .actorId(actor.getId())
                     .recipientId(recipient.getId())
                     .message(message)
-                    .build());
-            String destination = "/queue/notifications";
-            log.info("==> [WEBSOCKET] Attempting to send message to user '{}' at destination '{}'. Message: '{}'",
-                    recipient.getUsername(), destination, message);
-            messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", message);
+                    .build();
+            notificationRepository.save(newModel);
+
+            NotificationDTO wsDto = new NotificationDTO(
+                    newModel.getId(),
+                    newModel.getRecipientId(),
+                    newModel.getNotificationType().name(),
+                    newModel.getTargetUrl(),
+                    message,
+                    false,
+                    List.of(new UserDTO(actor.getUsername(), actor.getAvatar())),
+                    newModel.getCreatedAt()
+            );
+
+            log.info("==> [WEBSOCKET] Attempting to send message to user '{}'", recipient.getUsername());
+            messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", wsDto);
 
             log.info("Notification sent to {}: {}", recipient.getUsername(), message);
         }
@@ -228,7 +244,7 @@ public class NotificationService implements INotificationService {
 
     private String generateDynamicMessage(List<UserDTO> users, ENotificationType type) {
         int size = users.size();
-        if (size == 0) return "Có thông báo mới."; // Fallback
+        if (size == 0) return "Có thông báo mới.";
 
         String firstActorName = users.getFirst().getUserName();
         String actionText = switch (type) {
@@ -239,7 +255,7 @@ public class NotificationService implements INotificationService {
 
             case COMMENT_POST -> "đã bình luận vào bài viết của bạn";
             case COMMENT_REEL -> "đã bình luận vào reel của bạn";
-            case COMMENT_MENTION -> "đã nhắc đến bạn trong một bình luận";
+            case MENTION_COMMENT, COMMENT_MENTION -> "đã nhắc đến bạn trong một bình luận";
 
             case FOLLOW -> "đã theo dõi bạn";
             case TAG -> "đã gắn thẻ bạn trong một bài viết";

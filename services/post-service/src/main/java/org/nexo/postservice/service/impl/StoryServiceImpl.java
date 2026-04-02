@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.postservice.dto.CollectionRequestDto;
+import org.nexo.postservice.dto.MessageDTO;
 import org.nexo.postservice.dto.StoryDeletionEvent;
 import org.nexo.postservice.dto.StoryRequestDto;
 import org.nexo.postservice.dto.response.*;
@@ -12,12 +13,12 @@ import org.nexo.postservice.model.CollectionItemModel;
 import org.nexo.postservice.model.CollectionModel;
 import org.nexo.postservice.model.StoryModel;
 import org.nexo.postservice.model.StoryViewModel;
-import org.nexo.postservice.repository.ICollectionItemRepository;
 import org.nexo.postservice.repository.ICollectionRepository;
 import org.nexo.postservice.repository.IStoryRepository;
 import org.nexo.postservice.repository.IStoryViewRepository;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IStoryService;
+import org.nexo.postservice.util.Enum.ENotificationType;
 import org.nexo.postservice.util.SecurityUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -26,6 +27,7 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
@@ -50,7 +52,7 @@ public class StoryServiceImpl implements IStoryService {
 
     private final RedisTemplate<String, Object> redisTemplate;
     private final ICollectionRepository collectionRepository;
-    private final ICollectionItemRepository collectionItemRepository;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
 
     @Override
@@ -148,8 +150,21 @@ public class StoryServiceImpl implements IStoryService {
         StoryViewModel storyViewModel = storyViewRepository.findByStoryModel_IdAndSeenUserId(id, userId)
                 .orElseThrow(() -> new CustomException("Story View not exist. Please view first.", HttpStatus.BAD_REQUEST));
 
-        storyViewModel.setIsLike(!storyViewModel.getIsLike());
+        boolean newLikeStatus = !storyViewModel.getIsLike();
+        storyViewModel.setIsLike(newLikeStatus);
         storyViewRepository.save(storyViewModel);
+
+
+        if (newLikeStatus && !userId.equals(model.getUserId())) {
+            sendNotification(
+                    userId,
+                    model.getUserId(),
+                    ENotificationType.LIKE_STORY,
+                    "/stories/" + id
+            );
+        }
+
+
         return "Success";
     }
 
@@ -502,5 +517,15 @@ public class StoryServiceImpl implements IStoryService {
                 .totalPages(0)
                 .last(true)
                 .build();
+    }
+
+    private void sendNotification(Long actorId, Long recipientId, ENotificationType type, String targetUrl) {
+        MessageDTO messageDTO = MessageDTO.builder()
+                .actorId(actorId)
+                .recipientId(recipientId)
+                .notificationType(type.name())
+                .targetUrl(targetUrl)
+                .build();
+        kafkaTemplate.send("notification", messageDTO);
     }
 }

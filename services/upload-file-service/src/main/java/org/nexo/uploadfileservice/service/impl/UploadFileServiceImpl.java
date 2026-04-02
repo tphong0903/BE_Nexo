@@ -183,11 +183,19 @@ public class UploadFileServiceImpl implements IUploadFileService {
 
     private UploadResult uploadToCloudinary(MultipartFile multipartFile) {
         try {
-            Map uploadResult = cloudinary.uploader().upload(multipartFile.getInputStream(),
+            File tempFile = File.createTempFile("upload_", multipartFile.getOriginalFilename());
+            multipartFile.transferTo(tempFile);
+
+            Map uploadResult = cloudinary.uploader().upload(
+                    tempFile,
                     ObjectUtils.asMap(
                             "public_id", UUID.randomUUID() + "_" + multipartFile.getOriginalFilename(),
                             "folder", "posts",
-                            "resource_type", "auto"));
+                            "resource_type", "auto"
+                    )
+            );
+
+            tempFile.delete();
 
             return new UploadResult(
                     uploadResult.get("secure_url").toString(),

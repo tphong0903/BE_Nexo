@@ -227,42 +227,128 @@ public class PostServiceImpl implements IPostService {
     @Override
     public PostResponseDTO getPostById(Long id) {
         Long viewerId = securityUtil.getUserIdFromToken();
-        PostModel model = getPostWithCache(id);
 
-        checkVisibilityAccess(model.getUserId(), viewerId, model.getVisibility());
+        PostResponseDTO cachedPost = getPostCacheDTO(id);
 
-        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(model.getUserId());
-        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId, List.of(id));
+        checkVisibilityAccess(cachedPost.getUserId(), viewerId, EVisibilityPost.valueOf(cachedPost.getVisibility()));
 
-        return convertToPostResponseDTO(model, authorInfo, likedMap.getOrDefault(id, false));
+        return buildDynamicPostResponse(cachedPost, viewerId);
     }
 
     @Override
     public ReelResponseDTO getReelById(Long id) {
         Long viewerId = securityUtil.getUserIdFromToken();
-        ReelModel model = getReelWithCache(id);
 
-        checkVisibilityAccess(model.getUserId(), viewerId, model.getVisibility());
+        ReelResponseDTO cachedReel = getReelCacheDTO(id);
+        checkVisibilityAccess(cachedReel.getUserId(), viewerId, EVisibilityPost.valueOf(cachedReel.getVisibility()));
 
-        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(model.getUserId());
-        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId, List.of(id));
-
-        return convertToReelResponseDTO(model, authorInfo, likedMap.getOrDefault(id, false));
+        return buildDynamicReelResponse(cachedReel, viewerId);
     }
 
     @Override
     public PostResponseDTO getPostByIdGrpc(Long id) {
-        PostModel model = getPostWithCache(id);
-        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(model.getUserId());
-        return convertToPostResponseDTO(model, authorInfo, false);
+        PostResponseDTO cachedPost = getPostCacheDTO(id);
+        return updateDynamicCountersForPost(cachedPost);
     }
 
     @Override
     public ReelResponseDTO getReelByIdGrpc(Long id) {
-        ReelModel model = getReelWithCache(id);
-        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(model.getUserId());
+        ReelResponseDTO cachedReel = getReelCacheDTO(id);
+        return updateDynamicCountersForReel(cachedReel);
+    }
 
-        return convertToReelResponseDTO(model, authorInfo, false);
+    private PostResponseDTO getPostCacheDTO(Long postId) {
+        String cacheKey = "post_dto_cache:" + postId;
+        PostResponseDTO cachedDto = (PostResponseDTO) redisTemplate.opsForValue().get(cacheKey);
+
+        if (cachedDto != null) {
+            return cachedDto;
+        }
+
+        PostModel dbPost = postRepository.findById(postId)
+                .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
+
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(dbPost.getUserId());
+
+        PostResponseDTO staticDto = convertToPostResponseDTO(dbPost, authorInfo, false);
+
+        redisTemplate.opsForValue().set(cacheKey, staticDto, CACHE_TTL);
+        return staticDto;
+    }
+
+    private ReelResponseDTO getReelCacheDTO(Long reelId) {
+        String cacheKey = "reel_dto_cache:" + reelId;
+        ReelResponseDTO cachedDto = (ReelResponseDTO) redisTemplate.opsForValue().get(cacheKey);
+
+        if (cachedDto != null) {
+            return cachedDto;
+        }
+
+        ReelModel dbReel = reelRepository.findById(reelId)
+                .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.BAD_REQUEST));
+
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(dbReel.getUserId());
+
+        ReelResponseDTO staticDto = convertToReelResponseDTO(dbReel, authorInfo, false);
+
+        redisTemplate.opsForValue().set(cacheKey, staticDto, CACHE_TTL);
+        return staticDto;
+    }
+
+    private PostResponseDTO buildDynamicPostResponse(PostResponseDTO staticDto, Long viewerId) {
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId, List.of(staticDto.getPostId()));
+        boolean isLiked = likedMap.getOrDefault(staticDto.getPostId(), false);
+
+        PostResponseDTO updatedDto = updateDynamicCountersForPost(staticDto);
+
+        return updatedDto.toBuilder()
+                .isLike(isLiked)
+                .build();
+    }
+
+    private PostResponseDTO updateDynamicCountersForPost(PostResponseDTO dto) {
+        Object likesStr = redisTemplate.opsForValue().get("post:likes:" + dto.getPostId());
+        Object commentsStr = redisTemplate.opsForValue().get("post:comments:" + dto.getPostId());
+
+        Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : dto.getQuantityLike();
+        Long comments = (commentsStr != null) ? Long.valueOf(commentsStr.toString()) : dto.getQuantityComment();
+
+        return dto.toBuilder()
+                .quantityLike(likes)
+                .quantityComment(comments)
+                .build();
+    }
+
+    private ReelResponseDTO buildDynamicReelResponse(ReelResponseDTO staticDto, Long viewerId) {
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId, List.of(staticDto.getReelId()));
+        boolean isLiked = likedMap.getOrDefault(staticDto.getReelId(), false);
+
+        ReelResponseDTO updatedDto = updateDynamicCountersForReel(staticDto);
+
+        return updatedDto.toBuilder()
+                .isLike(isLiked)
+                .build();
+    }
+
+    private ReelResponseDTO updateDynamicCountersForReel(ReelResponseDTO dto) {
+        Object likesStr = redisTemplate.opsForValue().get("reel:likes:" + dto.getReelId());
+        Object commentsStr = redisTemplate.opsForValue().get("reel:comments:" + dto.getReelId());
+
+        Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : dto.getQuantityLike();
+        Long comments = (commentsStr != null) ? Long.valueOf(commentsStr.toString()) : dto.getQuantityComment();
+
+        return dto.toBuilder()
+                .quantityLike(likes)
+                .quantityComment(comments)
+                .build();
+    }
+
+    private void clearPostCache(Long id) {
+        redisTemplate.delete(Arrays.asList("post_dto_cache:" + id, "post:likes:" + id, "post:comments:" + id));
+    }
+
+    private void clearReelCache(Long id) {
+        redisTemplate.delete(Arrays.asList("reel_dto_cache:" + id, "reel:likes:" + id, "reel:comments:" + id));
     }
 
     @Override
@@ -369,40 +455,6 @@ public class PostServiceImpl implements IPostService {
         return buildPageResponse(postPage, postDTOs);
     }
 
-
-    private PostModel getPostWithCache(Long id) {
-//        String cacheKey = "post_cache:" + id;
-//        PostModel cachedPost = (PostModel) redisTemplate.opsForValue().get(cacheKey);
-
-//        if (cachedPost != null) return cachedPost;
-
-        PostModel dbPost = postRepository.findById(id)
-                .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
-
-//        redisTemplate.opsForValue().set(cacheKey, dbPost, CACHE_TTL);
-        return dbPost;
-    }
-
-    private ReelModel getReelWithCache(Long id) {
-//        String cacheKey = "reel_cache:" + id;
-//        ReelModel cachedReel = (ReelModel) redisTemplate.opsForValue().get(cacheKey);
-//
-//        if (cachedReel != null) return cachedReel;
-
-        ReelModel dbReel = reelRepository.findById(id)
-                .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.BAD_REQUEST));
-
-//        redisTemplate.opsForValue().set(cacheKey, dbReel, CACHE_TTL);
-        return dbReel;
-    }
-
-    private void clearPostCache(Long id) {
-        redisTemplate.delete(Arrays.asList("post_cache:" + id, "post:likes:" + id, "post:comments:" + id));
-    }
-
-    private void clearReelCache(Long id) {
-        redisTemplate.delete(Arrays.asList("reel_cache:" + id, "reel:likes:" + id, "reel:comments:" + id));
-    }
 
     private PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse author, Boolean isLike) {
         List<Long> tagIds = parseTagString(model.getTag(), model.getUserId());

@@ -27,6 +27,8 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.concurrent.TimeUnit;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -61,7 +63,7 @@ public class CommentServiceImpl implements ICommentService {
             commentRepository.save(model);
 
             redisTemplate.delete("comment_cache:" + model.getId());
-
+            invalidateListCache(model);
             if (dto.getListMentionUserId() != null) {
                 commentMentionService.syncMentionComment(dto.getListMentionUserId(), model);
             }
@@ -87,7 +89,7 @@ public class CommentServiceImpl implements ICommentService {
         }
 
         commentRepository.save(model);
-
+        invalidateListCache(model);
         redisTemplate.opsForValue().increment("global:comments:total");
         redisTemplate.opsForValue().increment("user:" + currentUserId + ":comments:total");
 
@@ -148,6 +150,7 @@ public class CommentServiceImpl implements ICommentService {
         commentRepository.delete(model);
 
         redisTemplate.delete("comment_cache:" + id);
+        invalidateListCache(model);
         redisTemplate.opsForValue().decrement("global:comments:total");
         redisTemplate.opsForValue().decrement("user:" + model.getUserId() + ":comments:total");
 
@@ -166,6 +169,15 @@ public class CommentServiceImpl implements ICommentService {
     @Override
     public ListCommentResponse getCommentOfPost(Long postId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
+        long version = getCacheVersion("post", postId);
+        String cacheKey = String.format("cache:comments:post:%d:v:%d:p:%d:s:%d:u:%d",
+                postId, version, pageNo, pageSize, currentUserId);
+
+        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
         PostServiceOuterClass.PostResponse post = postGrpcClient.getPostById(postId);
 
         checkVisibilityAccess(post.getUserId(), currentUserId);
@@ -173,25 +185,46 @@ public class CommentServiceImpl implements ICommentService {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
         Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
 
-        return commentMapper.toListResponse(postId, commentsPage, currentUserId);
+        ListCommentResponse response = commentMapper.toListResponse(postId, commentsPage, currentUserId);
+
+        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        return response;
     }
 
     @Override
     public ListCommentResponse getCommentOfReel(Long reelId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-        PostServiceOuterClass.ReelResponse reel = postGrpcClient.getReelById(reelId);
 
+        long version = getCacheVersion("reel", reelId);
+        String cacheKey = String.format("cache:comments:reel:%d:v:%d:p:%d:s:%d:u:%d",
+                reelId, version, pageNo, pageSize, currentUserId);
+        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
+        PostServiceOuterClass.ReelResponse reel = postGrpcClient.getReelById(reelId);
         checkVisibilityAccess(reel.getUserId(), currentUserId);
 
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
         Page<CommentModel> commentsPage = commentRepository.findByReelIdAndParentComment(reelId, pageable, null);
 
-        return commentMapper.toListResponse(reelId, commentsPage, currentUserId);
+        ListCommentResponse response = commentMapper.toListResponse(reelId, commentsPage, currentUserId);
+        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        return response;
     }
 
     @Override
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
+        long version = getCacheVersion("reply", commentId);
+        String cacheKey = String.format("cache:comments:reply:%d:v:%d:p:%d:s:%d:u:%d",
+                commentId, version, pageNo, pageSize, currentUserId);
+
+        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
 
         CommentModel parentComment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
@@ -201,7 +234,9 @@ public class CommentServiceImpl implements ICommentService {
 
         Long sourceId = (parentComment.getPostId() != null) ? parentComment.getPostId() : parentComment.getReelId();
 
-        return commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
+        ListCommentResponse response = commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
+        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        return response;
     }
 
     private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {
@@ -240,6 +275,27 @@ public class CommentServiceImpl implements ICommentService {
         UserServiceProto.CheckFollowResponse followCheck = userGrpcClient.checkFollow(viewerId, authorId);
         if (followCheck.getIsPrivate() && !followCheck.getIsFollow()) {
             throw new CustomException("This account is private. Follow to view comments.", HttpStatus.FORBIDDEN);
+        }
+    }
+
+    private long getCacheVersion(String prefix, Long id) {
+        Object v = redisTemplate.opsForValue().get(prefix + ":version:" + id);
+        return v != null ? ((Number) v).longValue() : 1L;
+    }
+
+    private void incrementCacheVersion(String prefix, Long id) {
+        redisTemplate.opsForValue().increment(prefix + ":version:" + id);
+    }
+
+    private void invalidateListCache(CommentModel model) {
+        if (model.getPostId() != null) {
+            incrementCacheVersion("post", model.getPostId());
+        }
+        if (model.getReelId() != null) {
+            incrementCacheVersion("reel", model.getReelId());
+        }
+        if (model.getParentComment() != null) {
+            incrementCacheVersion("reply", model.getParentComment().getId());
         }
     }
 }

@@ -1,19 +1,17 @@
 package org.nexo.notificationservice.dto;
 
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.nexo.notificationservice.util.ENotificationType;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-public class NotificationDTO {
+public class NotificationDTO implements Serializable {
     private Long id;
     private Long recipientId;
     private String notificationType;

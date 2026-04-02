@@ -15,26 +15,28 @@ import org.nexo.notificationservice.util.ENotificationType;
 import org.nexo.notificationservice.util.SecurityUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class NotificationService implements INotificationService {
+    private static final String UNREAD_COUNT_KEY = "noti:unread:count:";
+    private static final String USER_CACHE_KEY = "user:profile:";
     private final INotificationRepository notificationRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final SimpMessagingTemplate messagingTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public PageModelResponse<?> getNotifications(Pageable pageable) {
@@ -43,14 +45,7 @@ public class NotificationService implements INotificationService {
         List<NotificationModel> rawNotifications = notificationPage.getContent();
 
         if (rawNotifications.isEmpty()) {
-            return PageModelResponse.builder()
-                    .pageNo(notificationPage.getNumber())
-                    .pageSize(notificationPage.getSize())
-                    .totalElements(notificationPage.getTotalElements())
-                    .totalPages(notificationPage.getTotalPages())
-                    .last(notificationPage.isLast())
-                    .content(List.of())
-                    .build();
+            return PageModelResponse.builder().content(List.of()).build();
         }
 
         List<Long> actorIds = rawNotifications.stream()
@@ -58,11 +53,7 @@ public class NotificationService implements INotificationService {
                 .distinct()
                 .collect(Collectors.toList());
 
-        Map<Long, UserDTO> userMap = userGrpcClient.getUsersByIds(actorIds).stream()
-                .collect(Collectors.toMap(
-                        UserServiceProto.UserDTOResponse2::getId,
-                        userProto -> new UserDTO(userProto.getUsername(), userProto.getAvatar())
-                ));
+        Map<Long, UserDTO> userMap = getUsersWithCache(actorIds);
 
         Map<String, List<NotificationModel>> groupedNotifications = rawNotifications.stream()
                 .collect(Collectors.groupingBy(
@@ -117,7 +108,16 @@ public class NotificationService implements INotificationService {
     @Override
     public Long getNotificationsUnread() {
         Long userId = securityUtil.getUserIdFromToken();
-        return notificationRepository.countByRecipientIdAndIsRead(userId, false);
+        String key = UNREAD_COUNT_KEY + userId;
+
+        Integer cachedCount = (Integer) redisTemplate.opsForValue().get(key);
+        if (cachedCount != null) {
+            return cachedCount.longValue();
+        }
+
+        long count = notificationRepository.countByRecipientIdAndIsRead(userId, false);
+        redisTemplate.opsForValue().set(key, (int) count, 10, TimeUnit.MINUTES);
+        return count;
     }
 
     @Override
@@ -126,8 +126,12 @@ public class NotificationService implements INotificationService {
         NotificationModel model = notificationRepository.findById(id).orElse(null);
         if (model == null || !Objects.equals(model.getRecipientId(), userId))
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
-        model.setIsRead(true);
-        notificationRepository.save(model);
+
+        if (!model.getIsRead()) {
+            model.setIsRead(true);
+            notificationRepository.save(model);
+            decrementUnreadCache(userId);
+        }
         return "Success";
     }
 
@@ -142,6 +146,7 @@ public class NotificationService implements INotificationService {
             model.setIsRead(true);
         }
         notificationRepository.saveAll(list);
+        redisTemplate.delete(UNREAD_COUNT_KEY + userId);
         return "Success";
     }
 
@@ -212,6 +217,7 @@ public class NotificationService implements INotificationService {
                     message,
                     messageDTO.getTargetUrl()
             );
+            decrementUnreadCache(recipient.getId());
             log.info("Đã xóa thông báo tồn tại của {}: {}", recipient.getUsername(), message);
         } else {
             NotificationModel newModel = NotificationModel.builder()
@@ -223,7 +229,7 @@ public class NotificationService implements INotificationService {
                     .message(message)
                     .build();
             notificationRepository.save(newModel);
-
+            incrementUnreadCache(recipient.getId());
             NotificationDTO wsDto = new NotificationDTO(
                     newModel.getId(),
                     newModel.getRecipientId(),
@@ -268,5 +274,45 @@ public class NotificationService implements INotificationService {
         } else {
             return firstActorName + " và " + (size - 1) + " người khác " + actionText;
         }
+    }
+
+    private void incrementUnreadCache(Long userId) {
+        String key = UNREAD_COUNT_KEY + userId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+            redisTemplate.opsForValue().increment(key);
+        }
+    }
+
+    private void decrementUnreadCache(Long userId) {
+        String key = UNREAD_COUNT_KEY + userId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+            Long val = redisTemplate.opsForValue().decrement(key);
+            if (val != null && val < 0) redisTemplate.opsForValue().set(key, 0);
+        }
+    }
+
+    private Map<Long, UserDTO> getUsersWithCache(List<Long> actorIds) {
+        Map<Long, UserDTO> result = new HashMap<>();
+        List<Long> missingIds = new ArrayList<>();
+
+        for (Long id : actorIds) {
+            UserDTO cached = (UserDTO) redisTemplate.opsForValue().get(USER_CACHE_KEY + id);
+            if (cached != null) result.put(id, cached);
+            else missingIds.add(id);
+        }
+
+        if (!missingIds.isEmpty()) {
+            Map<Long, UserDTO> remoteUsers = userGrpcClient.getUsersByIds(missingIds).stream()
+                    .collect(Collectors.toMap(
+                            UserServiceProto.UserDTOResponse2::getId,
+                            u -> new UserDTO(u.getUsername(), u.getAvatar())
+                    ));
+
+            remoteUsers.forEach((id, dto) -> {
+                redisTemplate.opsForValue().set(USER_CACHE_KEY + id, dto, 1, TimeUnit.HOURS);
+                result.put(id, dto);
+            });
+        }
+        return result;
     }
 }

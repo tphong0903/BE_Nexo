@@ -32,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
@@ -80,6 +81,8 @@ public class LikeServiceImpl implements ILikeService {
                 sendNotification(currentUserId, commentModel.getUserId(), ENotificationType.LIKE_COMMENT, targetUrl);
             }
         }
+
+        incrementCacheVersion("comment", id);
         return "Success";
     }
 
@@ -91,6 +94,7 @@ public class LikeServiceImpl implements ILikeService {
 
         PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
         Long authorId = postResponse.getUserId();
+
         if (model != null) {
             likeRepository.delete(model);
             postGrpcClient.addLikeQuantityById(id, true, false);
@@ -117,6 +121,8 @@ public class LikeServiceImpl implements ILikeService {
                 sendNotification(currentUserId, postResponse.getUserId(), ENotificationType.LIKE_POST, "/posts/" + id);
             }
         }
+
+        incrementCacheVersion("post", id);
         return "Success";
     }
 
@@ -155,45 +161,88 @@ public class LikeServiceImpl implements ILikeService {
                 sendNotification(currentUserId, reelResponse.getUserId(), ENotificationType.LIKE_REEL, "/reels/" + id);
             }
         }
+
+        incrementCacheVersion("reel", id);
         return "Success";
     }
 
-
     @Override
+    @SuppressWarnings("unchecked")
     public PageModelResponse<FolloweeDTO> getLikePostDetail(Long id, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
+        long version = getCacheVersion("post", id);
+        String cacheKey = String.format("cache:likes:post:%d:v:%d:p:%d:s:%d:u:%d",
+                id, version, pageNo, pageSize, currentUserId);
+
+        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
+        // 2. Không có Cache -> Query DB & gRPC
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
         Page<LikeModel> likePage = likeRepository.findByPostId(id, pageable);
         List<Long> likedUserIds = likePage.getContent().stream().map(LikeModel::getUserId).toList();
 
         boolean hasLiked = likeRepository.existsByPostIdAndUserId(id, currentUserId);
 
-        return buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+
+        redisTemplate.opsForValue().set(cacheKey, response, 15, TimeUnit.MINUTES);
+        return response;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public PageModelResponse<FolloweeDTO> getLikeReelDetail(Long id, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
+        long version = getCacheVersion("reel", id);
+        String cacheKey = String.format("cache:likes:reel:%d:v:%d:p:%d:s:%d:u:%d",
+                id, version, pageNo, pageSize, currentUserId);
+
+        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
         Page<LikeModel> likePage = likeRepository.findByReelId(id, pageable);
         List<Long> likedUserIds = likePage.getContent().stream().map(LikeModel::getUserId).toList();
 
         boolean hasLiked = likeRepository.existsByReelIdAndUserId(id, currentUserId);
-        return buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+
+        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+
+        redisTemplate.opsForValue().set(cacheKey, response, 15, TimeUnit.MINUTES);
+        return response;
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public PageModelResponse<FolloweeDTO> getLikeCommentDetail(Long id, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
 
+        long version = getCacheVersion("comment", id);
+        String cacheKey = String.format("cache:likes:comment:%d:v:%d:p:%d:s:%d:u:%d",
+                id, version, pageNo, pageSize, currentUserId);
+
+        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
+        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").descending());
         Page<LikeCommentModel> likePage = likeCommentRepository.findByCommentModelId(id, pageable);
         List<Long> likedUserIds = likePage.getContent().stream().map(LikeCommentModel::getUserId).toList();
 
         boolean hasLiked = likeCommentRepository.existsByCommentModelIdAndUserId(id, currentUserId);
-        return buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+
+        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+
+        redisTemplate.opsForValue().set(cacheKey, response, 15, TimeUnit.MINUTES);
+        return response;
     }
 
 
@@ -278,5 +327,15 @@ public class LikeServiceImpl implements ILikeService {
         }
 
         userPostScoresRepository.save(userPostScores);
+    }
+
+
+    private long getCacheVersion(String prefix, Long id) {
+        Object v = redisTemplate.opsForValue().get(prefix + ":like_version:" + id);
+        return v != null ? ((Number) v).longValue() : 1L;
+    }
+
+    private void incrementCacheVersion(String prefix, Long id) {
+        redisTemplate.opsForValue().increment(prefix + ":like_version:" + id);
     }
 }

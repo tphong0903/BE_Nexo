@@ -55,7 +55,6 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
                               StreamObserver<PostServiceOuterClass.GetReelsByIdsResponse> responseObserver) {
         try {
             List<ReelResponseDTO> reelDTOs = postService.getReelsByIds(request.getPostIdsList(), request.getUserId());
-
             List<PostServiceOuterClass.ReelResponse> responses = reelDTOs.stream()
                     .filter(Objects::nonNull)
                     .map(this::mapToReelResponse)

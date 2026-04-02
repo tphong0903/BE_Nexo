@@ -4,25 +4,25 @@ on:
   push:
     branches: [ "develop" ]
     paths:
-      - 'auth-service/**'
+      - 'services/auth-service/**'
   pull_request:
     branches: [ "develop" ]
     paths:
-      - 'auth-service/**'
+      - 'services/auth-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest
 
     defaults:
       run:
-        working-directory: ./auth-service
+        working-directory: ./services/auth-service
 
     steps:
       - name: Checkout source code
         uses: actions/checkout@v3
 
       - name: Set up JDK 21
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v4
         with:
           java-version: '21'
           distribution: 'temurin'
@@ -40,6 +40,6 @@ jobs:
       - name: Build and push Docker image
         uses: docker/build-push-action@v4
         with:
-          context: ./auth-service
+          context: ./services/auth-service
           push: true
           tags: ${{ secrets.DOCKER_USERNAME }}/auth-service:latest

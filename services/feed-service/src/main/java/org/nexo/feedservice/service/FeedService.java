@@ -321,7 +321,6 @@ public class FeedService {
                 .last(true)
                 .content(new ArrayList<>())
                 .build();
-
         return ResponseData.builder().status(200).message("No more feed available").data(emptyPage).build();
     }
 }

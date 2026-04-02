@@ -243,7 +243,6 @@ public class NotificationService implements INotificationService {
 
             log.info("==> [WEBSOCKET] Attempting to send message to user '{}'", recipient.getUsername());
             messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", wsDto);
-
             log.info("Notification sent to {}: {}", recipient.getUsername(), message);
         }
     }

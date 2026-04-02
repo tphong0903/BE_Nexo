@@ -298,9 +298,7 @@ public class PostServiceImpl implements IPostService {
     private PostResponseDTO buildDynamicPostResponse(PostResponseDTO staticDto, Long viewerId) {
         Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId, List.of(staticDto.getPostId()));
         boolean isLiked = likedMap.getOrDefault(staticDto.getPostId(), false);
-
         PostResponseDTO updatedDto = updateDynamicCountersForPost(staticDto);
-
         return updatedDto.toBuilder()
                 .isLike(isLiked)
                 .build();

@@ -5,7 +5,10 @@ on:
     branches: [ "develop" ]
     paths:
       - 'upload-file-service/**'
-
+  pull_request:
+    branches: [ "develop" ]
+    paths:
+      - 'upload-file-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -121,7 +121,6 @@ public class FeedService {
                 });
     }
 
-    // ====== HÀM MỚI: ĐẢM BẢO LẤY ĐƯỢC BÀI CÁ NHÂN (TỪ REDIS HOẶC DB) ======
     private Mono<List<Long>> getPersonalFeedIds(Long userId, long fetchEnd, boolean isPost) {
         String keyFeedRedis1 = isPost ? "feed:" : "feed:reel:";
         String keyFeedRedis2 = isPost ? "user_posts:" : "user_reels:";
@@ -140,7 +139,6 @@ public class FeedService {
                     List<FeedItem> pushItems = tuple.getT1();
                     List<FeedItem> pullItems = tuple.getT2();
 
-                    // NẾU REDIS TRỐNG SẠCH -> FALLBACK XUỐNG DB LẤY 50 BÀI ĐỂ LÀM VỐN TRỘN VỚI TRENDING
                     if (pushItems.isEmpty() && pullItems.isEmpty()) {
                         return Mono.fromCallable(() -> {
                             PageRequest pageRequest = PageRequest.of(0, MAX_REDIS_FEED_SIZE);
@@ -163,26 +161,21 @@ public class FeedService {
                 });
     }
 
-    // ====== HÀM HYBRID FEED MỚI ĐÃ ĐƯỢC CẤU TRÚC LẠI ======
     public Mono<ResponseData<?>> getHybridFeed(Long userId, int page, int limit, Boolean isPost) {
         long startOffset = (long) page * limit;
 
-        // Nếu user lướt quá 50 bài (vượt ngưỡng Interleave), ta trực tiếp gọi DB
         if (startOffset >= MAX_REDIS_FEED_SIZE) {
             return fallbackToDatabase(userId, page, limit, isPost);
         }
 
-        long fetchEnd = MAX_REDIS_FEED_SIZE - 1; // Limit 50 bài trên Redis
+        long fetchEnd = MAX_REDIS_FEED_SIZE - 1;
         String trendingKey = isPost ? "trending:posts" : "trending:reels";
 
-        // 1. Lấy bài cá nhân an toàn (Redis -> DB)
         Mono<List<Long>> personalIdsMono = getPersonalFeedIds(userId, fetchEnd, isPost);
 
-        // 2. Lấy bài Trending
         Mono<List<Long>> trendingIdsMono = fetchFromRedisZSet(trendingKey, 0, fetchEnd)
                 .map(list -> list.stream().map(FeedItem::getPostId).collect(Collectors.toList()));
 
-        // 3. Tiến hành trộn (Interleave)
         return Mono.zip(personalIdsMono, trendingIdsMono)
                 .map(tuple -> {
                     List<Long> personalIds = tuple.getT1();
@@ -191,14 +184,12 @@ public class FeedService {
                     List<Long> finalIds = new ArrayList<>();
                     int p = 0, t = 0;
 
-                    // Trộn theo tỉ lệ 2 Cá nhân : 1 Trending
                     while (p < personalIds.size() || t < trendIds.size()) {
                         if (p < personalIds.size()) finalIds.add(personalIds.get(p++));
                         if (p < personalIds.size()) finalIds.add(personalIds.get(p++));
                         if (t < trendIds.size()) finalIds.add(trendIds.get(t++));
                     }
 
-                    // Phân trang bằng skip và limit trên list đã trộn
                     return finalIds.stream()
                             .distinct()
                             .skip(startOffset)
@@ -206,7 +197,6 @@ public class FeedService {
                             .collect(Collectors.toList());
                 })
                 .flatMap(finalPostIds -> {
-                    // Nếu trộn xong vẫn rỗng (User mới tinh, DB trống, Trending chưa chạy)
                     if (finalPostIds.isEmpty()) {
                         return Mono.just(createEmptyResponse(page, limit));
                     }

@@ -5,7 +5,10 @@ on:
     branches: [ "develop" ]
     paths:
       - 'user-service/**'
-
+  pull_request:
+    branches: [ "develop" ]
+    paths:
+      - 'user-service/**'
 jobs:
   build:
     runs-on: ubuntu-latest

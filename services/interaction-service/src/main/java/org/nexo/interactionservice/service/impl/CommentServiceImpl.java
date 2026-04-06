@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.interactionservice.dto.MessageDTO;
+import org.nexo.interactionservice.dto.UserActivityEvent;
 import org.nexo.interactionservice.dto.request.CommentDto;
 import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.exception.CustomException;
@@ -124,6 +125,16 @@ public class CommentServiceImpl implements ICommentService {
                     .targetUrl(url)
                     .build();
             kafkaTemplate.send("notification", messageDTO);
+
+            UserActivityEvent activityEvent = UserActivityEvent.builder()
+                    .eventType("COMMENT_CREATED")
+                    .userId(response.getUserId())
+                    .targetId(id)
+                    .targetType(a.getPostId() != null && a.getPostId() != 0 ? "POST" : "REEL")
+                    .occurredAt(java.time.Instant.now())
+                    .metadata("{\"source\":\"interaction-service\"}")
+                    .build();
+            kafkaTemplate.send("user-events", String.valueOf(response.getUserId()), activityEvent);
         }
 
         return "Success";

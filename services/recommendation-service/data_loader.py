@@ -14,6 +14,11 @@ class UserRecord:
     bio: str
     is_private: bool
     gender: str
+    created_at: str
+    last_active_at: str
+    activity_score: float
+    post_frequency: float
+    mutual_interactions: float
 
 
 @dataclass
@@ -49,6 +54,11 @@ def load_users() -> list[UserRecord]:
                 bio=str(item.get("bio") or ""),
                 is_private=bool(item.get("isPrivate", False)),
                 gender=str(item.get("gender") or "UNKNOWN"),
+                created_at=str(item.get("createdAt") or ""),
+                last_active_at=str(item.get("lastActiveAt") or item.get("lastLogin") or ""),
+                activity_score=float(item.get("activityScore") or 0.0),
+                post_frequency=float(item.get("postFrequency") or 0.0),
+                mutual_interactions=float(item.get("mutualInteractions") or 0.0),
             )
         )
     return users

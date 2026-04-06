@@ -20,4 +20,12 @@ public interface RecommendationUserExportDTO {
     EAccountStatus getAccountStatus();
 
     LocalDateTime getCreatedAt();
+
+    LocalDateTime getLastActiveAt();
+
+    Double getActivityScore();
+
+    Double getPostFrequency();
+
+    Double getMutualInteractions();
 }

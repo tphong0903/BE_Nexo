@@ -1,5 +1,6 @@
 package org.nexo.userservice.service.Impl;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.nexo.userservice.dto.RecommendationFollowExportDTO;
@@ -20,7 +21,10 @@ public class RecommendationDataExportServiceImpl implements RecommendationDataEx
 
     @Override
     public List<RecommendationUserExportDTO> exportUsers() {
-        return userRepository.findAllForRecommendationExport();
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime activitySince = now.minusDays(30);
+        LocalDateTime postSince = now.minusDays(7);
+        return userRepository.findAllForRecommendationExport(activitySince, postSince);
     }
 
     @Override

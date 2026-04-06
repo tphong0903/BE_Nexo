@@ -48,7 +48,7 @@ public class UserServiceImpl implements UserService {
     private final InteractionGrpcClient interactionGrpcClient;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
-        UserModel user = userRepository.findByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
+        UserModel user = userRepository.findFirstByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
         Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)

@@ -8,6 +8,8 @@ import org.nexo.postservice.dto.MessageDTO;
 import org.nexo.postservice.dto.MessagePostDTO;
 import org.nexo.postservice.dto.PostRequestDTO;
 import org.nexo.postservice.dto.UserTagDTO;
+import org.nexo.postservice.dto.*;
+import org.nexo.postservice.dto.UserActivityEvent;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
 import org.nexo.postservice.dto.response.ReelResponseDTO;
@@ -109,7 +111,18 @@ public class PostServiceImpl implements IPostService {
                     .postId(model.getId())
                     .authorId(request.getUserId())
                     .createdAt(Instant.now().toEpochMilli())
-                    .build());
+                    .build();
+            kafkaTemplate.send("post-created", message);
+
+            UserActivityEvent activityEvent = UserActivityEvent.builder()
+                    .eventType("POST_CREATED")
+                    .userId(postRequestDTO.getUserId())
+                    .targetId(model.getId())
+                    .targetType("POST")
+                    .occurredAt(Instant.now())
+                    .metadata("{\"source\":\"post-service\"}")
+                    .build();
+            kafkaTemplate.send("user-events", String.valueOf(postRequestDTO.getUserId()), activityEvent);
         }
 
         hashTagService.findAndAddHashTagFromCaption(model);

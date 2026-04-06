@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.interactionservice.dto.MessageDTO;
+import org.nexo.interactionservice.dto.UserActivityEvent;
 import org.nexo.interactionservice.dto.response.FolloweeDTO;
 import org.nexo.interactionservice.dto.response.PageModelResponse;
 import org.nexo.interactionservice.exception.CustomException;
@@ -74,10 +75,12 @@ public class LikeServiceImpl implements ILikeService {
             redisTemplate.opsForSet().add("comment:" + id + ":likes", String.valueOf(currentUserId));
 
             updateAffinityScore(currentUserId, authorId, SCORE_LIKE_COMMENT);
-            updateUserPostScore(currentUserId, commentModel.getPostId(), commentModel.getReelId(), (double) SCORE_LIKE_COMMENT);
+            updateUserPostScore(currentUserId, commentModel.getPostId(), commentModel.getReelId(),
+                    (double) SCORE_LIKE_COMMENT);
 
             if (!currentUserId.equals(commentModel.getUserId())) {
-                String targetUrl = commentModel.getPostId() != null ? "/posts/" + commentModel.getPostId() : "/reels/" + commentModel.getReelId();
+                String targetUrl = commentModel.getPostId() != null ? "/posts/" + commentModel.getPostId()
+                        : "/reels/" + commentModel.getReelId();
                 sendNotification(currentUserId, commentModel.getUserId(), ENotificationType.LIKE_COMMENT, targetUrl);
             }
         }
@@ -117,9 +120,19 @@ public class LikeServiceImpl implements ILikeService {
             updateAffinityScore(currentUserId, authorId, SCORE_LIKE_POST_REEL);
             updateUserPostScore(currentUserId, id, null, (double) SCORE_LIKE_POST_REEL);
 
-            if (!currentUserId.equals(postResponse.getUserId())) {
-                sendNotification(currentUserId, postResponse.getUserId(), ENotificationType.LIKE_POST, "/posts/" + id);
+            if (!currentUserId.equals(authorId)) {
+                sendNotification(currentUserId, authorId, ENotificationType.LIKE_POST, "/posts/" + id);
             }
+
+            UserActivityEvent activityEvent = UserActivityEvent.builder()
+                    .eventType("POST_LIKED")
+                    .userId(currentUserId)
+                    .targetId(id)
+                    .targetType("POST")
+                    .occurredAt(java.time.Instant.now())
+                    .metadata("{\"source\":\"interaction-service\"}")
+                    .build();
+            kafkaTemplate.send("user-events", String.valueOf(currentUserId), activityEvent);
         }
 
         incrementCacheVersion("post", id);
@@ -163,6 +176,42 @@ public class LikeServiceImpl implements ILikeService {
         }
 
         incrementCacheVersion("reel", id);
+        String keyloakId = securityUtil.getKeyloakId();
+        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        LikeModel model = likeRepository.findByPostIdAndUserId(id, response.getUserId());
+        try {
+            if (model != null) {
+                likeRepository.delete(model);
+                postGrpcClient.addLikeQuantityById(id, true, false);
+            } else {
+                model = LikeModel.builder()
+                        .postId(id)
+                        .userId(response.getUserId())
+                        .build();
+                likeRepository.save(model);
+                postGrpcClient.addLikeQuantityById(id, true, true);
+                PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
+                MessageDTO messageDTO = MessageDTO.builder()
+                        .actorId(response.getUserId())
+                        .recipientId(postResponse.getUserId())
+                        .notificationType(String.valueOf(ENotificationType.LIKE_POST))
+                        .targetUrl("/posts/" + id)
+                        .build();
+                kafkaTemplate.send("notification", messageDTO);
+
+                UserActivityEvent activityEvent = UserActivityEvent.builder()
+                        .eventType("POST_LIKED")
+                        .userId(response.getUserId())
+                        .targetId(id)
+                        .targetType("POST")
+                        .occurredAt(java.time.Instant.now())
+                        .metadata("{\"source\":\"interaction-service\"}")
+                        .build();
+                kafkaTemplate.send("user-events", String.valueOf(response.getUserId()), activityEvent);
+            }
+        } catch (Exception e) {
+            throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);
+        }
         return "Success";
     }
 
@@ -175,7 +224,8 @@ public class LikeServiceImpl implements ILikeService {
         String cacheKey = String.format("cache:likes:post:%d:v:%d:p:%d:s:%d:u:%d",
                 id, version, pageNo, pageSize, currentUserId);
 
-        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue().get(cacheKey);
+        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue()
+                .get(cacheKey);
         if (cachedResponse != null) {
             return cachedResponse;
         }
@@ -187,7 +237,8 @@ public class LikeServiceImpl implements ILikeService {
 
         boolean hasLiked = likeRepository.existsByPostIdAndUserId(id, currentUserId);
 
-        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId,
+                hasLiked);
 
         redisTemplate.opsForValue().set(cacheKey, response, 15, TimeUnit.MINUTES);
         return response;
@@ -202,7 +253,8 @@ public class LikeServiceImpl implements ILikeService {
         String cacheKey = String.format("cache:likes:reel:%d:v:%d:p:%d:s:%d:u:%d",
                 id, version, pageNo, pageSize, currentUserId);
 
-        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue().get(cacheKey);
+        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue()
+                .get(cacheKey);
         if (cachedResponse != null) {
             return cachedResponse;
         }
@@ -213,7 +265,8 @@ public class LikeServiceImpl implements ILikeService {
 
         boolean hasLiked = likeRepository.existsByReelIdAndUserId(id, currentUserId);
 
-        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId,
+                hasLiked);
 
         redisTemplate.opsForValue().set(cacheKey, response, 15, TimeUnit.MINUTES);
         return response;
@@ -228,7 +281,8 @@ public class LikeServiceImpl implements ILikeService {
         String cacheKey = String.format("cache:likes:comment:%d:v:%d:p:%d:s:%d:u:%d",
                 id, version, pageNo, pageSize, currentUserId);
 
-        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue().get(cacheKey);
+        PageModelResponse<FolloweeDTO> cachedResponse = (PageModelResponse<FolloweeDTO>) redisTemplate.opsForValue()
+                .get(cacheKey);
         if (cachedResponse != null) {
             return cachedResponse;
         }
@@ -239,12 +293,12 @@ public class LikeServiceImpl implements ILikeService {
 
         boolean hasLiked = likeCommentRepository.existsByCommentModelIdAndUserId(id, currentUserId);
 
-        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId, hasLiked);
+        PageModelResponse<FolloweeDTO> response = buildLikeDetailResponse(likePage, likedUserIds, currentUserId,
+                hasLiked);
 
         redisTemplate.opsForValue().set(cacheKey, response, 15, TimeUnit.MINUTES);
         return response;
     }
-
 
     private void sendNotification(Long actorId, Long recipientId, ENotificationType type, String targetUrl) {
         MessageDTO messageDTO = MessageDTO.builder()
@@ -263,8 +317,8 @@ public class LikeServiceImpl implements ILikeService {
             return buildEmptyPageResponse(pageData.getNumber(), pageData.getSize());
         }
 
-        List<UserServiceProto.UserDTOResponse3> listUserData =
-                userGrpcClient.getLikeUsersByIds(currentUserId, likedUserIds);
+        List<UserServiceProto.UserDTOResponse3> listUserData = userGrpcClient.getLikeUsersByIds(currentUserId,
+                likedUserIds);
 
         List<FolloweeDTO> followeeDTOs = new ArrayList<>(FolloweeMapper.toFolloweeDTOList(listUserData));
 
@@ -299,7 +353,8 @@ public class LikeServiceImpl implements ILikeService {
     }
 
     private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {
-        if (followerId.equals(authorId)) return;
+        if (followerId.equals(authorId))
+            return;
 
         String affinityKey = "affinity:" + followerId;
         redisTemplate.opsForHash().increment(affinityKey, String.valueOf(authorId), scoreDelta);
@@ -328,7 +383,6 @@ public class LikeServiceImpl implements ILikeService {
 
         userPostScoresRepository.save(userPostScores);
     }
-
 
     private long getCacheVersion(String prefix, Long id) {
         Object v = redisTemplate.opsForValue().get(prefix + ":like_version:" + id);

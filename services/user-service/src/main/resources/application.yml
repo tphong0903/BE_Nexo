@@ -90,6 +90,15 @@ recommendation:
     url: http://localhost:8000
   internal-token: change-me-in-env
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
 logging:
   level:
     "org.apache.kafka": OFF

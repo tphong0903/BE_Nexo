@@ -15,10 +15,11 @@ import java.util.Optional;
 
 @Repository
 public interface UserRepository extends JpaRepository<UserModel, Long> {
-    List<UserModel> findAllByAccountStatusAndRole(EAccountStatus status,ERole role);
+    List<UserModel> findAllByAccountStatusAndRole(EAccountStatus status, ERole role);
+
 
     Optional<UserModel> findByUsername(String username);
-    
+
 
     Optional<UserModel> findByEmail(String email);
 

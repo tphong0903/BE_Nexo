@@ -15,6 +15,8 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 100
   h2:
     console:
       enabled: false
@@ -31,9 +33,10 @@ spring:
           jwk-set-uri: http://localhost:9090/realms/nexo-network/protocol/openid-connect/certs
   data:
     redis:
-      port: 6379
       host: localhost
-      password: Admin@123
+      port: 6379
+      timeout: 2000ms
+      connect-timeout: 2000ms
 
   kafka:
     bootstrap-servers: localhost:9097
@@ -86,5 +89,7 @@ grpc:
       address: static://localhost:9095
       negotiation-type: plaintext
     ai-service:
-      address: static://localhost:8000
+      address: static://localhost:50051
+      enable-keep-alive: true
+      keep-alive-without-calls: true
       negotiationType: plaintext

@@ -36,6 +36,7 @@ spring:
               - "*"
             allowCredentials: true
             maxAge: 3600
+
       routes:
         - id: user-service
           uri: lb://users
@@ -83,10 +84,7 @@ spring:
             - Path=/api/notifications/**
           filters:
             - StripPrefix=2
-        - id: notification-websocket-route
-          uri: lb://notifications
-          predicates:
-            - Path=/ws/**
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
           metadata:
             websocket: true
 

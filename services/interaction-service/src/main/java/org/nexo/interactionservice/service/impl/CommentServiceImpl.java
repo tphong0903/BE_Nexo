@@ -1,6 +1,7 @@
 package org.nexo.interactionservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.interactionservice.dto.MessageDTO;
@@ -10,81 +11,116 @@ import org.nexo.interactionservice.dto.response.ListCommentResponse;
 import org.nexo.interactionservice.exception.CustomException;
 import org.nexo.interactionservice.mapper.CommentMapper;
 import org.nexo.interactionservice.model.CommentModel;
+import org.nexo.interactionservice.model.UserPostScores;
 import org.nexo.interactionservice.repository.ICommentRepository;
+import org.nexo.interactionservice.repository.IUserPostScoresRepository;
 import org.nexo.interactionservice.service.ICommentMentionService;
 import org.nexo.interactionservice.service.ICommentService;
 import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.util.concurrent.TimeUnit;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class CommentServiceImpl implements ICommentService {
+    private static final long SCORE_COMMENT = 3L;
     private final ICommentRepository commentRepository;
     private final ICommentMentionService commentMentionService;
+    private final IUserPostScoresRepository userPostScoresRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final PostGrpcClient postGrpcClient;
     private final CommentMapper commentMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
-    public String saveComment(CommentDto a) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        if (response.getUserId() != a.getUserId())
-            throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
+    @Transactional
+    public String saveComment(CommentDto dto) {
+        Long currentUserId = securityUtil.getUserIdFromToken();
+        if (!currentUserId.equals(dto.getUserId())) {
+            throw new CustomException("Don't allow to comment for another user", HttpStatus.FORBIDDEN);
+        }
+
         CommentModel model;
+        boolean isNewComment = (dto.getId() == null || dto.getId() == 0);
 
-        Boolean isAdd = false;
-        if (a.getId() != 0) {
-            model = commentRepository.findById(a.getId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
-            model.setContent(a.getContent());
-        } else {
-            isAdd = true;
-            model = CommentModel.builder()
-                    .content(a.getContent())
-                    .userId(a.getUserId())
-                    .build();
-        }
 
-        if (a.getPostId() != null && a.getPostId() != 0) {
-            model.setPostId(a.getPostId());
-        } else {
-            model.setReelId(a.getReelId());
-        }
+        if (!isNewComment) {
+            model = commentRepository.findById(dto.getId())
+                    .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
+            model.setContent(dto.getContent());
+            commentRepository.save(model);
 
-        if (a.getParentId() != 0) {
-            model.setParentComment(commentRepository.findById(a.getParentId()).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST)));
-        }
-        commentRepository.save(model);
-
-        if (isAdd) {
-            a.getListMentionUserId().forEach(i -> commentMentionService.addMentionComment(i, model));
-            String notificationType = "";
-            Long id = 0L;
-            String url = "";
-            if (a.getPostId() != null && a.getPostId() != 0) {
-                postGrpcClient.addCommentQuantityById(model.getPostId(), true, true);
-                notificationType = String.valueOf(ENotificationType.COMMENT_POST);
-                id = postGrpcClient.getPostById(model.getPostId()).getUserId();
-                url = "/posts/" + model.getPostId();
-            } else {
-                postGrpcClient.addCommentQuantityById(model.getReelId(), false, true);
-                notificationType = String.valueOf(ENotificationType.COMMENT_REEL);
-                id = postGrpcClient.getReelById(model.getReelId()).getUserId();
-                url = "/reels/" + model.getReelId();
+            redisTemplate.delete("comment_cache:" + model.getId());
+            invalidateListCache(model);
+            if (dto.getListMentionUserId() != null) {
+                commentMentionService.syncMentionComment(dto.getListMentionUserId(), model);
             }
+            return "Success";
+        }
+
+        model = CommentModel.builder()
+                .content(dto.getContent())
+                .userId(dto.getUserId())
+                .build();
+
+        boolean isPost = (dto.getPostId() != null && dto.getPostId() != 0);
+        if (isPost) {
+            model.setPostId(dto.getPostId());
+        } else {
+            model.setReelId(dto.getReelId());
+        }
+
+        if (dto.getParentId() != null && dto.getParentId() != 0) {
+            CommentModel parent = commentRepository.findById(dto.getParentId())
+                    .orElseThrow(() -> new CustomException("Parent comment does not exist", HttpStatus.BAD_REQUEST));
+            model.setParentComment(parent);
+        }
+
+        commentRepository.save(model);
+        invalidateListCache(model);
+        redisTemplate.opsForValue().increment("global:comments:total");
+        redisTemplate.opsForValue().increment("user:" + currentUserId + ":comments:total");
+
+        if (dto.getListMentionUserId() != null && !dto.getListMentionUserId().isEmpty()) {
+            commentMentionService.syncMentionComment(dto.getListMentionUserId(), model);
+        }
+
+        Long authorId;
+        String notificationType;
+        String url;
+
+        if (isPost) {
+            postGrpcClient.addCommentQuantityById(model.getPostId(), true, true);
+            notificationType = ENotificationType.COMMENT_POST.name();
+            authorId = postGrpcClient.getPostById(model.getPostId()).getUserId();
+            url = "/posts/" + model.getPostId();
+        } else {
+            postGrpcClient.addCommentQuantityById(model.getReelId(), false, true);
+            notificationType = ENotificationType.COMMENT_REEL.name();
+            authorId = postGrpcClient.getReelById(model.getReelId()).getUserId();
+            url = "/reels/" + model.getReelId();
+        }
+
+        updateAffinityScore(currentUserId, authorId, SCORE_COMMENT);
+        updateUserPostScore(currentUserId, model.getPostId(), model.getReelId(), (double) SCORE_COMMENT);
+
+        if (!currentUserId.equals(authorId)) {
             MessageDTO messageDTO = MessageDTO.builder()
-                    .actorId(response.getUserId())
-                    .recipientId(id)
+                    .actorId(currentUserId)
+                    .recipientId(authorId)
                     .notificationType(notificationType)
                     .targetUrl(url)
                     .build();
@@ -104,98 +140,173 @@ public class CommentServiceImpl implements ICommentService {
         return "Success";
     }
 
-
     @Override
+    @Transactional
     public String deleteComment(Long id) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        CommentModel model = commentRepository.findById(id).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
-        Long ownerId = 0L;
-        if (model.getReelId() != null) {
-            ownerId = postGrpcClient.getReelById(model.getReelId()).getUserId();
-        } else {
-            ownerId = postGrpcClient.getPostById(model.getPostId()).getUserId();
+        Long currentUserId = securityUtil.getUserIdFromToken();
+        CommentModel model = commentRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
+
+        Long postAuthorId = (model.getPostId() != null)
+                ? postGrpcClient.getPostById(model.getPostId()).getUserId()
+                : postGrpcClient.getReelById(model.getReelId()).getUserId();
+
+        boolean isOwnerOfComment = currentUserId.equals(model.getUserId());
+        boolean isPostOwner = currentUserId.equals(postAuthorId);
+
+        if (!isOwnerOfComment && !isPostOwner) {
+            throw new CustomException("Don't have permission to delete this comment", HttpStatus.FORBIDDEN);
         }
-        if (response.getUserId() != model.getUserId()
-                && !ownerId.equals(response.getUserId())) {
-            throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
-        }
+
         commentRepository.delete(model);
+
+        redisTemplate.delete("comment_cache:" + id);
+        invalidateListCache(model);
+        redisTemplate.opsForValue().decrement("global:comments:total");
+        redisTemplate.opsForValue().decrement("user:" + model.getUserId() + ":comments:total");
+
         if (model.getPostId() != null) {
             postGrpcClient.addCommentQuantityById(model.getPostId(), true, false);
-        } else {
+        } else if (model.getReelId() != null) {
             postGrpcClient.addCommentQuantityById(model.getReelId(), false, false);
         }
 
+        updateAffinityScore(model.getUserId(), postAuthorId, -SCORE_COMMENT);
+        updateUserPostScore(model.getUserId(), model.getPostId(), model.getReelId(), (double) -SCORE_COMMENT);
 
         return "Success";
     }
 
     @Override
     public ListCommentResponse getCommentOfPost(Long postId, int pageNo, int pageSize) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        PostServiceOuterClass.PostResponse model = postGrpcClient.getPostById(postId);
+        Long currentUserId = securityUtil.getUserIdFromToken();
+        long version = getCacheVersion("post", postId);
+        String cacheKey = String.format("cache:comments:post:%d:v:%d:p:%d:s:%d:u:%d",
+                postId, version, pageNo, pageSize, currentUserId);
 
-        boolean isAllow = false;
-        if (model.getUserId() == response.getUserId()) {
-            isAllow = true;
-        } else {
-            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());
-            if (!response2.getIsPrivate() || response2.getIsFollow()) {
-                isAllow = true;
-            }
+        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
         }
-        if (!isAllow)
-            throw new CustomException("Dont allow to get Comment", HttpStatus.BAD_REQUEST);
+
+        PostServiceOuterClass.PostResponse post = postGrpcClient.getPostById(postId);
+
+        checkVisibilityAccess(post.getUserId(), currentUserId);
 
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
-
         Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
-        return commentMapper.toListResponse(postId, commentsPage, response.getUserId());
 
+        ListCommentResponse response = commentMapper.toListResponse(postId, commentsPage, currentUserId);
+
+        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        return response;
     }
 
     @Override
     public ListCommentResponse getCommentOfReel(Long reelId, int pageNo, int pageSize) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Long currentUserId = securityUtil.getUserIdFromToken();
 
-        PostServiceOuterClass.ReelResponse model = postGrpcClient.getReelById(reelId);
-
-        boolean isAllow = false;
-        if (model.getUserId() == response.getUserId()) {
-            isAllow = true;
-        } else {
-            UserServiceProto.CheckFollowResponse response2 = userGrpcClient.checkFollow(response.getUserId(), model.getUserId());
-            if (!response2.getIsPrivate() || response2.getIsFollow()) {
-                isAllow = true;
-            }
+        long version = getCacheVersion("reel", reelId);
+        String cacheKey = String.format("cache:comments:reel:%d:v:%d:p:%d:s:%d:u:%d",
+                reelId, version, pageNo, pageSize, currentUserId);
+        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
         }
-        if (!isAllow)
-            throw new CustomException("Dont allow to get story", HttpStatus.BAD_REQUEST);
+
+        PostServiceOuterClass.ReelResponse reel = postGrpcClient.getReelById(reelId);
+        checkVisibilityAccess(reel.getUserId(), currentUserId);
 
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
-
         Page<CommentModel> commentsPage = commentRepository.findByReelIdAndParentComment(reelId, pageable, null);
-        return commentMapper.toListResponse(reelId, commentsPage, response.getUserId());
+
+        ListCommentResponse response = commentMapper.toListResponse(reelId, commentsPage, currentUserId);
+        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        return response;
     }
 
     @Override
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
+        Long currentUserId = securityUtil.getUserIdFromToken();
+        long version = getCacheVersion("reply", commentId);
+        String cacheKey = String.format("cache:comments:reply:%d:v:%d:p:%d:s:%d:u:%d",
+                commentId, version, pageNo, pageSize, currentUserId);
+
+        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
+        CommentModel parentComment = commentRepository.findById(commentId)
+                .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
+
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
         Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(commentId, pageable);
 
-        CommentModel model = commentRepository.findById(commentId).orElseThrow(() -> new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST));
+        Long sourceId = (parentComment.getPostId() != null) ? parentComment.getPostId() : parentComment.getReelId();
 
-        Long id;
-        if (model.getPostId() != null)
-            id = model.getPostId();
-        else
-            id = model.getReelId();
+        ListCommentResponse response = commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
+        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        return response;
+    }
 
-        return commentMapper.toListResponse(id, repliesPage, response.getUserId());
+    private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {
+        if (followerId.equals(authorId)) return;
+
+        String affinityKey = "affinity:" + followerId;
+        redisTemplate.opsForHash().increment(affinityKey, String.valueOf(authorId), scoreDelta);
+    }
+
+    private void updateUserPostScore(Long userId, Long postId, Long reelId, Double scoreDelta) {
+        UserPostScores userPostScores = null;
+        if (postId != null) {
+            userPostScores = userPostScoresRepository.findByUserIdAndPostId(userId, postId);
+        } else if (reelId != null) {
+            userPostScores = userPostScoresRepository.findByUserIdAndReelId(userId, reelId);
+        }
+
+        if (userPostScores == null) {
+            userPostScores = UserPostScores.builder()
+                    .userId(userId)
+                    .postId(postId)
+                    .reelId(reelId)
+                    .scores(scoreDelta > 0 ? scoreDelta : 0.0)
+                    .build();
+        } else {
+            double newScore = (userPostScores.getScores() != null ? userPostScores.getScores() : 0.0) + scoreDelta;
+            userPostScores.setScores(Math.max(newScore, 0.0));
+        }
+
+        userPostScoresRepository.save(userPostScores);
+    }
+
+    private void checkVisibilityAccess(Long authorId, Long viewerId) {
+        if (authorId.equals(viewerId)) return;
+
+        UserServiceProto.CheckFollowResponse followCheck = userGrpcClient.checkFollow(viewerId, authorId);
+        if (followCheck.getIsPrivate() && !followCheck.getIsFollow()) {
+            throw new CustomException("This account is private. Follow to view comments.", HttpStatus.FORBIDDEN);
+        }
+    }
+
+    private long getCacheVersion(String prefix, Long id) {
+        Object v = redisTemplate.opsForValue().get(prefix + ":version:" + id);
+        return v != null ? ((Number) v).longValue() : 1L;
+    }
+
+    private void incrementCacheVersion(String prefix, Long id) {
+        redisTemplate.opsForValue().increment(prefix + ":version:" + id);
+    }
+
+    private void invalidateListCache(CommentModel model) {
+        if (model.getPostId() != null) {
+            incrementCacheVersion("post", model.getPostId());
+        }
+        if (model.getReelId() != null) {
+            incrementCacheVersion("reel", model.getReelId());
+        }
+        if (model.getParentComment() != null) {
+            incrementCacheVersion("reply", model.getParentComment().getId());
+        }
     }
 }

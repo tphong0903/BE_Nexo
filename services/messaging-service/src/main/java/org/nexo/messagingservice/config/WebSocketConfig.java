@@ -41,7 +41,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws")
-                .setAllowedOrigins("https://nexo.nayamishop.id.vn")
+                .setAllowedOrigins("https://nexo.nayamishop.id.vn", "http://localhost:3000")
                 .withSockJS();
     }
 

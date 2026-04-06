@@ -1,6 +1,5 @@
 package org.nexo.postservice.service.GrpcServiceImpl;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +18,7 @@ import org.nexo.postservice.service.IPostService;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Objects;
@@ -31,319 +31,207 @@ public class PostGrpcServiceImpl extends PostServiceGrpc.PostServiceImplBase {
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final ObjectMapper objectMapper;
 
     @Override
     public void getPostsByIds(PostServiceOuterClass.GetPostsByIdsRequest request,
-            StreamObserver<PostServiceOuterClass.GetPostsByIdsResponse> responseObserver) {
+                              StreamObserver<PostServiceOuterClass.GetPostsByIdsResponse> responseObserver) {
         try {
-            Long viewerId = request.getUserId();
-            List<Long> posts = request.getPostIdsList();
-
-            List<PostResponseDTO> postDTOs = postService.getPostsByIds(posts, viewerId);
+            List<PostResponseDTO> postDTOs = postService.getPostsByIds(request.getPostIdsList(), request.getUserId());
 
             List<PostServiceOuterClass.PostResponse> responses = postDTOs.stream()
                     .filter(Objects::nonNull)
-                    .map(dto -> {
-                        PostServiceOuterClass.PostResponse.Builder builder = PostServiceOuterClass.PostResponse
-                                .newBuilder()
-                                .setPostId(dto.getPostId())
-                                .setUserId(dto.getUserId())
-                                .setUserName(dto.getUserName())
-                                .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
-                                .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
-                                .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
-                                .setTag(dto.getTag() != null ? dto.getTag() : "")
-                                .addAllMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : List.of())
-                                .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0L)
-                                .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0L)
-                                .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
-                                .setCreatedAt(dto.getCreatedAt() != null
-                                        ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                                        : 0L)
-                                .setUpdateAt(dto.getUpdatedAt() != null
-                                        ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                                        : 0L)
-                                .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false);
-
-                        if (dto.getListUserTag() != null) {
-                            builder.addAllListUserTag(
-                                    dto.getListUserTag().stream()
-                                            .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
-                                                    .setUserId(tag.getUserId())
-                                                    .setUserName(tag.getUserName())
-                                                    .build())
-                                            .toList());
-                        }
-
-                        return builder.build();
-                    })
+                    .map(this::mapToPostResponse)
                     .toList();
 
-            PostServiceOuterClass.GetPostsByIdsResponse response = PostServiceOuterClass.GetPostsByIdsResponse
-                    .newBuilder()
-                    .addAllPosts(responses)
-                    .build();
-
-            responseObserver.onNext(response);
+            responseObserver.onNext(PostServiceOuterClass.GetPostsByIdsResponse.newBuilder().addAllPosts(responses).build());
             responseObserver.onCompleted();
         } catch (Exception e) {
-            log.error("Error in getPostById", e);
-            responseObserver.onError(
-                    Status.INVALID_ARGUMENT
-                            .withDescription(e.getMessage())
-                            .asRuntimeException());
+            handleGrpcError("getPostsByIds", e, responseObserver);
         }
     }
 
     @Override
     public void getReelsByIds(PostServiceOuterClass.GetPostsByIdsRequest request,
-            StreamObserver<PostServiceOuterClass.GetReelsByIdsResponse> responseObserver) {
+                              StreamObserver<PostServiceOuterClass.GetReelsByIdsResponse> responseObserver) {
         try {
-            Long viewerId = request.getUserId();
-            List<Long> posts = request.getPostIdsList();
-
-            List<ReelResponseDTO> reelDTOs = postService.getReelsByIds(posts, viewerId);
-
+            List<ReelResponseDTO> reelDTOs = postService.getReelsByIds(request.getPostIdsList(), request.getUserId());
             List<PostServiceOuterClass.ReelResponse> responses = reelDTOs.stream()
                     .filter(Objects::nonNull)
-                    .map(dto -> {
-                        PostServiceOuterClass.ReelResponse.Builder builder = PostServiceOuterClass.ReelResponse
-                                .newBuilder()
-                                .setPostId(dto.getReelId())
-                                .setUserId(dto.getUserId())
-                                .setUserName(dto.getUserName())
-                                .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
-                                .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
-                                .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
-                                .setMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : "")
-                                .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0L)
-                                .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0L)
-                                .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
-                                .setCreatedAt(dto.getCreatedAt() != null
-                                        ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                                        : 0L)
-                                .setUpdateAt(dto.getUpdatedAt() != null
-                                        ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                                        : 0L)
-                                .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false);
-
-                        return builder.build();
-                    })
+                    .map(this::mapToReelResponse)
                     .toList();
 
-            PostServiceOuterClass.GetReelsByIdsResponse response = PostServiceOuterClass.GetReelsByIdsResponse
-                    .newBuilder()
-                    .addAllReels(responses)
-                    .build();
-
-            responseObserver.onNext(response);
+            responseObserver.onNext(PostServiceOuterClass.GetReelsByIdsResponse.newBuilder().addAllReels(responses).build());
             responseObserver.onCompleted();
         } catch (Exception e) {
-            log.error("Error in getPostById", e);
-            responseObserver.onError(
-                    Status.INVALID_ARGUMENT
-                            .withDescription(e.getMessage())
-                            .asRuntimeException());
+            handleGrpcError("getReelsByIds", e, responseObserver);
         }
     }
 
     @Override
     public void getPostById(PostServiceOuterClass.GetPostRequest request,
-            StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {
+                            StreamObserver<PostServiceOuterClass.PostResponse> responseObserver) {
         try {
-            Long id = request.getId();
-            PostResponseDTO dto = postService.getPostById2(id);
-
-            if (dto == null) {
-                responseObserver.onNext(PostServiceOuterClass.PostResponse.newBuilder().build());
-                responseObserver.onCompleted();
-                return;
-            }
-            PostServiceOuterClass.PostResponse response = PostServiceOuterClass.PostResponse.newBuilder()
-                    .setPostId(dto.getPostId())
-                    .setUserId(dto.getUserId())
-                    .setUserName(dto.getUserName() != null ? dto.getUserName() : "")
-                    .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
-                    .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
-                    .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
-                    .setTag(dto.getTag() != null ? dto.getTag() : "")
-                    .addAllMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : List.of())
-                    .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0)
-                    .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0)
-                    .addAllListUserTag(
-                            dto.getListUserTag() != null
-                                    ? dto.getListUserTag().stream()
-                                            .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
-                                                    .setUserId(tag.getUserId())
-                                                    .setUserName(tag.getUserName())
-                                                    .build())
-                                            .toList()
-                                    : List.of())
-                    .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
-                    .setCreatedAt(dto.getCreatedAt() != null
-                            ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                            : 0L)
-                    .setUpdateAt(dto.getUpdatedAt() != null
-                            ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                            : 0L)
-                    .build();
-
-            responseObserver.onNext(response);
+            PostResponseDTO dto = postService.getPostByIdGrpc(request.getId());
+            responseObserver.onNext(mapToPostResponse(dto));
             responseObserver.onCompleted();
         } catch (Exception e) {
-            log.error("Error in getPostById", e);
-            responseObserver.onError(
-                    Status.INVALID_ARGUMENT
-                            .withDescription(e.getMessage())
-                            .asRuntimeException());
+            handleGrpcError("getPostById", e, responseObserver);
         }
     }
 
     @Override
     public void getReelById(PostServiceOuterClass.GetPostRequest request,
-            StreamObserver<PostServiceOuterClass.ReelResponse> responseObserver) {
+                            StreamObserver<PostServiceOuterClass.ReelResponse> responseObserver) {
         try {
-            Long id = request.getId();
-            ReelResponseDTO dto = postService.getReelById2(id);
-
-            if (dto == null) {
-                responseObserver.onNext(PostServiceOuterClass.ReelResponse.newBuilder().build());
-                responseObserver.onCompleted();
-                return;
-            }
-            PostServiceOuterClass.ReelResponse response = PostServiceOuterClass.ReelResponse.newBuilder()
-                    .setPostId(dto.getReelId())
-                    .setUserId(dto.getUserId())
-                    .setUserName(dto.getUserName() != null ? dto.getUserName() : "")
-                    .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
-                    .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
-                    .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
-                    .setMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : null)
-                    .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0)
-                    .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0)
-                    .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
-                    .setCreatedAt(dto.getCreatedAt() != null
-                            ? dto.getCreatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                            : 0L)
-                    .setUpdateAt(dto.getUpdatedAt() != null
-                            ? dto.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-                            : 0L)
-                    .build();
-
-            responseObserver.onNext(response);
+            ReelResponseDTO dto = postService.getReelByIdGrpc(request.getId());
+            responseObserver.onNext(mapToReelResponse(dto));
             responseObserver.onCompleted();
         } catch (Exception e) {
-            log.error("Error in getPostById", e);
-            responseObserver.onError(
-                    Status.INVALID_ARGUMENT
-                            .withDescription(e.getMessage())
-                            .asRuntimeException());
+            handleGrpcError("getReelById", e, responseObserver);
         }
     }
 
     @Override
-    public void addLikeQuantityById(org.nexo.grpc.post.PostServiceOuterClass.GetPostRequest2 request,
-            StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
+    public void addLikeQuantityById(PostServiceOuterClass.GetPostRequest2 request,
+                                    StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
         try {
-            Long id = request.getId();
-            Boolean isPost = request.getIsPost();
-            Boolean isIncrease = request.getIsIncrease();
+            updateRedisCounter("likes", request.getIsPost(), request.getId(), request.getIsIncrease());
 
-            String key = isPost ? "post:likes:" + id : "reel:likes:" + id;
-
-            if (isIncrease) {
-                redisTemplate.opsForValue().increment(key);
+            int count = request.getIsIncrease() ? 1 : -1;
+            if (request.getIsPost()) {
+                postRepository.updateLikeQuantity(request.getId(), count);
             } else {
-                redisTemplate.opsForValue().decrement(key);
+                reelRepository.updateLikeQuantity(request.getId(), count);
             }
 
-            int count = isIncrease ? 1 : -1;
-            if (isPost) {
-                PostModel model = postRepository.findById(id)
-                        .orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
-                model.setLikeQuantity(model.getLikeQuantity() + count);
-                postRepository.save(model);
-            } else {
-                ReelModel model = reelRepository.findById(id)
-                        .orElseThrow(() -> new CustomException("Id is not exist", HttpStatus.BAD_REQUEST));
-                model.setLikeQuantity(model.getLikeQuantity() + count);
-                reelRepository.save(model);
-            }
-            PostServiceOuterClass.PostMessageResponse response = PostServiceOuterClass.PostMessageResponse.newBuilder()
-                    .setMessage("Success").build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
+            sendSuccessMessage(responseObserver);
         } catch (Exception e) {
-            log.error("Error in getPostById", e);
-            responseObserver.onError(
-                    Status.INVALID_ARGUMENT
-                            .withDescription(e.getMessage())
-                            .asRuntimeException());
+            handleGrpcError("addLikeQuantityById", e, responseObserver);
         }
     }
 
     @Override
     public void addCommentQuantityById(PostServiceOuterClass.GetPostRequest2 request,
-            StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
+                                       StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
         try {
-            Long id = request.getId();
-            Boolean isPost = request.getIsPost();
-            Boolean isIncrease = request.getIsIncrease();
+            updateRedisCounter("comments", request.getIsPost(), request.getId(), request.getIsIncrease());
 
-            String key = isPost ? "post:comments:" + id : "reel:comments:" + id;
+            int count = request.getIsIncrease() ? 1 : -1;
+            if (request.getIsPost()) {
+                postRepository.updateCommentQuantity(request.getId(), count);
+            } else {
+                reelRepository.updateCommentQuantity(request.getId(), count);
+            }
 
-            if (isIncrease) {
-                redisTemplate.opsForValue().increment(key);
-            } else {
-                redisTemplate.opsForValue().decrement(key);
-            }
-            int count = isIncrease ? 1 : -1;
-            if (isPost) {
-                PostModel model = postRepository.findById(id)
-                        .orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
-                model.setCommentQuantity(model.getCommentQuantity() + count);
-                postRepository.save(model);
-            } else {
-                ReelModel model = reelRepository.findById(id)
-                        .orElseThrow(() -> new CustomException("PostModel is not exist", HttpStatus.BAD_REQUEST));
-                model.setCommentQuantity(model.getCommentQuantity() + count);
-                reelRepository.save(model);
-            }
-            PostServiceOuterClass.PostMessageResponse response = PostServiceOuterClass.PostMessageResponse.newBuilder()
-                    .setMessage("Success").build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
+            sendSuccessMessage(responseObserver);
         } catch (Exception e) {
-            log.error("Error in getPostById", e);
-            responseObserver.onError(
-                    Status.INVALID_ARGUMENT
-                            .withDescription(e.getMessage())
-                            .asRuntimeException());
+            handleGrpcError("addCommentQuantityById", e, responseObserver);
         }
     }
 
     @Override
     public void getUserPostsCount(PostServiceOuterClass.GetUserPostsCountRequest request,
-            StreamObserver<PostServiceOuterClass.GetUserPostsCountResponse> responseObserver) {
+                                  StreamObserver<PostServiceOuterClass.GetUserPostsCountResponse> responseObserver) {
         try {
             Long userId = request.getUserId();
-            long postsCount = postRepository.countByUserIdAndIsActive(userId, true);
-            long reelsCount = reelRepository.countByUserIdAndIsActive(userId, true);
-            long totalCount = postsCount + reelsCount;
-            PostServiceOuterClass.GetUserPostsCountResponse response = PostServiceOuterClass.GetUserPostsCountResponse
-                    .newBuilder()
-                    .setPostsCount(totalCount)
-                    .build();
+            long totalCount = postRepository.countByUserIdAndIsActive(userId, true)
+                    + reelRepository.countByUserIdAndIsActive(userId, true);
 
-            responseObserver.onNext(response);
+            responseObserver.onNext(PostServiceOuterClass.GetUserPostsCountResponse.newBuilder().setPostsCount(totalCount).build());
             responseObserver.onCompleted();
         } catch (Exception e) {
-            log.error("Error in getUserPostsCount for userId: {}", request.getUserId(), e);
-            responseObserver.onError(
-                    Status.INVALID_ARGUMENT
-                            .withDescription(e.getMessage())
-                            .asRuntimeException());
+            handleGrpcError("getUserPostsCount", e, responseObserver);
         }
+    }
+
+
+    private PostServiceOuterClass.PostResponse mapToPostResponse(PostResponseDTO dto) {
+        if (dto == null) {
+            return PostServiceOuterClass.PostResponse.newBuilder().build();
+        }
+
+        PostServiceOuterClass.PostResponse.Builder builder = PostServiceOuterClass.PostResponse.newBuilder()
+                .setPostId(dto.getPostId())
+                .setUserId(dto.getUserId())
+                .setUserName(dto.getUserName() != null ? dto.getUserName() : "")
+                .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
+                .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
+                .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
+                .setTag(dto.getTag() != null ? dto.getTag() : "")
+                .addAllMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : List.of())
+                .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0L)
+                .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0L)
+                .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
+                .setCreatedAt(toEpochMilli(dto.getCreatedAt()))
+                .setUpdateAt(toEpochMilli(dto.getUpdatedAt()))
+                .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false);
+
+        if (dto.getListUserTag() != null && !dto.getListUserTag().isEmpty()) {
+            builder.addAllListUserTag(dto.getListUserTag().stream()
+                    .map(tag -> PostServiceOuterClass.UserTag.newBuilder()
+                            .setUserId(tag.getUserId())
+                            .setUserName(tag.getUserName())
+                            .build())
+                    .toList());
+        }
+
+        return builder.build();
+    }
+
+    private PostServiceOuterClass.ReelResponse mapToReelResponse(ReelResponseDTO dto) {
+        if (dto == null) {
+            return PostServiceOuterClass.ReelResponse.newBuilder().build();
+        }
+
+        return PostServiceOuterClass.ReelResponse.newBuilder()
+                .setPostId(dto.getReelId())
+                .setUserId(dto.getUserId())
+                .setUserName(dto.getUserName() != null ? dto.getUserName() : "")
+                .setAvatarUrl(dto.getAvatarUrl() != null ? dto.getAvatarUrl() : "")
+                .setCaption(dto.getCaption() != null ? dto.getCaption() : "")
+                .setVisibility(dto.getVisibility() != null ? dto.getVisibility() : "")
+                .setMediaUrl(dto.getMediaUrl() != null ? dto.getMediaUrl() : "")
+                .setQuantityLike(dto.getQuantityLike() != null ? dto.getQuantityLike() : 0L)
+                .setQuantityComment(dto.getQuantityComment() != null ? dto.getQuantityComment() : 0L)
+                .setIsActive(dto.getIsActive() != null ? dto.getIsActive() : false)
+                .setCreatedAt(toEpochMilli(dto.getCreatedAt()))
+                .setUpdateAt(toEpochMilli(dto.getUpdatedAt()))
+                .setIsLike(dto.getIsLike() != null ? dto.getIsLike() : false)
+                .build();
+    }
+
+    private void updateRedisCounter(String type, boolean isPost, Long id, boolean isIncrease) {
+        String key = (isPost ? "post:" : "reel:") + type + ":" + id;
+        if (isIncrease) {
+            redisTemplate.opsForValue().increment(key);
+        } else {
+            redisTemplate.opsForValue().decrement(key);
+        }
+    }
+
+    private PostModel getPostModel(Long id) {
+        return postRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
+    }
+
+    private ReelModel getReelModel(Long id) {
+        return reelRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
+    }
+
+    private long toEpochMilli(LocalDateTime dateTime) {
+        return dateTime != null ? dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli() : 0L;
+    }
+
+    private void sendSuccessMessage(StreamObserver<PostServiceOuterClass.PostMessageResponse> responseObserver) {
+        responseObserver.onNext(PostServiceOuterClass.PostMessageResponse.newBuilder().setMessage("Success").build());
+        responseObserver.onCompleted();
+    }
+
+    private void handleGrpcError(String methodName, Exception e, StreamObserver<?> responseObserver) {
+        log.error("Error in {}", methodName, e);
+        responseObserver.onError(Status.INVALID_ARGUMENT
+                .withDescription(e.getMessage())
+                .asRuntimeException());
     }
 }

@@ -6,3 +6,10 @@ protobuf
 py-eureka-client
 transformers
 torch
+pandas
+numpy
+scipy
+sqlalchemy
+psycopg2-binary
+redis
+pydantic

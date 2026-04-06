@@ -65,7 +65,6 @@ public class PostServiceImpl implements IPostService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
-
     @Override
     public String savePost(PostRequestDTO request, List<MultipartFile> files) {
         securityUtil.checkOwner(request.getUserId());
@@ -102,7 +101,8 @@ public class PostServiceImpl implements IPostService {
 
         postRepository.save(model);
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
-            String token = ((JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication()).getToken().getTokenValue();
+            String token = ((JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication()).getToken()
+                    .getTokenValue();
             fileServiceClient.savePostMedia(files, model.getId(), token);
         }
 
@@ -111,18 +111,17 @@ public class PostServiceImpl implements IPostService {
                     .postId(model.getId())
                     .authorId(request.getUserId())
                     .createdAt(Instant.now().toEpochMilli())
-                    .build();
-            kafkaTemplate.send("post-created", message);
+                    .build());
 
             UserActivityEvent activityEvent = UserActivityEvent.builder()
                     .eventType("POST_CREATED")
-                    .userId(postRequestDTO.getUserId())
+                    .userId(request.getUserId())
                     .targetId(model.getId())
                     .targetType("POST")
                     .occurredAt(Instant.now())
                     .metadata("{\"source\":\"post-service\"}")
                     .build();
-            kafkaTemplate.send("user-events", String.valueOf(postRequestDTO.getUserId()), activityEvent);
+            kafkaTemplate.send("user-events", String.valueOf(request.getUserId()), activityEvent);
         }
 
         hashTagService.findAndAddHashTagFromCaption(model);
@@ -184,7 +183,8 @@ public class PostServiceImpl implements IPostService {
     @Override
     @Transactional
     public String inactivePost(Long id) {
-        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post not exist", HttpStatus.BAD_REQUEST));
+        PostModel model = postRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Post not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
 
         model.setIsActive(!model.getIsActive());
@@ -197,7 +197,8 @@ public class PostServiceImpl implements IPostService {
     @Override
     @Transactional
     public String inactiveReel(Long id) {
-        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel not exist", HttpStatus.BAD_REQUEST));
+        ReelModel model = reelRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Reel not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
 
         model.setIsActive(!model.getIsActive());
@@ -235,7 +236,6 @@ public class PostServiceImpl implements IPostService {
 
         return "Success";
     }
-
 
     @Override
     public PostResponseDTO getPostById(Long id) {
@@ -309,7 +309,8 @@ public class PostServiceImpl implements IPostService {
     }
 
     private PostResponseDTO buildDynamicPostResponse(PostResponseDTO staticDto, Long viewerId) {
-        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId, List.of(staticDto.getPostId()));
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId,
+                List.of(staticDto.getPostId()));
         boolean isLiked = likedMap.getOrDefault(staticDto.getPostId(), false);
         PostResponseDTO updatedDto = updateDynamicCountersForPost(staticDto);
         return updatedDto.toBuilder()
@@ -331,7 +332,8 @@ public class PostServiceImpl implements IPostService {
     }
 
     private ReelResponseDTO buildDynamicReelResponse(ReelResponseDTO staticDto, Long viewerId) {
-        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId, List.of(staticDto.getReelId()));
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId,
+                List.of(staticDto.getReelId()));
         boolean isLiked = likedMap.getOrDefault(staticDto.getReelId(), false);
 
         ReelResponseDTO updatedDto = updateDynamicCountersForReel(staticDto);
@@ -406,7 +408,8 @@ public class PostServiceImpl implements IPostService {
 
     @Override
     public List<PostResponseDTO> getPostsByIds(List<Long> postIds, Long viewerId) {
-        if (postIds == null || postIds.isEmpty()) return Collections.emptyList();
+        if (postIds == null || postIds.isEmpty())
+            return Collections.emptyList();
 
         List<PostModel> posts = postRepository.findAllById(postIds);
 
@@ -427,7 +430,8 @@ public class PostServiceImpl implements IPostService {
 
     @Override
     public List<ReelResponseDTO> getReelsByIds(List<Long> reelIds, Long viewerId) {
-        if (reelIds == null || reelIds.isEmpty()) return Collections.emptyList();
+        if (reelIds == null || reelIds.isEmpty())
+            return Collections.emptyList();
 
         List<ReelModel> reels = reelRepository.findAllById(reelIds);
 
@@ -466,11 +470,11 @@ public class PostServiceImpl implements IPostService {
         return buildPageResponse(postPage, postDTOs);
     }
 
-
-    private PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse author, Boolean isLike) {
+    private PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse author,
+            Boolean isLike) {
         List<Long> tagIds = parseTagString(model.getTag(), model.getUserId());
-        List<UserTagDTO> userTags = tagIds.isEmpty() ? Collections.emptyList() :
-                userGrpcClient.getUsersByIds(tagIds).stream()
+        List<UserTagDTO> userTags = tagIds.isEmpty() ? Collections.emptyList()
+                : userGrpcClient.getUsersByIds(tagIds).stream()
                         .map(u -> UserTagDTO.builder().userId(u.getId()).userName(u.getUsername()).build())
                         .toList();
 
@@ -493,13 +497,15 @@ public class PostServiceImpl implements IPostService {
                 .quantityLike(likes)
                 .quantityComment(comments)
                 .userId(model.getUserId())
-                .mediaUrl(model.getPostMediaModels() != null ?
-                        model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList() : List.of())
+                .mediaUrl(model.getPostMediaModels() != null
+                        ? model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList()
+                        : List.of())
                 .updatedAt(model.getUpdatedAt())
                 .build();
     }
 
-    private ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse author, Boolean isLike) {
+    private ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse author,
+            Boolean isLike) {
         Object likesStr = redisTemplate.opsForValue().get("reel:likes:" + model.getId());
         Object commentsStr = redisTemplate.opsForValue().get("reel:comments:" + model.getId());
         Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : model.getLikeQuantity();
@@ -522,8 +528,10 @@ public class PostServiceImpl implements IPostService {
                 .build();
     }
 
-    private EVisibilityPost checkVisibilityAccess(Long targetUserId, Long viewerId, EVisibilityPost requiredVisibility) {
-        if (targetUserId.equals(viewerId)) return null;
+    private EVisibilityPost checkVisibilityAccess(Long targetUserId, Long viewerId,
+            EVisibilityPost requiredVisibility) {
+        if (targetUserId.equals(viewerId))
+            return null;
 
         UserServiceProto.CheckFollowResponse followCheck = userGrpcClient.checkFollow(viewerId, targetUserId);
         if (followCheck.getIsPrivate() && !followCheck.getIsFollow()) {
@@ -538,7 +546,8 @@ public class PostServiceImpl implements IPostService {
     }
 
     private List<Long> parseTagString(String tagStr, Long excludeId) {
-        if (tagStr == null || tagStr.isBlank()) return Collections.emptyList();
+        if (tagStr == null || tagStr.isBlank())
+            return Collections.emptyList();
         return Arrays.stream(tagStr.split(","))
                 .filter(s -> !s.isBlank())
                 .map(Long::parseLong)

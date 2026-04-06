@@ -178,17 +178,17 @@ public class LikeServiceImpl implements ILikeService {
         incrementCacheVersion("reel", id);
         String keyloakId = securityUtil.getKeyloakId();
         UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        LikeModel model = likeRepository.findByPostIdAndUserId(id, response.getUserId());
+        LikeModel postLikeModel = likeRepository.findByPostIdAndUserId(id, response.getUserId());
         try {
-            if (model != null) {
-                likeRepository.delete(model);
+            if (postLikeModel != null) {
+                likeRepository.delete(postLikeModel);
                 postGrpcClient.addLikeQuantityById(id, true, false);
             } else {
-                model = LikeModel.builder()
+                postLikeModel = LikeModel.builder()
                         .postId(id)
                         .userId(response.getUserId())
                         .build();
-                likeRepository.save(model);
+                likeRepository.save(postLikeModel);
                 postGrpcClient.addLikeQuantityById(id, true, true);
                 PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
                 MessageDTO messageDTO = MessageDTO.builder()

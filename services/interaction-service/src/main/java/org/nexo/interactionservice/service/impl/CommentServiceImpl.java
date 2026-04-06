@@ -28,6 +28,7 @@ import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -55,7 +56,6 @@ public class CommentServiceImpl implements ICommentService {
 
         CommentModel model;
         boolean isNewComment = (dto.getId() == null || dto.getId() == 0);
-
 
         if (!isNewComment) {
             model = commentRepository.findById(dto.getId())
@@ -128,13 +128,13 @@ public class CommentServiceImpl implements ICommentService {
 
             UserActivityEvent activityEvent = UserActivityEvent.builder()
                     .eventType("COMMENT_CREATED")
-                    .userId(response.getUserId())
-                    .targetId(id)
-                    .targetType(a.getPostId() != null && a.getPostId() != 0 ? "POST" : "REEL")
-                    .occurredAt(java.time.Instant.now())
+                    .userId(dto.getUserId())
+                    .targetId(authorId)
+                    .targetType(model.getPostId() != null && model.getPostId() != 0 ? "POST" : "REEL")
+                    .occurredAt(Instant.now())
                     .metadata("{\"source\":\"interaction-service\"}")
                     .build();
-            kafkaTemplate.send("user-events", String.valueOf(response.getUserId()), activityEvent);
+            kafkaTemplate.send("user-events", String.valueOf(dto.getUserId()), activityEvent);
         }
 
         return "Success";
@@ -251,7 +251,8 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {
-        if (followerId.equals(authorId)) return;
+        if (followerId.equals(authorId))
+            return;
 
         String affinityKey = "affinity:" + followerId;
         redisTemplate.opsForHash().increment(affinityKey, String.valueOf(authorId), scoreDelta);
@@ -281,7 +282,8 @@ public class CommentServiceImpl implements ICommentService {
     }
 
     private void checkVisibilityAccess(Long authorId, Long viewerId) {
-        if (authorId.equals(viewerId)) return;
+        if (authorId.equals(viewerId))
+            return;
 
         UserServiceProto.CheckFollowResponse followCheck = userGrpcClient.checkFollow(viewerId, authorId);
         if (followCheck.getIsPrivate() && !followCheck.getIsFollow()) {

@@ -10,7 +10,13 @@ from recommendation_engine import engine
 
 
 def run_consumer() -> None:
-    engine.load_or_bootstrap()
+    while True:
+        try:
+            engine.load_or_bootstrap()
+            break
+        except Exception as exc:
+            print(f"[consumer] bootstrap failed, retrying in 5s: {exc}")
+            time.sleep(5)
 
     consumer = KafkaConsumer(
         settings.kafka_topic_user_events,

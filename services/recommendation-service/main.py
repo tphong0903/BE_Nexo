@@ -77,7 +77,10 @@ def _redis_set_list(key: str, values: list[int]) -> None:
 
 @app.on_event("startup")
 def startup_event() -> None:
-    engine.load_or_bootstrap()
+    try:
+        engine.load_or_bootstrap()
+    except Exception as exc:
+        logger.warning("startup bootstrap failed (will retry on next request): %s", exc)
 
 
 @app.get("/health/live")
@@ -120,6 +123,12 @@ def recommend_friends(request: Request, user_id: int, k: int = Query(default=set
         return {"user_id": user_id, "suggested_friend_ids": cached, "source": "redis"}
 
     CACHE_COUNT.labels(result="miss").inc()
+
+    if engine.graph_data is None:
+        try:
+            engine.load_or_bootstrap()
+        except Exception as exc:
+            logger.warning("lazy bootstrap failed: %s", exc)
 
     result = engine.recommend(user_id, k)
 

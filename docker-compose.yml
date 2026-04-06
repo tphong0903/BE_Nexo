@@ -85,6 +85,13 @@ services:
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9097
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_APIKEY: masterKey
+      RECOMMENDATION_INTERNAL_TOKEN: ${RECOMMENDATION_INTERNAL_TOKEN:-nexo-internal-token}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8085/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
     depends_on:
       - user-db
       - redis
@@ -124,18 +131,24 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
+    volumes:
+      - recommendation_artifacts:/app/artifacts
     depends_on:
-      - user-service
-      - redis
-      - kafka
+      user-service:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
     deploy:
       resources:
         limits:
           cpus: "0.5"
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: "0.25"
-          memory: 256M
+          memory: 512M
     networks:
       - nexo-network
 
@@ -159,25 +172,31 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
+    volumes:
+      - recommendation_artifacts:/app/artifacts
     depends_on:
-      - user-service
-      - redis
-      - kafka
+      user-service:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
     deploy:
       resources:
         limits:
           cpus: "0.3"
-          memory: 384M
+          memory: 512M
         reservations:
           cpus: "0.15"
-          memory: 192M
+          memory: 256M
     networks:
       - nexo-network
 
   recommendation-worker:
     container_name: recommendation-worker
     build: ./services/recommendation-service
-    command: celery -A celery_app.celery_app worker --loglevel=info
+    command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
     restart: unless-stopped
     environment:
       SERVICE_PORT: 8000
@@ -194,18 +213,24 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
+    volumes:
+      - recommendation_artifacts:/app/artifacts
     depends_on:
-      - user-service
-      - redis
-      - kafka
+      user-service:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
     deploy:
       resources:
         limits:
           cpus: "0.4"
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: "0.2"
-          memory: 256M
+          memory: 512M
     networks:
       - nexo-network
 
@@ -229,6 +254,7 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
     depends_on:
       - user-service
       - redis
@@ -800,3 +826,4 @@ volumes:
   redis_data:
   prometheus_data:
   grafana_data:
+  recommendation_artifacts:

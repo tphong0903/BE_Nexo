@@ -5,7 +5,6 @@ import org.nexo.userservice.service.RecommendationDataExportService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -26,17 +25,17 @@ public class RecommendationInternalController {
     private final RecommendationDataExportService recommendationDataExportService;
 
     @GetMapping(value = "/users", produces = MediaType.APPLICATION_JSON_VALUE)
-    public ResponseData<?>exportUsers(
+    public ResponseData<?> exportUsers(
             @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String internalToken) {
         if (!isValidInternalToken(internalToken)) {
             return unauthorizedResponse("Unauthorized internal request");
         }
 
         return ResponseData.builder()
-                        .status(HttpStatus.OK.value())
-                        .message("Export users for recommendation success")
-                        .data(recommendationDataExportService.exportUsers())
-                        .build();
+                .status(HttpStatus.OK.value())
+                .message("Export users for recommendation success")
+                .data(recommendationDataExportService.exportUsers())
+                .build();
     }
 
     @GetMapping(value = "/follows", produces = MediaType.APPLICATION_JSON_VALUE)
@@ -47,11 +46,11 @@ public class RecommendationInternalController {
         }
 
         return ResponseData.builder()
-                        .status(HttpStatus.OK.value())
-                        .message("Export follows for recommendation success")
-                        .data(recommendationDataExportService.exportFollows())
-                        .build();
-                
+                .status(HttpStatus.OK.value())
+                .message("Export follows for recommendation success")
+                .data(recommendationDataExportService.exportFollows())
+                .build();
+
     }
 
     private boolean isValidInternalToken(String internalToken) {
@@ -62,9 +61,9 @@ public class RecommendationInternalController {
 
     private ResponseData<?> unauthorizedResponse(String message) {
         return ResponseData.builder()
-                        .status(HttpStatus.UNAUTHORIZED.value())
-                        .message(message)
-                        .data(null)
-                        .build();
+                .status(HttpStatus.UNAUTHORIZED.value())
+                .message(message)
+                .data(null)
+                .build();
     }
 }

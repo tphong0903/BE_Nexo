@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import net.datafaker.Faker;
 import org.nexo.authservice.config.KeycloakConfig;
 import org.nexo.authservice.dto.*;
 import org.nexo.authservice.exception.KeycloakClientException;
@@ -28,10 +29,12 @@ import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 @Service
 @AllArgsConstructor
@@ -543,6 +546,93 @@ public class AuthServiceImpl implements AuthService {
                                     return Mono.just(tokenResponse);
                                 }
                             });
+                });
+    }
+
+    @Override
+    public Mono<SeedUsersResponse> seedFakeUsers(int count) {
+        Faker faker = new Faker();
+        List<SyncUserRequest> users = new ArrayList<>();
+
+        for (int i = 0; i < count; i++) {
+            String uniqueSuffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+            String cleaned = (faker.internet().username() + uniqueSuffix).replaceAll("[^a-zA-Z0-9_.]", "");
+            String username = cleaned.length() >= 3
+                    ? cleaned.substring(0, Math.min(30, cleaned.length()))
+                    : "user" + uniqueSuffix;
+            String email = uniqueSuffix + "@nexo.dev";
+            String fullname = faker.name().fullName();
+
+            SyncUserRequest req = new SyncUserRequest();
+            req.setEmail(email);
+            req.setUsername(username);
+            req.setFullname(fullname);
+            req.setDefaultPassword("Nexo@123456");
+            users.add(req);
+        }
+
+        return getAdminToken()
+                .flatMap(adminToken -> Flux.fromIterable(users)
+                        .flatMap(user -> seedSingleUser(user, adminToken), 5)
+                        .collectList())
+                .map(results -> {
+                    List<String> errors = results.stream()
+                            .filter(r -> r.getStatus().startsWith("FAILED") || r.getStatus().equals("CONFLICT_EXISTS"))
+                            .map(r -> r.getUsername() + ": " + r.getStatus())
+                            .toList();
+                    long succeeded = results.stream()
+                            .filter(r -> r.getStatus().equals("SUCCESS"))
+                            .count();
+                    return SeedUsersResponse.builder()
+                            .requested(count)
+                            .succeeded((int) succeeded)
+                            .failed(results.size() - (int) succeeded)
+                            .errors(errors)
+                            .build();
+                });
+    }
+
+    private Mono<SyncUserResponse> seedSingleUser(SyncUserRequest request, String adminToken) {
+        ObjectNode userNode = objectMapper.createObjectNode();
+        userNode.put("email", request.getEmail());
+        userNode.put("username", request.getUsername());
+        userNode.put("lastName", request.getFullname());
+        userNode.put("enabled", true);
+        userNode.put("emailVerified", true);
+
+        ArrayNode credentialsArray = objectMapper.createArrayNode();
+        ObjectNode credentialNode = objectMapper.createObjectNode();
+        credentialNode.put("type", "password");
+        credentialNode.put("value", request.getDefaultPassword() != null ? request.getDefaultPassword() : "Nexo@123456");
+        credentialNode.put("temporary", false);
+        credentialsArray.add(credentialNode);
+        userNode.set("credentials", credentialsArray);
+
+        return webClient.post()
+                .uri(keycloakConfig.getUsersUrl())
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .bodyValue(userNode)
+                .exchangeToMono(response -> {
+                    if (response.statusCode().is2xxSuccessful()) {
+                        String location = response.headers().asHttpHeaders().getFirst(HttpHeaders.LOCATION);
+                        String keycloakId = location != null ? location.substring(location.lastIndexOf("/") + 1) : null;
+                        if (keycloakId == null) {
+                            return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: no keycloakId", null));
+                        }
+                        return userGrpcClient.createUser(keycloakId, request.getEmail(), request.getFullname(), request.getUsername())
+                                .flatMap(grpcResp -> userGrpcClient.updateAccountStatus(keycloakId, "ACTIVE"))
+                                .thenReturn(new SyncUserResponse(request.getUsername(), request.getEmail(), "SUCCESS", keycloakId))
+                                .onErrorResume(ex -> {
+                                    log.error("gRPC failed for {}: {}", request.getEmail(), ex.getMessage());
+                                    return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: grpc - " + ex.getMessage(), keycloakId));
+                                });
+                    } else if (response.statusCode().value() == 409) {
+                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "CONFLICT_EXISTS", null));
+                    } else {
+                        return response.bodyToMono(String.class)
+                                .map(body -> new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: " + response.statusCode(), null));
+                    }
                 });
     }
 

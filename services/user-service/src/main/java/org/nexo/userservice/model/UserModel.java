@@ -59,7 +59,7 @@ public class UserModel {
     @Builder.Default
     private Boolean onlineStatus = true;
 
-    @Column(name = "is_KOL")
+    @Column(name = "is_kol")
     @Builder.Default
     private Boolean isKOL = false;
 

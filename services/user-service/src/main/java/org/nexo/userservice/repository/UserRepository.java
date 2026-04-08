@@ -89,7 +89,8 @@ public interface UserRepository extends JpaRepository<UserModel, Long> {
             "                      WHERE f2.follower.id = f1.following.id " +
             "                      AND f2.following.id = u.id " +
             "                      AND f2.status = org.nexo.userservice.enums.EStatusFollow.ACTIVE)), 0.0) AS mutualInteractions " +
-            "FROM UserModel u")
+            "FROM UserModel u " +
+            "WHERE u.accountStatus = org.nexo.userservice.enums.EAccountStatus.ACTIVE")
     List<RecommendationUserExportDTO> findAllForRecommendationExport(
             @Param("activitySince") LocalDateTime activitySince,
             @Param("postSince") LocalDateTime postSince);

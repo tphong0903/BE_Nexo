@@ -33,4 +33,6 @@ public interface AuthService {
     Mono<Void> changePassword(String keycloakUserId, String oldPassword, String newPassword);
 
     Mono<List<SyncUserResponse>> syncUsersToKeycloak(List<SyncUserRequest> users);
+
+    Mono<SeedUsersResponse> seedFakeUsers(int count);
 }

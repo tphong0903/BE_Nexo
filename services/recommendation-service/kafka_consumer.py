@@ -34,6 +34,14 @@ def run_consumer() -> None:
         try:
             if event_type == "USER_FOLLOWED":
                 engine.on_follow_event(int(payload["followerId"]), int(payload["followingId"]))
+            elif event_type == "USER_BLOCKED":
+                engine.on_block_event(int(payload["userId"]), int(payload["targetUserId"]))
+            elif event_type == "USER_UNBLOCKED":
+                engine.on_unblock_event(int(payload["userId"]), int(payload["targetUserId"]))
+            elif event_type == "USER_DEACTIVATED":
+                engine.on_user_deactivated(int(payload["userId"]))
+            elif event_type == "USER_REACTIVATED":
+                engine.retrain_full()
             elif event_type == "RECOMMENDATION_RELOAD":
                 engine.retrain_full()
         except Exception as exc:

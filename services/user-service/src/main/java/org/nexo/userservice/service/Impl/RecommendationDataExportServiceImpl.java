@@ -3,9 +3,11 @@ package org.nexo.userservice.service.Impl;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.nexo.userservice.dto.RecommendationBlockExportDTO;
 import org.nexo.userservice.dto.RecommendationFollowExportDTO;
 import org.nexo.userservice.dto.RecommendationUserExportDTO;
 import org.nexo.userservice.repository.FollowRepository;
+import org.nexo.userservice.repository.UserBlockRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.RecommendationDataExportService;
 import org.springframework.stereotype.Service;
@@ -18,6 +20,7 @@ public class RecommendationDataExportServiceImpl implements RecommendationDataEx
 
     private final UserRepository userRepository;
     private final FollowRepository followRepository;
+    private final UserBlockRepository userBlockRepository;
 
     @Override
     public List<RecommendationUserExportDTO> exportUsers() {
@@ -30,5 +33,10 @@ public class RecommendationDataExportServiceImpl implements RecommendationDataEx
     @Override
     public List<RecommendationFollowExportDTO> exportFollows() {
         return followRepository.findAllForRecommendationExport();
+    }
+
+    @Override
+    public List<RecommendationBlockExportDTO> exportBlocks() {
+        return userBlockRepository.findAllForRecommendationExport();
     }
 }

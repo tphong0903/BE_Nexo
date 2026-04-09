@@ -53,6 +53,20 @@ public class RecommendationInternalController {
 
     }
 
+    @GetMapping(value = "/blocks", produces = MediaType.APPLICATION_JSON_VALUE)
+    public ResponseData<?> exportBlocks(
+            @RequestHeader(value = INTERNAL_TOKEN_HEADER, required = false) String internalToken) {
+        if (!isValidInternalToken(internalToken)) {
+            return unauthorizedResponse("Unauthorized internal request");
+        }
+
+        return ResponseData.builder()
+                .status(HttpStatus.OK.value())
+                .message("Export blocks for recommendation success")
+                .data(recommendationDataExportService.exportBlocks())
+                .build();
+    }
+
     private boolean isValidInternalToken(String internalToken) {
         return internalTokenConfig != null
                 && !internalTokenConfig.isBlank()

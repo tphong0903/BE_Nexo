@@ -1,11 +1,13 @@
 package org.nexo.userservice.service.Impl;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
+import org.nexo.userservice.dto.RecommendationStatusEvent;
 import org.nexo.userservice.dto.UserSearchEvent;
 import org.nexo.userservice.dto.UserStatisticsResponse;
 import org.nexo.userservice.enums.EAccountStatus;
@@ -178,6 +180,11 @@ public class UserServiceImpl implements UserService {
         user.setAccountStatus(EAccountStatus.LOCKED);
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
+        userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                .eventType("USER_DEACTIVATED")
+                .userId(user.getId())
+                .timestamp(Instant.now())
+                .build());
 
     }
 
@@ -193,6 +200,11 @@ public class UserServiceImpl implements UserService {
         user.setAccountStatus(EAccountStatus.ACTIVE);
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
+        userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                .eventType("USER_REACTIVATED")
+                .userId(user.getId())
+                .timestamp(Instant.now())
+                .build());
 
     }
 

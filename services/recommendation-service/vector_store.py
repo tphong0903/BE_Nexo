@@ -38,6 +38,16 @@ class VectorStore:
         self.vectors = vectors
         self._rebuild_index()
 
+    def remove_user(self, user_id: int) -> bool:
+        try:
+            idx = self.user_ids.index(user_id)
+        except ValueError:
+            return False
+        self.user_ids.pop(idx)
+        self.vectors = np.delete(self.vectors, idx, axis=0)
+        self._rebuild_index()
+        return True
+
     def update_one(self, user_id: int, vector: np.ndarray) -> None:
         vector = vector.astype(np.float32).reshape(1, -1)
         if vector.shape[1] != self.dim:

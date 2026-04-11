@@ -154,7 +154,7 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
     Long countTotalFollowersByUserId(@Param("userId") Long userId);
 
         @Query(value = "SELECT u.id, u.account_status, u.avatar_url, u.bio, u.created_at, u.email, u.fullname, " +
-                        "u.is_private, u.keycloak_user_id, u.last_login, u.online_status, u.role, u.username, u.violation_count " +
+                        "u.is_private, u.is_kol, u.keycloak_user_id, u.last_login, u.online_status, u.role, u.username, u.violation_count " +
                         "FROM follow fm1 " +
                         "JOIN follow fm2 ON fm1.following_id = fm2.follower_id " +
                         "JOIN users u ON u.id = fm2.following_id " +
@@ -166,7 +166,7 @@ public interface FollowRepository extends JpaRepository<FollowModel, FollowId> {
                         "AND fm2.following_id NOT IN (SELECT ub.blocked_id FROM user_blocks ub WHERE ub.blocker_id = :userId) " +
                         "AND fm2.following_id NOT IN (SELECT ub.blocker_id FROM user_blocks ub WHERE ub.blocked_id = :userId) " +
                         "GROUP BY u.id, u.account_status, u.avatar_url, u.bio, u.created_at, u.email, u.fullname, " +
-                        "u.is_private, u.keycloak_user_id, u.last_login, u.online_status, u.role, u.username, u.violation_count " +
+                        "u.is_private, u.is_kol, u.keycloak_user_id, u.last_login, u.online_status, u.role, u.username, u.violation_count " +
                         "ORDER BY COUNT(fm2.follower_id) DESC",
                 countQuery = "SELECT COUNT(DISTINCT fm2.following_id) " +
                         "FROM follow fm1 " +

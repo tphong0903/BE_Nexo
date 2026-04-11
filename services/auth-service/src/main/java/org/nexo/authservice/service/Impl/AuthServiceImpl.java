@@ -125,30 +125,47 @@ public class AuthServiceImpl implements AuthService {
         if (userId == null) {
             return Mono.error(new KeycloakClientException(500, "Cannot extract userId"));
         }
-
         return userGrpcClient.createUser(
                         userId,
                         registerRequest.getEmail(),
                         registerRequest.getFullname(),
                         registerRequest.getUsername())
-                .doOnSuccess(grpcResponse -> {
-                    if (grpcResponse.getSuccess()) {
-                        Mono.fromRunnable(() -> sendVerifyEmail(userId, adminToken)
-                                .doOnError(ex -> {
-                                    log.error("Send verify email failed for userId={} : {}", userId, ex.getMessage());
-                                    enqueueRetry(userId, adminToken, 1);
-                                })
-                                .subscribe()).subscribe();
-                    } else {
-                        log.error("Failed to create user in user-service: {}", grpcResponse.getMessage());
+                .flatMap(grpcResponse -> {
+                    if (!grpcResponse.getSuccess()) {
+                        log.error("[SAGA] user-service rejected createUser for userId={}: {}", userId, grpcResponse.getMessage());
+                        return rollbackKeycloakUser(userId, adminToken)
+                                .then(Mono.error(new KeycloakClientException(500,
+                                        "Registration failed: " + grpcResponse.getMessage())));
                     }
+                    sendVerifyEmail(userId, adminToken)
+                            .doOnError(ex -> {
+                                log.error("Send verify email failed for userId={}: {}", userId, ex.getMessage());
+                                enqueueRetry(userId, adminToken, 1);
+                            })
+                            .subscribe();
+                    return Mono.just(userId);
                 })
-                .doOnError(error -> {
-                    log.error("gRPC call to user-service failed for userId={}: {}", userId, error.getMessage());
+                .onErrorResume(ex -> {
+                    if (ex instanceof KeycloakClientException) {
+                        return Mono.error(ex);
+                    }
+                    log.error("[SAGA] gRPC transport error for userId={}: {}", userId, ex.getMessage());
+                    return rollbackKeycloakUser(userId, adminToken)
+                            .then(Mono.error(new KeycloakClientException(500,
+                                    "Registration failed, Keycloak user rolled back")));
+                });
+    }
 
-                })
-                .map(grpcResponse -> userId)
-                .onErrorReturn(userId);
+    private Mono<Void> rollbackKeycloakUser(String userId, String adminToken) {
+        log.warn("[SAGA ROLLBACK] Deleting Keycloak user userId={}", userId);
+        return webClient.delete()
+                .uri(keycloakConfig.getUsersUrl() + "/" + userId)
+                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .doOnSuccess(v -> log.info("[SAGA ROLLBACK] Keycloak user deleted successfully userId={}", userId))
+                .doOnError(e -> log.error("[SAGA ROLLBACK] Failed to delete Keycloak user userId={}: {}", userId, e.getMessage()))
+                .onErrorComplete();
     }
 
     private Mono<String> handleRegistrationError(ClientResponse response) {

@@ -10,3 +10,4 @@ torch
 torch-geometric
 prometheus-client
 sentence-transformers
+scikit-learn

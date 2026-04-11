@@ -100,7 +100,7 @@ def _bio_embedding_vector(bio: str, dim: int = 16) -> np.ndarray:
     model = _get_embedder()
     if model is not None:
         try:
-            vec = np.array(model.encode([f"passage: {bio or ''}"])[0], dtype=np.float32)
+            vec = np.array(model.encode([bio or ""])[0], dtype=np.float32)
             if vec.shape[0] >= dim:
                 return vec[:dim]
             out = np.zeros((dim,), dtype=np.float32)

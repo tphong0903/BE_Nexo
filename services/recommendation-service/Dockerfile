@@ -9,7 +9,7 @@ COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download model at build time so startup doesn't hit HuggingFace
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('intfloat/multilingual-e5-small')"
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('vinai/phobert-base-v2')"
 
 # Prevent runtime HuggingFace network calls
 ENV HF_HUB_OFFLINE=1

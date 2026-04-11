@@ -17,3 +17,4 @@ redis_client = redis.Redis(
 vector_store = VectorStore(settings.embedding_dim)
 user_vector_map: dict[int, np.ndarray] = {}
 following_map: dict[int, set[int]] = {}
+block_map: dict[int, set[int]] = {}  # blocker_id -> set of blocked_ids

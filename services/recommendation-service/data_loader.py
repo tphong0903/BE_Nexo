@@ -19,6 +19,7 @@ class UserRecord:
     activity_score: float
     post_frequency: float
     mutual_interactions: float
+    account_status: str = "ACTIVE"
 
 
 @dataclass
@@ -26,6 +27,12 @@ class FollowRecord:
     follower_id: int
     following_id: int
     status: str
+
+
+@dataclass
+class BlockRecord:
+    blocker_id: int
+    blocked_id: int
 
 
 def _extract_response_data(payload: dict) -> list[dict]:
@@ -59,9 +66,25 @@ def load_users() -> list[UserRecord]:
                 activity_score=float(item.get("activityScore") or 0.0),
                 post_frequency=float(item.get("postFrequency") or 0.0),
                 mutual_interactions=float(item.get("mutualInteractions") or 0.0),
+                account_status=str(item.get("accountStatus") or "ACTIVE").upper(),
             )
         )
     return users
+
+
+def load_blocks() -> list[BlockRecord]:
+    url = f"{settings.user_service_base_url}/internal/recommendation/blocks"
+    response = requests.get(url, headers=_headers(), timeout=15)
+    response.raise_for_status()
+
+    records = _extract_response_data(response.json())
+    return [
+        BlockRecord(
+            blocker_id=int(item.get("blockerId")),
+            blocked_id=int(item.get("blockedId")),
+        )
+        for item in records
+    ]
 
 
 def load_follows() -> list[FollowRecord]:

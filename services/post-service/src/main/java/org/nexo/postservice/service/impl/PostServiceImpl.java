@@ -512,6 +512,10 @@ public class PostServiceImpl implements IPostService {
     private EVisibilityPost checkVisibilityAccess(Long targetUserId, Long viewerId, EVisibilityPost requiredVisibility) {
         if (targetUserId.equals(viewerId)) return null;
 
+        if (securityUtil.isPrivilegedUser()) {
+            return EVisibilityPost.PUBLIC;
+        }
+
         UserServiceProto.CheckFollowResponse followCheck = userGrpcClient.checkFollow(viewerId, targetUserId);
         if (followCheck.getIsPrivate() && !followCheck.getIsFollow()) {
             throw new CustomException("Don't have permission to view this content", HttpStatus.FORBIDDEN);

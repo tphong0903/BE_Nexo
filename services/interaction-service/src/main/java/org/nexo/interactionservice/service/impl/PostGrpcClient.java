@@ -5,6 +5,11 @@ import org.nexo.grpc.post.PostServiceGrpc;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
 
 @Service
 public class PostGrpcClient {
@@ -26,6 +31,22 @@ public class PostGrpcClient {
 
     public PostServiceOuterClass.ReelResponse getReelById(Long id) {
         return postStub.getReelById(PostServiceOuterClass.GetPostRequest.newBuilder().setId(id).build());
+    }
+
+    public Map<Long, PostServiceOuterClass.PostResponse> getPostsByIds(List<Long> postIds, Long userId) {
+        if (postIds == null || postIds.isEmpty()) {
+            return Map.of();
+        }
+
+        PostServiceOuterClass.GetPostsByIdsResponse response = postStub.getPostsByIds(
+                PostServiceOuterClass.GetPostsByIdsRequest.newBuilder()
+                        .addAllPostIds(postIds)
+                        .setUserId(userId)
+                        .build()
+        );
+
+        return response.getPostsList().stream()
+                .collect(Collectors.toMap(PostServiceOuterClass.PostResponse::getPostId, Function.identity()));
     }
 
 }

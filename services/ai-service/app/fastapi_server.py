@@ -9,6 +9,9 @@ from pydantic import BaseModel
 import time
 import logging
 from app.predictor import predict
+from apscheduler.schedulers.background import BackgroundScheduler
+from contextlib import asynccontextmanager
+import os
 
 logging.basicConfig(
     level=logging.INFO,
@@ -19,12 +22,25 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-app = FastAPI()
+db_user = os.getenv("DB_USER", "user")
+db_pass = os.getenv("DB_PASS", "pass")
+db_host = "user-db"
+db_name = "userdb"
+DB_URL = f"postgresql+psycopg2://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
 
-DB_URL = "postgresql+psycopg2://user:pass@localhost:5433/userdb"
 engine = create_engine(DB_URL)
 
-redis_client = redis.Redis(host='localhost', port=6379, db=0, decode_responses=True)
+redis_host = os.getenv("REDIS_HOST", "redis")
+redis_port = int(os.getenv("REDIS_PORT", 6379))
+redis_password = os.getenv("REDIS_PASSWORD", "Admin@123")
+
+redis_client = redis.Redis(
+    host=redis_host,
+    port=redis_port,
+    password=redis_password,
+    db=0,
+    decode_responses=True
+)
 
 
 class TextRequest(BaseModel):
@@ -247,6 +263,23 @@ def train_trending_and_push_to_redis():
     except Exception as e:
         logger.error(f"Loi trong qua trinh xu ly Trending: {str(e)}")
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    scheduler = BackgroundScheduler()
+
+    scheduler.add_job(train_and_push_to_redis, 'interval', hours=1)
+
+    scheduler.add_job(train_reels_and_push_to_redis, 'interval', hours=1)
+
+    scheduler.add_job(train_trending_and_push_to_redis, 'cron', hour=2, minute=0)
+    scheduler.start()
+    logger.info("Background Scheduler đã được khởi động!")
+    yield
+    scheduler.shutdown()
+    logger.info("Background Scheduler đã dừng.")
+
+app = FastAPI(lifespan=lifespan)
 
 @app.get("/")
 def health():

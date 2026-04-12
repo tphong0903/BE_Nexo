@@ -588,6 +588,34 @@ services:
     networks:
       - nexo-network
 
+  ai-service:
+    container_name: ai-service
+    build: ./services/ai-service
+    ports:
+      - "8001:8000"
+    restart: unless-stopped
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      DB_URL: jdbc:postgresql://user-db:5432/userdb
+      DB_USER: user
+      DB_PASS: pass
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: Admin@123
+    depends_on:
+      - user-db
+      - redis
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+    networks:
+      - nexo-network
+
   postgres:
     image: postgres:15
     environment:

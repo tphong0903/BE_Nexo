@@ -1,0 +1,102 @@
+{
+  "id": null,
+  "uid": "recommendation-overview",
+  "title": "Recommendation Service Overview",
+  "tags": ["recommendation", "ml", "fastapi"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-30m",
+    "to": "now"
+  },
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "Request Rate (req/s)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_requests_total{endpoint=~\"/recommend/.*|/recommend/\\{user_id\\}\"}[1m]))",
+          "legendFormat": "recommend",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "P95 Latency (ms)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(recommendation_request_latency_seconds_bucket{endpoint=~\"/recommend/.*|/recommend/\\{user_id\\}\"}[5m])) by (le)) * 1000",
+          "legendFormat": "p95",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Cache Hit Rate (%)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "(sum(rate(recommendation_cache_total{result=\"hit\"}[5m])) / clamp_min(sum(rate(recommendation_cache_total[5m])), 0.0001)) * 100",
+          "legendFormat": "hit rate",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Source Ratio (redis vs faiss)",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_source_total[5m])) by (source)",
+          "legendFormat": "{{source}}",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate (per min)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(rate(recommendation_errors_total[1m])) * 60",
+          "legendFormat": "errors/min",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "type": "stat",
+      "title": "5m Total Recommend Requests",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "targets": [
+        {
+          "expr": "sum(increase(recommendation_requests_total{endpoint=~\"/recommend/.*|/recommend/\\{user_id\\}\"}[5m]))",
+          "refId": "A"
+        }
+      ]
+    }
+  ]
+}

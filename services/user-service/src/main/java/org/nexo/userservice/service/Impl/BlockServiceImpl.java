@@ -3,7 +3,10 @@ package org.nexo.userservice.service.Impl;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import java.time.Instant;
+
 import org.nexo.userservice.dto.PageModelResponse;
+import org.nexo.userservice.dto.RecommendationStatusEvent;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.exception.ResourceNotFoundException;
 import org.nexo.userservice.grpc.MessagingGrpcClient;
@@ -15,6 +18,7 @@ import org.nexo.userservice.repository.FollowRepository;
 import org.nexo.userservice.repository.UserBlockRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.BlockService;
+import org.nexo.userservice.service.UserEventProducer;
 import org.nexo.userservice.util.JwtUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -35,6 +39,7 @@ public class BlockServiceImpl implements BlockService {
         private final UserMapper userMapper;
         private final FollowRepository followRepository;
         private final MessagingGrpcClient messagingGrpcClient;
+        private final UserEventProducer userEventProducer;
 
         public void block(Long blockerId, Long blockedId) {
                 if (blockerId.equals(blockedId)) {
@@ -96,6 +101,12 @@ public class BlockServiceImpl implements BlockService {
                 block(currentUserId, targetUserId);
                 followRepository.deleteByFollowerIdAndFollowingId(currentUserId, targetUserId);
                 messagingGrpcClient.handleBlockStatusChange(currentUserId, targetUserId, true);
+                userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                                .eventType("USER_BLOCKED")
+                                .userId(currentUserId)
+                                .targetUserId(targetUserId)
+                                .timestamp(Instant.now())
+                                .build());
         }
 
         @Transactional
@@ -111,9 +122,13 @@ public class BlockServiceImpl implements BlockService {
                 userRepository.findById(targetUserId)
                                 .orElseThrow(() -> new ResourceNotFoundException("Target user not found"));
                 unblock(currentUserId, targetUserId);
-
                 messagingGrpcClient.handleBlockStatusChange(currentUserId, targetUserId, false);
-
+                userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                                .eventType("USER_UNBLOCKED")
+                                .userId(currentUserId)
+                                .targetUserId(targetUserId)
+                                .timestamp(Instant.now())
+                                .build());
         }
 
         @Override

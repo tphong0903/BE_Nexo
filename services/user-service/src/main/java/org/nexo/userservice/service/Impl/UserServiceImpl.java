@@ -1,11 +1,13 @@
 package org.nexo.userservice.service.Impl;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.UpdateUserRequest;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
+import org.nexo.userservice.dto.RecommendationStatusEvent;
 import org.nexo.userservice.dto.UserSearchEvent;
 import org.nexo.userservice.dto.UserStatisticsResponse;
 import org.nexo.userservice.enums.EAccountStatus;
@@ -48,7 +50,7 @@ public class UserServiceImpl implements UserService {
     private final InteractionGrpcClient interactionGrpcClient;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
-        UserModel user = userRepository.findByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
+        UserModel user = userRepository.findFirstByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
         Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
@@ -178,6 +180,11 @@ public class UserServiceImpl implements UserService {
         user.setAccountStatus(EAccountStatus.LOCKED);
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
+        userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                .eventType("USER_DEACTIVATED")
+                .userId(user.getId())
+                .timestamp(Instant.now())
+                .build());
 
     }
 
@@ -193,6 +200,11 @@ public class UserServiceImpl implements UserService {
         user.setAccountStatus(EAccountStatus.ACTIVE);
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
+        userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                .eventType("USER_REACTIVATED")
+                .userId(user.getId())
+                .timestamp(Instant.now())
+                .build());
 
     }
 

@@ -22,6 +22,7 @@ spring:
             allowedOrigins:
               - "https://nexo.nayamishop.id.vn"
               - "http://localhost:3000"
+              - "http://localhost:9090"
               - "https://nexo.keycloak.nayamishop.id.vn"
             allowedMethods:
               - GET

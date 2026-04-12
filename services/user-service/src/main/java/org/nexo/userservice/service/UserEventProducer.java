@@ -3,6 +3,7 @@ package org.nexo.userservice.service;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.userservice.dto.RecommendationFollowedEvent;
+import org.nexo.userservice.dto.RecommendationStatusEvent;
 import org.nexo.userservice.dto.UserSearchEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -24,5 +25,9 @@ public class UserEventProducer {
 
     public void sendRecommendationFollowedEvent(RecommendationFollowedEvent event) {
         kafkaTemplate.send(userEventsTopic, String.valueOf(event.getFollowerId()), event);
+    }
+
+    public void sendRecommendationStatusEvent(RecommendationStatusEvent event) {
+        kafkaTemplate.send(userEventsTopic, String.valueOf(event.getUserId()), event);
     }
 }

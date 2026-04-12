@@ -9,6 +9,7 @@ celery_app = Celery(
     "recommendation-service",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
+    include=["tasks"],
 )
 
 celery_app.conf.update(
@@ -22,4 +23,3 @@ celery_app.conf.update(
     },
 )
 
-celery_app.autodiscover_tasks(["tasks"])

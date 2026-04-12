@@ -85,6 +85,13 @@ services:
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9097
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_APIKEY: masterKey
+      RECOMMENDATION_INTERNAL_TOKEN: ${RECOMMENDATION_INTERNAL_TOKEN:-nexo-internal-token}
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8085/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 60s
     depends_on:
       - user-db
       - redis
@@ -124,18 +131,24 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
+    volumes:
+      - recommendation_artifacts:/app/artifacts
     depends_on:
-      - user-service
-      - redis
-      - kafka
+      user-service:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
     deploy:
       resources:
         limits:
           cpus: "0.5"
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: "0.25"
-          memory: 256M
+          memory: 512M
     networks:
       - nexo-network
 
@@ -159,25 +172,31 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
+    volumes:
+      - recommendation_artifacts:/app/artifacts
     depends_on:
-      - user-service
-      - redis
-      - kafka
+      user-service:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
     deploy:
       resources:
         limits:
           cpus: "0.3"
-          memory: 384M
+          memory: 512M
         reservations:
           cpus: "0.15"
-          memory: 192M
+          memory: 256M
     networks:
       - nexo-network
 
   recommendation-worker:
     container_name: recommendation-worker
     build: ./services/recommendation-service
-    command: celery -A celery_app.celery_app worker --loglevel=info
+    command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
     restart: unless-stopped
     environment:
       SERVICE_PORT: 8000
@@ -194,18 +213,24 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
+    volumes:
+      - recommendation_artifacts:/app/artifacts
     depends_on:
-      - user-service
-      - redis
-      - kafka
+      user-service:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      kafka:
+        condition: service_started
     deploy:
       resources:
         limits:
           cpus: "0.4"
-          memory: 512M
+          memory: 1G
         reservations:
           cpus: "0.2"
-          memory: 256M
+          memory: 512M
     networks:
       - nexo-network
 
@@ -229,6 +254,7 @@ services:
       EMBEDDING_DIM: 32
       CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
       CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      TRANSFORMERS_VERBOSITY: error
     depends_on:
       - user-service
       - redis
@@ -285,12 +311,18 @@ services:
       GRPC_CLIENT_INTERACTIONS_ADDRESS: static://interaction-service:9095
       GRPC_CLIENT_INTERACTIONS_NEGOTIATION_TYPE: plaintext
     depends_on:
-      - eureka-server
-      - user-db
-      - redis
-      - keycloak
-      - kafka
-      - user-service
+      eureka-server:
+        condition: service_healthy
+      user-db:
+        condition: service_started
+      redis:
+        condition: service_started
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+      user-service:
+        condition: service_healthy
     restart: unless-stopped
     deploy:
       resources:
@@ -347,6 +379,12 @@ services:
     environment:
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8761/actuator/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 45s
     deploy:
       resources:
         limits:
@@ -438,13 +476,20 @@ services:
       GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
       GRPC_CLIENT_POSTS_NEGOTIATION_TYPE: plaintext
     depends_on:
-      - eureka-server
-      - user-db
-      - redis
-      - keycloak
-      - kafka
-      - user-service
-      - post-service
+      eureka-server:
+        condition: service_healthy
+      user-db:
+        condition: service_started
+      redis:
+        condition: service_started
+      keycloak:
+        condition: service_started
+      kafka:
+        condition: service_started
+      user-service:
+        condition: service_healthy
+      post-service:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -568,7 +613,7 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.0
-    command: start
+    command: start-dev
     environment:
       KC_HOSTNAME: localhost
       KC_HOSTNAME_PORT: 9090
@@ -749,6 +794,43 @@ services:
     networks:
       - nexo-network
 
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+    depends_on:
+      - recommendation-service
+    restart: unless-stopped
+    networks:
+      - nexo-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+    networks:
+      - nexo-network
+
 networks:
   nexo-network:
     driver: bridge
@@ -761,3 +843,6 @@ volumes:
   zookeeper-data:
   zookeeper-log:
   redis_data:
+  prometheus_data:
+  grafana_data:
+  recommendation_artifacts:

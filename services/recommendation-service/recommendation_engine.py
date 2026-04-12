@@ -9,9 +9,10 @@ import torch.nn.functional as F
 from torch_geometric.utils import negative_sampling
 
 from config import settings
-from data_loader import FollowRecord, UserRecord, load_follows, load_users
+from data_loader import BlockRecord, FollowRecord, UserRecord, load_blocks, load_follows, load_users
+from feature_engineering import build_graph_stats, user_feature_vector
 from model import GraphSAGE
-from state import following_map, redis_client, user_vector_map, vector_store
+from state import block_map, following_map, redis_client, user_vector_map, vector_store
 
 
 @dataclass
@@ -34,28 +35,7 @@ class RecommendationEngine:
     def _artifact_path(self, filename: str) -> Path:
         return settings.artifact_dir / filename
 
-    def _feature_vector(self, user: UserRecord) -> np.ndarray:
-        text_seed = hash((user.username, user.bio[:120])) & 0xFFFFFFFF
-        rng = np.random.default_rng(text_seed)
-
-        base = rng.normal(0, 1, settings.feature_dim).astype(np.float32)
-        base[0] = np.float32(min(len(user.bio) / 500.0, 1.0))
-        base[1] = np.float32(1.0 if user.is_private else 0.0)
-
-        g = (user.gender or "UNKNOWN").upper()
-        base[2] = np.float32(1.0 if g == "MALE" else 0.0)
-        base[3] = np.float32(1.0 if g == "FEMALE" else 0.0)
-        return base
-
-    def _build_graph(self, users: list[UserRecord], follows: list[FollowRecord]) -> GraphData:
-        user_ids = [u.id for u in users]
-        user_id_to_idx = {uid: i for i, uid in enumerate(user_ids)}
-
-        features = np.vstack([self._feature_vector(u) for u in users]).astype(np.float32) if users else np.empty(
-            (0, settings.feature_dim), dtype=np.float32
-        )
-        x = torch.tensor(features, dtype=torch.float32)
-
+    def _build_follow_edges(self, follows: list[FollowRecord], user_id_to_idx: dict[int, int]) -> torch.Tensor:
         edges: list[tuple[int, int]] = []
         following_map.clear()
 
@@ -73,9 +53,20 @@ class RecommendationEngine:
             following_map.setdefault(f.follower_id, set()).add(f.following_id)
 
         if edges:
-            edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
-        else:
-            edge_index = torch.empty((2, 0), dtype=torch.long)
+            return torch.tensor(edges, dtype=torch.long).t().contiguous()
+        return torch.empty((2, 0), dtype=torch.long)
+
+    def _build_graph(self, users: list[UserRecord], follows: list[FollowRecord]) -> GraphData:
+        users = [u for u in users if u.account_status == "ACTIVE"]
+        user_ids = [u.id for u in users]
+        user_id_to_idx = {uid: i for i, uid in enumerate(user_ids)}
+
+        stats = build_graph_stats(users, follows)
+        features = np.vstack([user_feature_vector(u, stats) for u in users]).astype(np.float32) if users else np.empty(
+            (0, settings.feature_dim), dtype=np.float32
+        )
+        x = torch.tensor(features, dtype=torch.float32)
+        edge_index = self._build_follow_edges(follows, user_id_to_idx)
 
         return GraphData(user_ids=user_ids, user_id_to_idx=user_id_to_idx, x=x, edge_index=edge_index)
 
@@ -89,14 +80,63 @@ class RecommendationEngine:
         if model_path.exists():
             self.model.load_state_dict(torch.load(model_path, map_location="cpu"))
 
+    def _load_block_map(self, blocks: list[BlockRecord]) -> None:
+        block_map.clear()
+        for b in blocks:
+            block_map.setdefault(b.blocker_id, set()).add(b.blocked_id)
+
+    def _build_neighbor_map(self, edge_index: torch.Tensor) -> dict[int, set[int]]:
+        neighbors: dict[int, set[int]] = {}
+        for src, dst in zip(edge_index[0].tolist(), edge_index[1].tolist()):
+            neighbors.setdefault(src, set()).add(dst)
+        return neighbors
+
+    def _sample_hard_negatives(self, edge_index: torch.Tensor, num_nodes: int, num_samples: int) -> torch.Tensor:
+        """50% hard negatives (2-hop neighbors not yet connected) + 50% random negatives."""
+        rand_neg = negative_sampling(edge_index, num_nodes, num_samples, method="sparse")
+        if edge_index.size(1) == 0:
+            return rand_neg
+
+        neighbors = self._build_neighbor_map(edge_index)
+        pos_set = set(zip(edge_index[0].tolist(), edge_index[1].tolist()))
+        node_list = list(neighbors.keys())
+
+        hard_negs: list[tuple[int, int]] = []
+        hard_target = num_samples // 2
+        rng = np.random.default_rng()
+
+        for _ in range(hard_target * 20):
+            if len(hard_negs) >= hard_target:
+                break
+            u = int(rng.choice(node_list))
+            two_hop = set()
+            for v in neighbors.get(u, set()):
+                two_hop.update(neighbors.get(v, set()))
+            two_hop.discard(u)
+            two_hop -= neighbors.get(u, set())
+            if not two_hop:
+                continue
+            w = int(rng.choice(list(two_hop)))
+            if (u, w) not in pos_set:
+                hard_negs.append((u, w))
+
+        if not hard_negs:
+            return rand_neg
+
+        hard_tensor = torch.tensor(hard_negs, dtype=torch.long).t().contiguous()
+        # Fill the other half with random negatives
+        fill = negative_sampling(edge_index, num_nodes, num_samples - len(hard_negs), method="sparse")
+        return torch.cat([hard_tensor, fill], dim=1)
+
     def _train_link_prediction(self, graph: GraphData) -> None:
         if graph.x.size(0) == 0:
             return
 
         optimizer = torch.optim.Adam(self.model.parameters(), lr=settings.training_lr)
         x, edge_index = graph.x, graph.edge_index
+        log_every = max(settings.training_epochs // 5, 1)
 
-        for _ in range(settings.training_epochs):
+        for epoch in range(1, settings.training_epochs + 1):
             self.model.train()
             z = self.model(x, edge_index)
 
@@ -104,15 +144,13 @@ class RecommendationEngine:
                 loss = (z * 0.0).sum()
             else:
                 pos_edge = edge_index
-                neg_edge = negative_sampling(
-                    edge_index=edge_index,
-                    num_nodes=x.size(0),
-                    num_neg_samples=max(pos_edge.size(1) * settings.negative_ratio, 1),
-                    method="sparse",
-                )
+                num_neg = max(pos_edge.size(1) * settings.negative_ratio, 1)
+                neg_edge = self._sample_hard_negatives(edge_index, x.size(0), num_neg)
 
-                pos_score = (z[pos_edge[0]] * z[pos_edge[1]]).sum(dim=1)
-                neg_score = (z[neg_edge[0]] * z[neg_edge[1]]).sum(dim=1)
+                # Normalize during training to match inference metric (cosine via IndexFlatIP)
+                z_norm = F.normalize(z, p=2, dim=1)
+                pos_score = (z_norm[pos_edge[0]] * z_norm[pos_edge[1]]).sum(dim=1)
+                neg_score = (z_norm[neg_edge[0]] * z_norm[neg_edge[1]]).sum(dim=1)
 
                 pos_loss = F.binary_cross_entropy_with_logits(pos_score, torch.ones_like(pos_score))
                 neg_loss = F.binary_cross_entropy_with_logits(neg_score, torch.zeros_like(neg_score))
@@ -121,6 +159,47 @@ class RecommendationEngine:
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            if epoch % log_every == 0 or epoch == settings.training_epochs:
+                metrics = self._eval_metrics(z_norm if edge_index.size(1) > 0 else None, edge_index)
+                print(
+                    f"[train] epoch={epoch}/{settings.training_epochs}"
+                    f" loss={loss.item():.4f}"
+                    f" auc={metrics['auc']:.3f}"
+                    f" ap={metrics['ap']:.3f}"
+                )
+
+    @staticmethod
+    def _eval_metrics(z_norm: torch.Tensor | None, edge_index: torch.Tensor) -> dict[str, float]:
+        """Compute AUC and AP on a small random sample of pos/neg edges (no grad)."""
+        if z_norm is None or edge_index.size(1) == 0:
+            return {"auc": 0.0, "ap": 0.0}
+
+        try:
+            from sklearn.metrics import roc_auc_score, average_precision_score
+        except ImportError:
+            return {"auc": 0.0, "ap": 0.0}
+
+        with torch.no_grad():
+            sample = min(edge_index.size(1), 512)
+            idx = torch.randperm(edge_index.size(1))[:sample]
+            pos_edge = edge_index[:, idx]
+
+            neg_edge = negative_sampling(edge_index, z_norm.size(0), sample, method="sparse")
+
+            pos_scores = torch.sigmoid((z_norm[pos_edge[0]] * z_norm[pos_edge[1]]).sum(dim=1)).cpu().numpy()
+            neg_scores = torch.sigmoid((z_norm[neg_edge[0]] * z_norm[neg_edge[1]]).sum(dim=1)).cpu().numpy()
+
+        y_true = np.concatenate([np.ones(len(pos_scores)), np.zeros(len(neg_scores))])
+        y_score = np.concatenate([pos_scores, neg_scores])
+
+        try:
+            auc = float(roc_auc_score(y_true, y_score))
+            ap = float(average_precision_score(y_true, y_score))
+        except Exception:
+            auc, ap = 0.0, 0.0
+
+        return {"auc": auc, "ap": ap}
 
     def _forward_embeddings(self, graph: GraphData) -> np.ndarray:
         self.model.eval()
@@ -140,7 +219,9 @@ class RecommendationEngine:
     def retrain_full(self) -> dict:
         users = load_users()
         follows = load_follows()
+        blocks = load_blocks()
 
+        self._load_block_map(blocks)
         graph = self._build_graph(users, follows)
         self._train_link_prediction(graph)
         embeddings = self._forward_embeddings(graph)
@@ -154,7 +235,12 @@ class RecommendationEngine:
     def load_or_bootstrap(self) -> None:
         users = load_users()
         follows = load_follows()
-        graph = self._build_graph(users, follows)
+        blocks = load_blocks()
+        self._load_block_map(blocks)
+
+        user_ids = [u.id for u in users]
+        user_id_to_idx = {uid: i for i, uid in enumerate(user_ids)}
+        edge_index = self._build_follow_edges(follows, user_id_to_idx)
 
         self._load_model_weights_if_exists()
         embeddings_path = self._artifact_path(settings.embeddings_file)
@@ -163,12 +249,20 @@ class RecommendationEngine:
         if embeddings_path.exists() and user_ids_path.exists():
             arr = np.load(embeddings_path)
             ids = np.load(user_ids_path).astype(np.int64).tolist()
-            if len(ids) == graph.x.size(0) and arr.shape[0] == len(ids) and arr.shape[1] == settings.embedding_dim:
-                graph.user_ids = ids
-                graph.user_id_to_idx = {uid: i for i, uid in enumerate(ids)}
+            if arr.shape[0] == len(ids) and arr.shape[1] == settings.embedding_dim:
+                # Fast path: skip feature computation and sentence transformer entirely
+                # New users since last retrain won't have embeddings until next retrain
+                graph = GraphData(
+                    user_ids=ids,
+                    user_id_to_idx={uid: i for i, uid in enumerate(ids)},
+                    x=torch.empty((len(ids), settings.feature_dim), dtype=torch.float32),
+                    edge_index=edge_index,
+                )
                 self._apply_embeddings_to_state(graph, arr.astype(np.float32))
                 return
 
+        # No saved artifacts: full feature computation + GNN forward pass
+        graph = self._build_graph(users, follows)
         embeddings = self._forward_embeddings(graph)
         self._apply_embeddings_to_state(graph, embeddings)
 
@@ -179,6 +273,12 @@ class RecommendationEngine:
 
         exclude_ids = {user_id}
         exclude_ids.update(following_map.get(user_id, set()))
+        # Loại người mà user đã block
+        exclude_ids.update(block_map.get(user_id, set()))
+        # Loại người đã block user (2 chiều)
+        for blocker, blocked_set in block_map.items():
+            if user_id in blocked_set:
+                exclude_ids.add(blocker)
         return vector_store.search(vector, top_k, exclude_ids=exclude_ids)
 
     def on_follow_event(self, follower_id: int, following_id: int) -> None:
@@ -203,6 +303,22 @@ class RecommendationEngine:
 
         self.evict_user_cache(follower_id)
         self.evict_user_cache(following_id)
+
+    def on_block_event(self, blocker_id: int, blocked_id: int) -> None:
+        block_map.setdefault(blocker_id, set()).add(blocked_id)
+        self.evict_user_cache(blocker_id)
+        self.evict_user_cache(blocked_id)
+
+    def on_unblock_event(self, blocker_id: int, blocked_id: int) -> None:
+        block_map.get(blocker_id, set()).discard(blocked_id)
+        self.evict_user_cache(blocker_id)
+        self.evict_user_cache(blocked_id)
+
+    def on_user_deactivated(self, user_id: int) -> None:
+        user_vector_map.pop(user_id, None)
+        vector_store.remove_user(user_id)
+        # Flush toàn bộ cache vì kết quả của người khác có thể chứa user này
+        self.flush_cache()
 
     def evict_user_cache(self, user_id: int) -> None:
         keys = list(redis_client.scan_iter(match=f"rec:user:{user_id}:k:*", count=100))

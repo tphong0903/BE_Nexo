@@ -19,9 +19,10 @@ class Settings:
     kafka_group_id: str = os.getenv("KAFKA_GROUP_ID", "recommendation-service-group")
 
     default_top_k: int = int(os.getenv("DEFAULT_TOP_K", "10"))
-    feature_dim: int = int(os.getenv("FEATURE_DIM", "16"))
+    feature_dim: int = int(os.getenv("FEATURE_DIM", "64"))
     hidden_dim: int = int(os.getenv("HIDDEN_DIM", "64"))
     embedding_dim: int = int(os.getenv("EMBEDDING_DIM", "32"))
+    text_embedding_model: str = os.getenv("TEXT_EMBEDDING_MODEL", "vinai/phobert-base-v2")
 
     training_epochs: int = int(os.getenv("TRAINING_EPOCHS", "60"))
     training_lr: float = float(os.getenv("TRAINING_LR", "0.01"))

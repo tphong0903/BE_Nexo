@@ -91,6 +91,12 @@
 			<version>1.3.2</version>
 		</dependency>
 		
+		<!-- Actuator (health check endpoint for Docker) -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+
 		<!-- PostgreSQL Database -->
 		<dependency>
 			<groupId>org.postgresql</groupId>

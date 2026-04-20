@@ -1,7 +1,7 @@
 services:
   api-gateway:
     container_name: api-gateway
-    build: ./services/api-gateway
+    image: phongga088/api-gateway:latest
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -25,7 +25,7 @@ services:
 
   auth-service:
     container_name: auth-service
-    build: ./services/auth-service
+    image: phongga088/auth-service:latest
     ports:
       - "8081:8081"
       - "9099:9099"
@@ -57,7 +57,7 @@ services:
       - nexo-network
   user-service:
     container_name: user-service
-    build: ./services/user-service
+    image: phongga088/user-service:latest
     ports:
       - "8085:8085"
       - "9092:9092"
@@ -112,7 +112,7 @@ services:
 
   recommendation-service:
     container_name: recommendation-service
-    build: ./services/recommendation-service
+    image: phongga088/recommendation-service:latest
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -272,7 +272,7 @@ services:
 
   post-service:
     container_name: post-service
-    build: ./services/post-service
+    image: phongga088/post-service:latest
     ports:
       - "8087:8087"
       - "9094:9094"
@@ -337,7 +337,7 @@ services:
 
   upload-file-service:
     container_name: upload-file-service
-    build: ./services/upload-file-service
+    image: phongga088/upload-file-service:latest
     ports:
       - "8086:8086"
       - "9093:9093"
@@ -372,7 +372,7 @@ services:
 
   eureka-server:
     container_name: eureka-server
-    build: ./services/eureka-server
+    image: phongga088/eureka-server:latest
     ports:
       - "8761:8761"
     restart: unless-stopped
@@ -398,7 +398,7 @@ services:
 
   feed-service:
     container_name: feed-service
-    build: ./services/feed-service
+    image: phongga088/feed-service:latest
     ports:
       - "8084:8084"
     restart: unless-stopped
@@ -447,7 +447,7 @@ services:
 
   interaction-service:
     container_name: interaction-service
-    build: ./services/interaction-service
+    image: phongga088/interaction-service:latest
     ports:
       - "8083:8083"
       - "9095:9095"
@@ -503,7 +503,7 @@ services:
 
   messaging-service:
     container_name: messaging-service
-    build: ./services/messaging-service
+    image: phongga088/messaging-service:latest
     ports:
       - "8095:8095"
       - "9098:9098"
@@ -544,7 +544,7 @@ services:
 
   notification-service:
     container_name: notification-service
-    build: ./services/notification-service
+    image: phongga088/notification-service:latest
     ports:
       - "8088:8088"
     restart: unless-stopped
@@ -590,7 +590,7 @@ services:
 
   ai-service:
     container_name: ai-service
-    build: ./services/ai-service
+    build: .phongga088/ai-service:latest
     ports:
       - "8001:8000"
     restart: unless-stopped
@@ -802,7 +802,7 @@ services:
     networks:
       - nexo-network
   meilisearch:
-    image: getmeili/meilisearch:latest
+    image: getmeili/meilisearch:v1.25.0
     container_name: meilisearch
     ports:
       - "7700:7700"

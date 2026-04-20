@@ -4,6 +4,7 @@ from scipy.sparse import csr_matrix
 from scipy.sparse.linalg import svds
 from sqlalchemy import create_engine
 import redis
+import os
 from fastapi import FastAPI, BackgroundTasks
 from pydantic import BaseModel
 import time
@@ -28,18 +29,24 @@ db_host = "user-db"
 db_name = "userdb"
 DB_URL = f"postgresql+psycopg2://{db_user}:{db_pass}@{db_host}:5432/{db_name}"
 
+db_user = os.getenv("DB_USER", "user")
+db_pass = os.getenv("DB_PASS", "pass")
+db_host = os.getenv("DB_HOST", "user-db")
+db_port = os.getenv("DB_PORT", "5432")
+db_name = os.getenv("DB_NAME", "userdb")
+DB_URL = os.getenv("DB_URL", f"postgresql+psycopg2://{db_user}:{db_pass}@{db_host}:{db_port}/{db_name}")
 engine = create_engine(DB_URL)
 
 redis_host = os.getenv("REDIS_HOST", "redis")
-redis_port = int(os.getenv("REDIS_PORT", 6379))
-redis_password = os.getenv("REDIS_PASSWORD", "Admin@123")
-
+redis_port = int(os.getenv("REDIS_PORT", "6379"))
+redis_db = int(os.getenv("REDIS_DB", "0"))
+redis_password = os.getenv("REDIS_PASSWORD", "")
 redis_client = redis.Redis(
     host=redis_host,
     port=redis_port,
-    password=redis_password,
-    db=0,
-    decode_responses=True
+    db=redis_db,
+    password=redis_password or None,
+    decode_responses=True,
 )
 
 

@@ -34,3 +34,7 @@ build/
 
 
 .env
+.env.fullstack
+.env.fullstack.*
+.env.recommendation
+.env.recommendation.*

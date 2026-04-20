@@ -103,7 +103,7 @@ public class LikeServiceImpl implements ILikeService {
             postGrpcClient.addLikeQuantityById(id, true, false);
 
             redisTemplate.opsForSet().remove("post:" + id + ":likes", String.valueOf(currentUserId));
-            redisTemplate.opsForValue().decrement("global:likes:total");
+            redisTemplate.opsForValue().setIfAbsent("global:likes:total", 0L);
             redisTemplate.opsForValue().decrement("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, -SCORE_LIKE_POST_REEL);
@@ -114,7 +114,7 @@ public class LikeServiceImpl implements ILikeService {
             postGrpcClient.addLikeQuantityById(id, true, true);
 
             redisTemplate.opsForSet().add("post:" + id + ":likes", String.valueOf(currentUserId));
-            redisTemplate.opsForValue().increment("global:likes:total");
+            redisTemplate.opsForValue().setIfAbsent("global:likes:total", 0L);
             redisTemplate.opsForValue().increment("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, SCORE_LIKE_POST_REEL);
@@ -164,7 +164,7 @@ public class LikeServiceImpl implements ILikeService {
             postGrpcClient.addLikeQuantityById(id, false, true);
 
             redisTemplate.opsForSet().add("reel:" + id + ":likes", String.valueOf(currentUserId));
-            redisTemplate.opsForValue().increment("global:likes:total");
+            redisTemplate.opsForValue().setIfAbsent("global:likes:total", 0L);
             redisTemplate.opsForValue().increment("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, SCORE_LIKE_POST_REEL);

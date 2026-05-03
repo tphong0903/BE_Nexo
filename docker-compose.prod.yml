@@ -154,7 +154,7 @@ services:
 
   recommendation-consumer:
     container_name: recommendation-consumer
-    build: ./services/recommendation-service
+    image: phongga088/recommendation-service:latest
     command: python kafka_consumer.py
     restart: unless-stopped
     environment:
@@ -195,7 +195,7 @@ services:
 
   recommendation-worker:
     container_name: recommendation-worker
-    build: ./services/recommendation-service
+    image: phongga088/recommendation-service:latest
     command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
     restart: unless-stopped
     environment:
@@ -236,7 +236,7 @@ services:
 
   recommendation-beat:
     container_name: recommendation-beat
-    build: ./services/recommendation-service
+    image: phongga088/recommendation-service:latest
     command: celery -A celery_app.celery_app beat --loglevel=info
     restart: unless-stopped
     environment:
@@ -727,6 +727,7 @@ services:
     container_name: kafka
     ports:
       - "9097:9097"
+      - "29092:29092"
     depends_on:
       - zookeeper
     volumes:
@@ -734,9 +735,9 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9097
-      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9097
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9097,PLAINTEXT_HOST://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9097,PLAINTEXT_HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 

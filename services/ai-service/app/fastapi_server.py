@@ -12,6 +12,7 @@ from app.predictor import predict
 from apscheduler.schedulers.background import BackgroundScheduler
 from contextlib import asynccontextmanager
 import os
+from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(
     level=logging.INFO,
@@ -280,7 +281,13 @@ async def lifespan(app: FastAPI):
     logger.info("Background Scheduler đã dừng.")
 
 app = FastAPI(lifespan=lifespan)
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/")
 def health():
     return {"service": "ai-service", "status": "running"}

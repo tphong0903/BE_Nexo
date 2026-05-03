@@ -20,26 +20,26 @@ public class FeedController {
     @GetMapping(value = "/posts/{userId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<?> getFeedOfPosts(@PathVariable Long userId,
                                   @RequestParam(defaultValue = "0") int pageNo,
-                                  @RequestParam(defaultValue = "20") int pageSize) {
+                                  @RequestParam(defaultValue = "10") int limit) {
         return securityUtil.getUserIdFromToken()
                 .flatMap(currentUserId -> {
                     if (!currentUserId.equals(userId)) {
                         return Mono.error(new CustomException("Don't allow to get feed", HttpStatus.UNAUTHORIZED));
                     }
-                    return feedService.getHybridFeed(userId, pageNo, pageSize, true);
+                    return feedService.getHybridFeed(userId, pageNo, limit, true);
                 });
     }
 
     @GetMapping(value = "/reels/{userId}", produces = MediaType.APPLICATION_JSON_VALUE)
     public Mono<?> getFeedOfReels(@PathVariable Long userId,
                                   @RequestParam(defaultValue = "0") int pageNo,
-                                  @RequestParam(defaultValue = "20") int pageSize) {
+                                  @RequestParam(defaultValue = "10") int limit) {
         return securityUtil.getUserIdFromToken()
                 .flatMap(currentUserId -> {
                     if (!currentUserId.equals(userId)) {
                         return Mono.error(new CustomException("Don't allow to get feed", HttpStatus.UNAUTHORIZED));
                     }
-                    return feedService.getHybridFeed(userId, pageNo, pageSize, false);
+                    return feedService.getHybridFeed(userId, pageNo, limit, false);
                 });
 
     }

@@ -554,6 +554,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .build();
         group = conversationRepository.save(group);
 
+        ConversationParticipantModel creatorParticipant = new ConversationParticipantModel();
         creatorParticipant.setConversation(group);
         creatorParticipant.setUserId(creatorId);
         creatorParticipant.setGroupAdmin(true);

@@ -36,6 +36,18 @@ public class ConversationModel {
 
     @Column(name = "blocked_by_user_id")
     private Long blockedByUserId;
+
+    @Column(name = "is_group", nullable = false)
+    private boolean isGroup = false;
+
+    @Column(name = "group_name", length = 100)
+    private String groupName;
+
+    @Column(name = "group_avatar_url")
+    private String groupAvatarUrl;
+
+    @Column(name = "created_by_user_id")
+    private Long createdByUserId;
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

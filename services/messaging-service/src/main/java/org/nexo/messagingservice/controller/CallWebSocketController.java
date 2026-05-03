@@ -39,8 +39,9 @@ public class CallWebSocketController {
         CallNotificationDTO notification = callService.initiateCall(request, callerUserId);
 
         Long calleeUserId = callService.getOtherParticipantId(notification.getCallId(), callerUserId);
+        String calleeUsername = userGrpcClient.getUserById(calleeUserId).getUsername();
         messagingTemplate.convertAndSendToUser(
-                calleeUserId.toString(),
+                calleeUsername,
                 "/queue/call/incoming",
                 notification);
 
@@ -62,8 +63,9 @@ public class CallWebSocketController {
         CallResponseDTO response = callService.respondToCall(request, calleeUserId);
 
         Long callerUserId = callService.getOtherParticipantId(request.getCallId(), calleeUserId);
+        String callerUsername = userGrpcClient.getUserById(callerUserId).getUsername();
         messagingTemplate.convertAndSendToUser(
-                callerUserId.toString(),
+                callerUsername,
                 "/queue/call/response",
                 response);
 
@@ -85,8 +87,9 @@ public class CallWebSocketController {
         CallSignalDTO signalDTO = callService.relaySignal(request, senderUserId);
 
         Long receiverUserId = callService.getOtherParticipantId(request.getCallId(), senderUserId);
+        String receiverUsername = userGrpcClient.getUserById(receiverUserId).getUsername();
         messagingTemplate.convertAndSendToUser(
-                receiverUserId.toString(),
+                receiverUsername,
                 "/queue/call/signal",
                 signalDTO);
     }
@@ -106,9 +109,12 @@ public class CallWebSocketController {
 
         CallEndedDTO endedDTO = callService.endCall(request, userId);
 
+        String callerUsername = userGrpcClient.getUserById(userId).getUsername();
+        String otherUsername = userGrpcClient.getUserById(otherUserId).getUsername();
+
         // Notify both participants
-        messagingTemplate.convertAndSendToUser(userId.toString(), "/queue/call/ended", endedDTO);
-        messagingTemplate.convertAndSendToUser(otherUserId.toString(), "/queue/call/ended", endedDTO);
+        messagingTemplate.convertAndSendToUser(callerUsername, "/queue/call/ended", endedDTO);
+        messagingTemplate.convertAndSendToUser(otherUsername, "/queue/call/ended", endedDTO);
 
         log.info("Call {} ended by user {} (finalStatus={}, duration={}s)",
                 request.getCallId(), userId, endedDTO.getFinalStatus(), endedDTO.getDurationSeconds());

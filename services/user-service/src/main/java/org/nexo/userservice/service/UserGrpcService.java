@@ -323,6 +323,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                         .setEmail("")
                         .setUsername("")
                         .setFullName("")
+                        .setRole("")
                         .build();
 
                 responseObserver.onNext(response);
@@ -336,6 +337,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                     .setEmail(user.getEmail() != null ? user.getEmail() : "")
                     .setUsername(user.getUsername() != null ? user.getUsername() : "")
                     .setFullName(user.getFullName() != null ? user.getFullName() : "")
+                    .setRole(user.getRole() != null ? "ROLE_" + user.getRole().name() : "ROLE_USER")
                     .build();
 
             responseObserver.onNext(response);
@@ -353,6 +355,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                     .setEmail("")
                     .setUsername("")
                     .setFullName("")
+                    .setRole("")
                     .build();
 
             responseObserver.onNext(response);

@@ -10,6 +10,7 @@ spring:
   data:
     redis:
       port: 6379
+      password: Admin@123
       host: localhost
   application:
     name: api-gateway

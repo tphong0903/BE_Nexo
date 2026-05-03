@@ -139,25 +139,36 @@ public class FeedService {
                     List<FeedItem> pushItems = tuple.getT1();
                     List<FeedItem> pullItems = tuple.getT2();
 
-                    if (pushItems.isEmpty() && pullItems.isEmpty()) {
-                        return Mono.fromCallable(() -> {
-                            PageRequest pageRequest = PageRequest.of(0, MAX_REDIS_FEED_SIZE);
-                            if (isPost) {
-                                return feedRepository.findPostIdsByFollowerId(userId, pageRequest).getContent();
-                            } else {
-                                return feedReelRepository.findReelIdsByFollowerId(userId, pageRequest).getContent();
-                            }
-                        }).subscribeOn(Schedulers.boundedElastic());
-                    }
+                    List<FeedItem> mergedRedis = new ArrayList<>(pushItems);
+                    mergedRedis.addAll(pullItems);
+                    mergedRedis.sort(Comparator.naturalOrder());
 
-                    List<FeedItem> merged = new ArrayList<>(pushItems);
-                    merged.addAll(pullItems);
-                    merged.sort(Comparator.naturalOrder());
-
-                    return Mono.just(merged.stream()
+                    List<Long> redisIds = mergedRedis.stream()
                             .map(FeedItem::getPostId)
                             .distinct()
-                            .collect(Collectors.toList()));
+                            .collect(Collectors.toList());
+
+                    if (redisIds.size() >= MAX_REDIS_FEED_SIZE) {
+                        return Mono.just(redisIds);
+                    }
+
+                    return Mono.fromCallable(() -> {
+                                PageRequest pageRequest = PageRequest.of(0, MAX_REDIS_FEED_SIZE);
+                                if (isPost) {
+                                    return feedRepository.findPostIdsByFollowerId(userId, pageRequest).getContent();
+                                } else {
+                                    return feedReelRepository.findReelIdsByFollowerId(userId, pageRequest).getContent();
+                                }
+                            }).subscribeOn(Schedulers.boundedElastic())
+                            .map(dbIds -> {
+                                List<Long> finalMergedIds = new ArrayList<>(redisIds);
+                                for (Long dbId : dbIds) {
+                                    if (!finalMergedIds.contains(dbId)) {
+                                        finalMergedIds.add(dbId);
+                                    }
+                                }
+                                return finalMergedIds;
+                            });
                 });
     }
 
@@ -293,15 +304,26 @@ public class FeedService {
     }
 
     private <T> Mono<ResponseData<?>> createResponseData(List<T> sortedContent, int page, Long limit, Page<Long> pageResult) {
-        long totalElements = (pageResult != null) ? pageResult.getTotalElements() : sortedContent.size();
-        int totalPages = (pageResult != null) ? pageResult.getTotalPages() : 1;
+        long totalElements;
+        int totalPages;
+        boolean isLast;
+
+        if (pageResult != null) {
+            totalElements = pageResult.getTotalElements();
+            totalPages = pageResult.getTotalPages();
+            isLast = page + 1 >= totalPages;
+        } else {
+            totalElements = sortedContent.size();
+            isLast = sortedContent.size() < limit.intValue();
+            totalPages = page + (isLast ? 1 : 2);
+        }
 
         PageModelResponse<T> pageModelResponse = PageModelResponse.<T>builder()
                 .pageNo(page)
                 .pageSize(limit.intValue())
                 .totalElements(totalElements)
                 .totalPages(totalPages)
-                .last(page + 1 >= totalPages)
+                .last(isLast)
                 .content(sortedContent)
                 .build();
 

@@ -112,7 +112,7 @@ public class CallServiceImpl implements CallService {
         CallModel call = callRepository.findByIdAndParticipant(request.getCallId(), senderUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Call not found or access denied"));
 
-        if (call.getStatus() != ECallStatus.ACCEPTED) {
+        if (call.getStatus() != ECallStatus.ACCEPTED && call.getStatus() != ECallStatus.RINGING) {
             throw new IllegalStateException("Call is not active (status: " + call.getStatus() + ")");
         }
 

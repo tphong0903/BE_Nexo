@@ -1,7 +1,9 @@
 package org.nexo.messagingservice.service.Impl;
 
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse;
@@ -552,15 +554,13 @@ public class ConversationServiceImpl implements ConversationService {
                 .build();
         group = conversationRepository.save(group);
 
-        // Add creator as admin
-        ConversationParticipantModel creatorParticipant = new ConversationParticipantModel();
         creatorParticipant.setConversation(group);
         creatorParticipant.setUserId(creatorId);
         creatorParticipant.setGroupAdmin(true);
         participantRepository.save(creatorParticipant);
 
-        // Add members
-        for (Long memberId : request.getMemberUserIds()) {
+        Set<Long> uniqueMemberIds = new HashSet<>(request.getMemberUserIds());
+        for (Long memberId : uniqueMemberIds) {
             if (!memberId.equals(creatorId)) {
                 ConversationParticipantModel member = new ConversationParticipantModel();
                 member.setConversation(group);
@@ -582,11 +582,13 @@ public class ConversationServiceImpl implements ConversationService {
         ConversationModel group = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
 
-        if (!group.isGroup()) throw new IllegalArgumentException("Not a group conversation");
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
 
         boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
                 .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
-        if (!isAdmin) throw new SecurityException("Only admins can update group info");
+        if (!isAdmin)
+            throw new SecurityException("Only admins can update group info");
 
         if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
             group.setGroupName(request.getGroupName().trim());
@@ -606,7 +608,8 @@ public class ConversationServiceImpl implements ConversationService {
         ConversationModel group = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
 
-        if (!group.isGroup()) throw new IllegalArgumentException("Not a group conversation");
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
         if (!isUserParticipant(conversationId, userId))
             throw new SecurityException("Not a participant");
 
@@ -629,13 +632,15 @@ public class ConversationServiceImpl implements ConversationService {
         ConversationModel group = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
 
-        if (!group.isGroup()) throw new IllegalArgumentException("Not a group conversation");
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
 
         boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
                 .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
         boolean isSelf = userId.equals(targetUserId);
 
-        if (!isAdmin && !isSelf) throw new SecurityException("Only admins can remove members");
+        if (!isAdmin && !isSelf)
+            throw new SecurityException("Only admins can remove members");
         if (targetUserId.equals(group.getCreatedByUserId()))
             throw new IllegalArgumentException("Cannot remove the group creator");
 
@@ -651,7 +656,8 @@ public class ConversationServiceImpl implements ConversationService {
         ConversationModel group = conversationRepository.findById(conversationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
 
-        if (!group.isGroup()) throw new IllegalArgumentException("Not a group conversation");
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
         if (userId.equals(group.getCreatedByUserId()))
             throw new IllegalArgumentException("Group creator cannot leave. Transfer ownership or delete the group.");
 
@@ -666,7 +672,8 @@ public class ConversationServiceImpl implements ConversationService {
 
         boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
                 .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
-        if (!isAdmin) throw new SecurityException("Only admins can promote members");
+        if (!isAdmin)
+            throw new SecurityException("Only admins can promote members");
 
         ConversationParticipantModel target = participantRepository
                 .findByConversationIdAndUserId(conversationId, targetUserId)
@@ -688,7 +695,8 @@ public class ConversationServiceImpl implements ConversationService {
 
         boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
                 .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
-        if (!isAdmin) throw new SecurityException("Only admins can demote members");
+        if (!isAdmin)
+            throw new SecurityException("Only admins can demote members");
 
         ConversationParticipantModel target = participantRepository
                 .findByConversationIdAndUserId(conversationId, targetUserId)

@@ -4,12 +4,7 @@ import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
-import org.nexo.postservice.dto.MessageDTO;
-import org.nexo.postservice.dto.MessagePostDTO;
-import org.nexo.postservice.dto.PostRequestDTO;
-import org.nexo.postservice.dto.UserTagDTO;
 import org.nexo.postservice.dto.*;
-import org.nexo.postservice.dto.UserActivityEvent;
 import org.nexo.postservice.dto.response.PageModelResponse;
 import org.nexo.postservice.dto.response.PostResponseDTO;
 import org.nexo.postservice.dto.response.ReelResponseDTO;
@@ -42,10 +37,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
@@ -133,7 +125,6 @@ public class PostServiceImpl implements IPostService {
     }
 
     @Override
-    @Transactional
     public String saveReel(PostRequestDTO request, List<MultipartFile> files) {
         securityUtil.checkOwner(request.getUserId());
         UserServiceProto.UserDTOResponse userDTO = userGrpcClient.getUserDTOById(request.getUserId());
@@ -456,7 +447,7 @@ public class PostServiceImpl implements IPostService {
         Long id = securityUtil.getUserIdFromToken();
         UserServiceProto.UserDTOResponse currentUser = userGrpcClient.getUserDTOById(id);
 
-        Page<PostModel> postPage = hashtag.isEmpty()
+        Page<PostModel> postPage = (Objects.equals(hashtag, "#") || hashtag.trim().isEmpty())
                 ? postRepository.findPopularPublicPostsWithHashtagScore(pageable)
                 : postRepository.findPopularPublicPostsByHashtag(hashtag, pageable);
 
@@ -471,12 +462,12 @@ public class PostServiceImpl implements IPostService {
     }
 
     private PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse author,
-            Boolean isLike) {
+                                                     Boolean isLike) {
         List<Long> tagIds = parseTagString(model.getTag(), model.getUserId());
         List<UserTagDTO> userTags = tagIds.isEmpty() ? Collections.emptyList()
                 : userGrpcClient.getUsersByIds(tagIds).stream()
-                        .map(u -> UserTagDTO.builder().userId(u.getId()).userName(u.getUsername()).build())
-                        .toList();
+                .map(u -> UserTagDTO.builder().userId(u.getId()).userName(u.getUsername()).build())
+                .toList();
 
         Object likesStr = redisTemplate.opsForValue().get("post:likes:" + model.getId());
         Object commentsStr = redisTemplate.opsForValue().get("post:comments:" + model.getId());
@@ -505,7 +496,7 @@ public class PostServiceImpl implements IPostService {
     }
 
     private ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse author,
-            Boolean isLike) {
+                                                     Boolean isLike) {
         Object likesStr = redisTemplate.opsForValue().get("reel:likes:" + model.getId());
         Object commentsStr = redisTemplate.opsForValue().get("reel:comments:" + model.getId());
         Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : model.getLikeQuantity();
@@ -529,7 +520,7 @@ public class PostServiceImpl implements IPostService {
     }
 
     private EVisibilityPost checkVisibilityAccess(Long targetUserId, Long viewerId,
-            EVisibilityPost requiredVisibility) {
+                                                  EVisibilityPost requiredVisibility) {
         if (targetUserId.equals(viewerId))
             return null;
 

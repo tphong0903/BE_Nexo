@@ -1,5 +1,6 @@
 import grpc
 from concurrent import futures
+import os
 
 import moderation_pb2_grpc, moderation_pb2
 from app.predictor import predict
@@ -27,10 +28,11 @@ def start_grpc():
         ModerationService(), server
     )
 
-    server.add_insecure_port('[::]:50051')
+    grpc_port = int(os.getenv("GRPC_PORT", "50051"))
+    server.add_insecure_port(f"[::]:{grpc_port}")
 
     server.start()
 
-    print("gRPC server running on port 50051")
+    print(f"gRPC server running on port {grpc_port}")
 
     server.wait_for_termination()

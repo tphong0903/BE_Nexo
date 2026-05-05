@@ -176,42 +176,6 @@ public class LikeServiceImpl implements ILikeService {
         }
 
         incrementCacheVersion("reel", id);
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto response = userGrpcClient.getUserByKeycloakId(keyloakId);
-        LikeModel postLikeModel = likeRepository.findByPostIdAndUserId(id, response.getUserId());
-        try {
-            if (postLikeModel != null) {
-                likeRepository.delete(postLikeModel);
-                postGrpcClient.addLikeQuantityById(id, true, false);
-            } else {
-                postLikeModel = LikeModel.builder()
-                        .postId(id)
-                        .userId(response.getUserId())
-                        .build();
-                likeRepository.save(postLikeModel);
-                postGrpcClient.addLikeQuantityById(id, true, true);
-                PostServiceOuterClass.PostResponse postResponse = postGrpcClient.getPostById(id);
-                MessageDTO messageDTO = MessageDTO.builder()
-                        .actorId(response.getUserId())
-                        .recipientId(postResponse.getUserId())
-                        .notificationType(String.valueOf(ENotificationType.LIKE_POST))
-                        .targetUrl("/posts/" + id)
-                        .build();
-                kafkaTemplate.send("notification", messageDTO);
-
-                UserActivityEvent activityEvent = UserActivityEvent.builder()
-                        .eventType("POST_LIKED")
-                        .userId(response.getUserId())
-                        .targetId(id)
-                        .targetType("POST")
-                        .occurredAt(java.time.Instant.now())
-                        .metadata("{\"source\":\"interaction-service\"}")
-                        .build();
-                kafkaTemplate.send("user-events", String.valueOf(response.getUserId()), activityEvent);
-            }
-        } catch (Exception e) {
-            throw new CustomException(e.getMessage(), HttpStatus.BAD_REQUEST);
-        }
         return "Success";
     }
 

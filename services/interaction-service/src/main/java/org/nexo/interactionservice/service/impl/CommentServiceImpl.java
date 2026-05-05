@@ -91,7 +91,7 @@ public class CommentServiceImpl implements ICommentService {
 
         commentRepository.save(model);
         invalidateListCache(model);
-        redisTemplate.opsForValue().increment("global:comments:total");
+        redisTemplate.opsForValue().setIfAbsent("global:likes:total", 0L);
         redisTemplate.opsForValue().increment("user:" + currentUserId + ":comments:total");
 
         if (dto.getListMentionUserId() != null && !dto.getListMentionUserId().isEmpty()) {

@@ -5,11 +5,17 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.messagingservice.dto.*;
 import org.nexo.messagingservice.enums.ECallStatus;
+import org.nexo.messagingservice.enums.ECallType;
+import org.nexo.messagingservice.enums.EMessageType;
 import org.nexo.messagingservice.exception.ResourceNotFoundException;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.CallModel;
+import org.nexo.messagingservice.model.ConversationModel;
+import org.nexo.messagingservice.model.MessageModel;
 import org.nexo.messagingservice.repository.CallRepository;
 import org.nexo.messagingservice.repository.ConversationParticipantRepository;
+import org.nexo.messagingservice.repository.ConversationRepository;
+import org.nexo.messagingservice.repository.MessageRepository;
 import org.nexo.messagingservice.service.CallService;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -27,6 +33,8 @@ public class CallServiceImpl implements CallService {
 
     private final CallRepository callRepository;
     private final ConversationParticipantRepository participantRepository;
+    private final ConversationRepository conversationRepository;
+    private final MessageRepository messageRepository;
     private final UserGrpcClient userGrpcClient;
 
     @Override
@@ -141,15 +149,29 @@ public class CallServiceImpl implements CallService {
             finalStatus = call.getStatus();
         }
 
-        Long durationSeconds = null;
-        if (call.getAnsweredAt() != null) {
-            durationSeconds = ChronoUnit.SECONDS.between(call.getAnsweredAt(), now);
-        }
+        final Long durationSeconds = call.getAnsweredAt() != null
+                ? ChronoUnit.SECONDS.between(call.getAnsweredAt(), now)
+                : null;
 
         call.setStatus(finalStatus);
         call.setEndedAt(now);
         call.setDurationSeconds(durationSeconds);
         callRepository.save(call);
+
+        conversationRepository.findById(call.getConversationId()).ifPresent(conversation -> {
+            String content = buildCallMessageContent(call.getCallType(), finalStatus, durationSeconds);
+            MessageModel callMessage = MessageModel.builder()
+                    .conversation(conversation)
+                    .senderUserId(call.getCallerUserId())
+                    .content(content)
+                    .messageType(EMessageType.CALL)
+                    .isActive(true)
+                    .build();
+            messageRepository.save(callMessage);
+            conversation.setLastMessageId(callMessage.getId());
+            conversation.setLastMessageAt(now);
+            conversationRepository.save(conversation);
+        });
 
         return CallEndedDTO.builder()
                 .callId(call.getId())
@@ -158,6 +180,20 @@ public class CallServiceImpl implements CallService {
                 .durationSeconds(durationSeconds)
                 .endedAt(now)
                 .build();
+    }
+
+    private String buildCallMessageContent(ECallType callType, ECallStatus status, Long durationSeconds) {
+        String type = callType == ECallType.VIDEO_CALL ? "Video call" : "Cuộc gọi thoại";
+        return switch (status) {
+            case MISSED -> type + "|MISSED|0";
+            case REJECTED -> type + "|REJECTED|0";
+            case ENDED -> {
+                long mins = durationSeconds != null ? durationSeconds / 60 : 0;
+                long secs = durationSeconds != null ? durationSeconds % 60 : 0;
+                yield type + "|ENDED|" + String.format("%02d:%02d", mins, secs);
+            }
+            default -> type + "|ENDED|0";
+        };
     }
 
     @Override

@@ -95,23 +95,62 @@ public class CallServiceImpl implements CallService {
         }
 
         ECallStatus newStatus;
+        LocalDateTime now = LocalDateTime.now();
         if (Boolean.TRUE.equals(request.getAccepted())) {
             newStatus = ECallStatus.ACCEPTED;
-            call.setAnsweredAt(LocalDateTime.now());
+            call.setAnsweredAt(now);
         } else {
             newStatus = ECallStatus.REJECTED;
-            call.setEndedAt(LocalDateTime.now());
+            call.setEndedAt(now);
         }
         call.setStatus(newStatus);
         callRepository.save(call);
 
         UserServiceProto.UserDTOResponse calleeInfo = userGrpcClient.getUserById(calleeUserId);
 
+        final MessageDTO[] savedCallMessageDTO = {null};
+        if (newStatus == ECallStatus.REJECTED) {
+            conversationRepository.findById(call.getConversationId()).ifPresent(conversation -> {
+                String content = buildCallMessageContent(call.getCallType(), ECallStatus.REJECTED, null);
+                MessageModel callMessage = MessageModel.builder()
+                        .conversation(conversation)
+                        .senderUserId(call.getCallerUserId())
+                        .content(content)
+                        .messageType(EMessageType.CALL)
+                        .isActive(true)
+                        .build();
+                messageRepository.save(callMessage);
+                conversation.setLastMessageId(callMessage.getId());
+                conversation.setLastMessageAt(now);
+                conversationRepository.save(conversation);
+
+                UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(call.getCallerUserId());
+                UserDTO senderDTO = UserDTO.builder()
+                        .id(call.getCallerUserId())
+                        .username(callerInfo.getUsername())
+                        .fullName(callerInfo.getFullName())
+                        .avatarUrl(callerInfo.getAvatar())
+                        .build();
+                savedCallMessageDTO[0] = MessageDTO.builder()
+                        .id(callMessage.getId())
+                        .conversationId(conversation.getId())
+                        .sender(senderDTO)
+                        .content(content)
+                        .messageType(EMessageType.CALL)
+                        .mediaList(List.of())
+                        .reactions(List.of())
+                        .createdAt(callMessage.getCreatedAt())
+                        .build();
+            });
+        }
+
         return CallResponseDTO.builder()
                 .callId(call.getId())
+                .conversationId(call.getConversationId())
                 .responderId(calleeUserId)
                 .responderUsername(calleeInfo.getUsername())
                 .status(newStatus)
+                .callMessage(savedCallMessageDTO[0])
                 .build();
     }
 
@@ -158,6 +197,7 @@ public class CallServiceImpl implements CallService {
         call.setDurationSeconds(durationSeconds);
         callRepository.save(call);
 
+        final MessageDTO[] savedCallMessageDTO = {null};
         conversationRepository.findById(call.getConversationId()).ifPresent(conversation -> {
             String content = buildCallMessageContent(call.getCallType(), finalStatus, durationSeconds);
             MessageModel callMessage = MessageModel.builder()
@@ -171,14 +211,34 @@ public class CallServiceImpl implements CallService {
             conversation.setLastMessageId(callMessage.getId());
             conversation.setLastMessageAt(now);
             conversationRepository.save(conversation);
+
+            UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(call.getCallerUserId());
+            UserDTO senderDTO = UserDTO.builder()
+                    .id(call.getCallerUserId())
+                    .username(callerInfo.getUsername())
+                    .fullName(callerInfo.getFullName())
+                    .avatarUrl(callerInfo.getAvatar())
+                    .build();
+            savedCallMessageDTO[0] = MessageDTO.builder()
+                    .id(callMessage.getId())
+                    .conversationId(conversation.getId())
+                    .sender(senderDTO)
+                    .content(content)
+                    .messageType(EMessageType.CALL)
+                    .mediaList(List.of())
+                    .reactions(List.of())
+                    .createdAt(callMessage.getCreatedAt())
+                    .build();
         });
 
         return CallEndedDTO.builder()
                 .callId(call.getId())
+                .conversationId(call.getConversationId())
                 .endedByUserId(userId)
                 .finalStatus(finalStatus)
                 .durationSeconds(durationSeconds)
                 .endedAt(now)
+                .callMessage(savedCallMessageDTO[0])
                 .build();
     }
 

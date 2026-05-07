@@ -15,7 +15,9 @@ import org.nexo.messagingservice.enums.ECallStatus;
 @AllArgsConstructor
 public class CallResponseDTO {
     private Long callId;
+    private Long conversationId;
     private Long responderId;
     private String responderUsername;
     private ECallStatus status;
+    private MessageDTO callMessage;
 }

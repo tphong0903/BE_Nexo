@@ -67,6 +67,12 @@ public class CallWebSocketController {
                 "/queue/call/response",
                 response);
 
+        if (response.getCallMessage() != null && response.getConversationId() != null) {
+            messagingTemplate.convertAndSend(
+                    "/topic/conversation/" + response.getConversationId(),
+                    response.getCallMessage());
+        }
+
         log.info("Call {} response from user {}: accepted={}",
                 request.getCallId(), calleeUserId, request.getAccepted());
     }
@@ -106,9 +112,14 @@ public class CallWebSocketController {
 
         CallEndedDTO endedDTO = callService.endCall(request, userId);
 
-        // Notify both participants
         messagingTemplate.convertAndSendToUser(userId.toString(), "/queue/call/ended", endedDTO);
         messagingTemplate.convertAndSendToUser(otherUserId.toString(), "/queue/call/ended", endedDTO);
+
+        if (endedDTO.getCallMessage() != null && endedDTO.getConversationId() != null) {
+            messagingTemplate.convertAndSend(
+                    "/topic/conversation/" + endedDTO.getConversationId(),
+                    endedDTO.getCallMessage());
+        }
 
         log.info("Call {} ended by user {} (finalStatus={}, duration={}s)",
                 request.getCallId(), userId, endedDTO.getFinalStatus(), endedDTO.getDurationSeconds());

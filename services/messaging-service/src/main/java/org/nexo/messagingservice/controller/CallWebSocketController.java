@@ -44,6 +44,12 @@ public class CallWebSocketController {
                 "/queue/call/incoming",
                 notification);
 
+        // Send callId back to caller so they can end/cancel the call before callee responds
+        messagingTemplate.convertAndSendToUser(
+                callerUserId.toString(),
+                "/queue/call/initiated",
+                notification);
+
         log.info("Call {} initiated by user {} to user {} (type={})",
                 notification.getCallId(), callerUserId, calleeUserId, request.getCallType());
     }

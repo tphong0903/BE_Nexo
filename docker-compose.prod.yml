@@ -590,7 +590,7 @@ services:
 
   ai-service:
     container_name: ai-service
-    build: .phongga088/ai-service:latest
+    image: phongga088/ai-service-v2:latest
     ports:
       - "8001:8000"
     restart: unless-stopped

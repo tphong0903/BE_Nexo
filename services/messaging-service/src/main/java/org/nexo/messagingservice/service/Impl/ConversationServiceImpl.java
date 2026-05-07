@@ -1,9 +1,12 @@
 package org.nexo.messagingservice.service.Impl;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse;
@@ -242,10 +245,12 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     private ConversationResponseDTO mapToDto(ConversationModel conversation, Long requestingUserId) {
-        List<Long> participantUserIds = participantRepository
-                .findActiveUserIdsByConversationId(conversation.getId());
+        Map<Long, ConversationParticipantModel> participantMap = participantRepository
+                .findByConversationId(conversation.getId())
+                .stream()
+                .collect(Collectors.toMap(ConversationParticipantModel::getUserId, p -> p));
 
-        List<UserDTOResponse2> participants = userGrpcClient.getUsersByIds(participantUserIds);
+        List<UserDTOResponse2> participants = userGrpcClient.getUsersByIds(new ArrayList<>(participantMap.keySet()));
 
         List<UserDTO> participantDTOs = participants.stream()
                 .map(u -> UserDTO.builder()
@@ -253,14 +258,14 @@ public class ConversationServiceImpl implements ConversationService {
                         .username(u.getUsername())
                         .avatarUrl(u.getAvatar())
                         .fullName(u.getFullName())
-                        .nickname(
-                                participantRepository.findByConversationIdAndUserId(conversation.getId(), u.getId())
-                                        .map(ConversationParticipantModel::getNickname)
-                                        .orElse(null))
+                        .nickname(participantMap.containsKey(u.getId())
+                                ? participantMap.get(u.getId()).getNickname()
+                                : null)
                         .onlineStatus(u.getOnlineStatus())
                         .build())
                 .toList();
 
+        ConversationParticipantModel myParticipant = participantMap.get(requestingUserId);
         boolean isGroup = conversation.isGroup();
 
         String displayName;
@@ -279,11 +284,8 @@ public class ConversationServiceImpl implements ConversationService {
                     .orElse(null);
 
             if (otherUser != null) {
-                ConversationParticipantModel participant = participantRepository
-                        .findByConversationIdAndUserId(conversation.getId(), requestingUserId)
-                        .orElse(null);
-                if (participant != null && participant.getNickname() != null && !participant.getNickname().isEmpty()) {
-                    displayName = participant.getNickname();
+                if (myParticipant != null && myParticipant.getNickname() != null && !myParticipant.getNickname().isEmpty()) {
+                    displayName = myParticipant.getNickname();
                 } else {
                     displayName = otherUser.getFullName();
                 }
@@ -297,10 +299,7 @@ public class ConversationServiceImpl implements ConversationService {
             }
         }
 
-        boolean isGroupAdmin = participantRepository
-                .findByConversationIdAndUserId(conversation.getId(), requestingUserId)
-                .map(ConversationParticipantModel::isGroupAdmin)
-                .orElse(false);
+        boolean isGroupAdmin = myParticipant != null && myParticipant.isGroupAdmin();
 
         MessageDTO lastMessage = null;
         if (conversation.getLastMessageId() != null) {
@@ -309,7 +308,10 @@ public class ConversationServiceImpl implements ConversationService {
                 lastMessage = mapMessageToDto(lastMsg.get());
             }
         }
-        Long unreadCount = getUnreadCount(conversation.getId(), requestingUserId);
+
+        Long lastReadMsgId = myParticipant != null ? myParticipant.getLastReadMessageId() : null;
+        Long unreadCount = messageRepository.countUnreadMessages(
+                conversation.getId(), requestingUserId, lastReadMsgId != null ? lastReadMsgId : 0L);
 
         return ConversationResponseDTO.builder()
                 .id(conversation.getId())
@@ -335,14 +337,26 @@ public class ConversationServiceImpl implements ConversationService {
                 .build();
     }
 
-    public PageModelResponse<ConversationResponseDTO> getUserConversations(String keycloakUserId, Pageable pageable) {
+    public PageModelResponse<ConversationResponseDTO> getUserConversations(String keycloakUserId, Pageable pageable, String search) {
         UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
         Long userId = user.getUserId();
         Page<ConversationModel> conversations = conversationRepository
                 .findNormalConversationsByUserId(userId, pageable);
 
+        String searchLower = (search != null && !search.isBlank()) ? search.toLowerCase().trim() : null;
+
         List<ConversationResponseDTO> allConversations = conversations.stream()
                 .map(conv -> mapToDto(conv, userId))
+                .filter(dto -> {
+                    if (searchLower == null) return true;
+                    if (dto.isGroup()) {
+                        String name = dto.getGroupName() != null ? dto.getGroupName() : dto.getFullname();
+                        return name != null && name.toLowerCase().contains(searchLower);
+                    }
+                    boolean matchFullname = dto.getFullname() != null && dto.getFullname().toLowerCase().contains(searchLower);
+                    boolean matchUsername = dto.getUsername() != null && dto.getUsername().toLowerCase().contains(searchLower);
+                    return matchFullname || matchUsername;
+                })
                 .toList();
 
         PageModelResponse<ConversationResponseDTO> pageModelResponse = PageModelResponse

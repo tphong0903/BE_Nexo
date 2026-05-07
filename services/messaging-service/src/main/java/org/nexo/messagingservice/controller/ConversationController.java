@@ -54,7 +54,7 @@ public class ConversationController {
                         Authentication authentication) {
                 String keycloakUserId = authentication.getName();
                 return ResponseData.builder()
-                                .data(conversationService.getUserConversations(keycloakUserId, pageable))
+                                .data(conversationService.getUserConversations(keycloakUserId, pageable, search))
                                 .message("User conversations retrieved successfully")
                                 .build();
         }

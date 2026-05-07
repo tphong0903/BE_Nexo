@@ -11,7 +11,7 @@ import org.springframework.data.domain.Pageable;
 public interface ConversationService {
     ConversationResponseDTO getOrCreateDirectConversation(String keycloakUserId, Long recipientUserId);
 
-    PageModelResponse<ConversationResponseDTO> getUserConversations(String keycloakUserId, Pageable pageable);
+    PageModelResponse<ConversationResponseDTO> getUserConversations(String keycloakUserId, Pageable pageable, String search);
 
     ConversationResponseDTO getConversationById(Long conversationId, Long requestingUserId);
 

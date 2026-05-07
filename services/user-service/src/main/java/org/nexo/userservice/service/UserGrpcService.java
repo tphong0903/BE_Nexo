@@ -426,22 +426,16 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
     @Override
     public void getUsersByIds(UserServiceProto.GetUsersByIdsRequest request,
                               StreamObserver<UserServiceProto.GetUsersByIdsResponse> responseObserver) {
-        List<UserServiceProto.UserDTOResponse2> list = new ArrayList<>();
-        for (Long id : request.getUserIdsList()) {
-            var user = userRepository.findById(id).orElse(null);
-            if (user != null) {
-                UserServiceProto.UserDTOResponse2 response = UserServiceProto.UserDTOResponse2
-                        .newBuilder()
+        List<UserServiceProto.UserDTOResponse2> list = userRepository.findAllById(request.getUserIdsList())
+                .stream()
+                .map(user -> UserServiceProto.UserDTOResponse2.newBuilder()
                         .setId(user.getId())
                         .setUsername(user.getUsername() != null ? user.getUsername() : "")
                         .setAvatar(user.getAvatar() != null ? user.getAvatar() : "")
                         .setFullName(user.getFullName() != null ? user.getFullName() : "")
-                        .setOnlineStatus(user.getOnlineStatus() != null ? user.getOnlineStatus()
-                                : false)
-                        .build();
-                list.add(response);
-            }
-        }
+                        .setOnlineStatus(user.getOnlineStatus() != null ? user.getOnlineStatus() : false)
+                        .build())
+                .collect(Collectors.toList());
         responseObserver.onNext(UserServiceProto.GetUsersByIdsResponse.newBuilder().addAllUsers(list).build());
         responseObserver.onCompleted();
     }

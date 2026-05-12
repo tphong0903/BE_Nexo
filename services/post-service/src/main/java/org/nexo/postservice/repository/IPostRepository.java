@@ -84,4 +84,15 @@ public interface IPostRepository extends JpaRepository<PostModel, Long> {
             "ORDER BY DATE(p.createdAt)")
     List<Object[]> countPostsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
+    @Query("SELECT p FROM PostModel p " +
+            "WHERE (:hashtag IS NULL OR p.tag LIKE %:hashtag%) " +
+            "AND (:content IS NULL OR p.caption LIKE %:content%) " +
+            "AND (:startDate IS NULL OR p.createdAt >= :startDate) " +
+            "AND (:endDate IS NULL OR p.createdAt <= :endDate)")
+    Page<PostModel> filterPosts(@Param("hashtag") String hashtag,
+                                @Param("content") String content,
+                                @Param("authorName") String authorName,
+                                @Param("startDate") LocalDateTime startDate,
+                                @Param("endDate") LocalDateTime endDate,
+                                Pageable pageable);
 }

@@ -1,21 +1,9 @@
 package org.nexo.userservice.service.Impl;
 
-import java.time.Instant;
-import java.time.LocalDateTime;
-
-import java.util.List;
-
-import org.nexo.userservice.dto.ChangePasswordRequest;
-import org.nexo.userservice.dto.PageModelResponse;
-import org.nexo.userservice.dto.UpdateUserRequest;
-import org.nexo.userservice.dto.UserActivityLogResponse;
-import org.nexo.userservice.dto.UserDTOResponse;
-import org.nexo.userservice.dto.UserProfileDTOResponse;
-import org.nexo.userservice.dto.RecommendationStatusEvent;
-import org.nexo.userservice.dto.UserSearchEvent;
-import org.nexo.userservice.dto.UserStatisticsResponse;
-import org.nexo.userservice.model.UserActivityLogModel;
-import org.nexo.userservice.repository.UserActivityLogRepository;
+import jakarta.transaction.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.nexo.userservice.dto.*;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.enums.ERole;
 import org.nexo.userservice.enums.EStatusFollow;
@@ -25,8 +13,10 @@ import org.nexo.userservice.grpc.InteractionGrpcClient;
 import org.nexo.userservice.grpc.PostGrpcClient;
 import org.nexo.userservice.grpc.UploadFileGrpcClient;
 import org.nexo.userservice.mapper.UserMapper;
+import org.nexo.userservice.model.UserActivityLogModel;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.FollowRepository;
+import org.nexo.userservice.repository.UserActivityLogRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.BlockService;
 import org.nexo.userservice.service.UserEventProducer;
@@ -37,9 +27,9 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -265,6 +255,21 @@ public class UserServiceImpl implements UserService {
                 .totalPages(page.getTotalPages())
                 .last(page.isLast())
                 .content(content)
+                .build();
+    }
+
+    @Override
+    public InfoDashboardUser getInfoDashboardUser() {
+        Long totalUsers = userRepository.count();
+        Long totalUsersActive = userRepository.countUsersByStatus(EAccountStatus.ACTIVE);
+        Long totalUsersBlock = userRepository.countUsersByStatus(EAccountStatus.LOCKED);
+        Long totalUsersPending = userRepository.countUsersByStatus(EAccountStatus.PENDING);
+
+        return InfoDashboardUser.builder()
+                .totalUsers(totalUsers)
+                .totalUsersActive(totalUsersActive)
+                .totalUsersLocked(totalUsersBlock)
+                .totalUsersPending(totalUsersPending)
                 .build();
     }
 

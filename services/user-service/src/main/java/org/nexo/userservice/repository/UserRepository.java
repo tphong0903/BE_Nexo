@@ -1,8 +1,8 @@
 package org.nexo.userservice.repository;
 
+import org.nexo.userservice.dto.RecommendationUserExportDTO;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.enums.ERole;
-import org.nexo.userservice.dto.RecommendationUserExportDTO;
 import org.nexo.userservice.model.UserModel;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
@@ -95,4 +95,6 @@ public interface UserRepository extends JpaRepository<UserModel, Long> {
             @Param("activitySince") LocalDateTime activitySince,
             @Param("postSince") LocalDateTime postSince);
 
+    @Query("SELECT COUNT(u) FROM UserModel u WHERE u.accountStatus = :status")
+    Long countUsersByStatus(@Param("status") EAccountStatus status);
 }

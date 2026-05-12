@@ -217,4 +217,17 @@ public class UserController {
                                 .build();
         }
 
+        @GetMapping("/activity-logs")
+        public ResponseData<?> getActivityLogs(
+                        @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @RequestParam(defaultValue = "0") int pageNo,
+                        @RequestParam(defaultValue = "20") int pageSize) {
+                String accessToken = authHeader.replace("Bearer ", "").trim();
+                return ResponseData.builder()
+                                .status(200)
+                                .message("Activity logs retrieved successfully")
+                                .data(userService.getUserActivityLogs(accessToken, pageNo, pageSize))
+                                .build();
+        }
+
 }

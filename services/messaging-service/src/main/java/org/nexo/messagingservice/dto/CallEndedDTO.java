@@ -17,9 +17,10 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class CallEndedDTO {
     private Long callId;
+    private Long conversationId;
     private Long endedByUserId;
     private ECallStatus finalStatus;
-    // duration in seconds (null if call was never answered)
     private Long durationSeconds;
     private LocalDateTime endedAt;
+    private MessageDTO callMessage;
 }

@@ -470,9 +470,9 @@ public class FollowServiceImpl implements FollowService {
                                 .build();
                 FollowModel followModel = followRepository.findById(id1).orElse(null);
                 UserModel user = userRepository.findById(userId2).orElse(null);
-                list.add(followModel != null);
-                list.add(user != null ? user.getIsPrivate() : false);
-                list.add(followModel != null ? followModel.getIsCloseFriend() : false);
+                list.add(followModel != null && followModel.getStatus() == EStatusFollow.ACTIVE);
+                list.add(user != null && Boolean.TRUE.equals(user.getIsPrivate()));
+                list.add(followModel != null && Boolean.TRUE.equals(followModel.getIsCloseFriend()));
                 return list;
         }
 

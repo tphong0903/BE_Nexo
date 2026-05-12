@@ -13,8 +13,7 @@ import java.util.stream.Collectors;
 import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UpdateUserRequest;
-import org.nexo.userservice.dto.UserSearchResponse;
-import org.nexo.userservice.dto.UserSearchResponseAdmin;
+import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.service.MeilisearchService;
 import org.nexo.userservice.service.UserService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -133,10 +132,10 @@ public class UserController {
         @GetMapping("/search")
         public ResponseData<?> searchUsers(
                         @RequestParam(required = false, defaultValue = "") String query,
-                        @RequestParam(required = false, defaultValue = "10") Integer limit,
-                        @RequestParam(required = false, defaultValue = "0") Integer offset,
+                        @RequestParam(defaultValue = "0") int pageNo,
+                        @RequestParam(defaultValue = "10") int pageSize,
                         @RequestParam(required = false) String filter) throws MeilisearchException {
-                UserSearchResponse response = meilisearchService.searchUsers(query, limit, offset, filter);
+                PageModelResponse<?> response = meilisearchService.searchUsers(query, pageNo, pageSize, filter);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("User search completed successfully")
@@ -146,13 +145,12 @@ public class UserController {
 
         @GetMapping
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseData<?> getUser(@RequestParam(required = false, defaultValue = "") String query,
-                        @RequestParam(required = false, defaultValue = "10") Integer limit,
-                        @RequestParam(required = false, defaultValue = "0") Integer offset,
+        public ResponseData<?> getUser(
+                        @RequestParam(required = false, defaultValue = "") String query,
+                        @RequestParam(defaultValue = "0") int pageNo,
+                        @RequestParam(defaultValue = "10") int pageSize,
                         @RequestParam(required = false) String filter) throws MeilisearchException {
-
-                UserSearchResponseAdmin response = meilisearchService.searchUsersAdmin(query, limit, offset, filter);
-
+                PageModelResponse<?> response = meilisearchService.searchUsersAdmin(query, pageNo, pageSize, filter);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Admin user search completed successfully")

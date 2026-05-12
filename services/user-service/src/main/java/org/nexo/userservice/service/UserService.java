@@ -1,11 +1,6 @@
 package org.nexo.userservice.service;
 
-import org.nexo.userservice.dto.ChangePasswordRequest;
-import org.nexo.userservice.dto.PageModelResponse;
-import org.nexo.userservice.dto.UpdateUserRequest;
-import org.nexo.userservice.dto.UserActivityLogResponse;
-import org.nexo.userservice.dto.UserDTOResponse;
-import org.nexo.userservice.dto.UserProfileDTOResponse;
+import org.nexo.userservice.dto.*;
 import org.springframework.web.multipart.MultipartFile;
 
 public interface UserService {
@@ -21,7 +16,7 @@ public interface UserService {
     void assignRoleToUser(String username, String role);
 
     void banUser(String username);
-    
+
     void unbanUser(String username);
 
     void updateUserOauth(String keycloakUserId, UpdateUserRequest request);
@@ -31,4 +26,6 @@ public interface UserService {
     org.nexo.userservice.dto.UserStatisticsResponse getUserStatistics(Long userId);
 
     PageModelResponse<UserActivityLogResponse> getUserActivityLogs(String accessToken, int pageNo, int pageSize);
+
+    InfoDashboardUser getInfoDashboardUser();
 }

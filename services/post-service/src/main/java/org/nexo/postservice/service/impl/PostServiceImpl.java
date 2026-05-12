@@ -204,7 +204,8 @@ public class PostServiceImpl implements IPostService {
     public String deletePost(Long id) {
         PostModel model = postRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
-        securityUtil.checkOwner(model.getUserId());
+        if (!securityUtil.isPrivilegedUser())
+            securityUtil.checkOwner(model.getUserId());
 
         postRepository.delete(model);
         clearPostCache(id);
@@ -218,7 +219,8 @@ public class PostServiceImpl implements IPostService {
     public String deleteReel(Long id) {
         ReelModel model = reelRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.BAD_REQUEST));
-        securityUtil.checkOwner(model.getUserId());
+        if (!securityUtil.isPrivilegedUser())
+            securityUtil.checkOwner(model.getUserId());
 
         reelRepository.delete(model);
         clearReelCache(id);

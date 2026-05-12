@@ -56,7 +56,6 @@ public class StoryServiceImpl implements IStoryService {
 
 
     @Override
-    @Transactional
     public String saveStory(StoryRequestDto dto, List<MultipartFile> files) {
         securityUtil.checkOwner(dto.getUserId());
         UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(dto.getUserId());

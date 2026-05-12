@@ -17,10 +17,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 @Service
 @RequiredArgsConstructor
@@ -112,17 +109,40 @@ public class DashboardServiceImpl implements IDashboardService {
     }
 
     @Override
-    public PageModelResponse getAllPost(String search, int page, int limit, String type) {
-        Pageable pageable = PageRequest.of(page, limit, Sort.by("created_at").descending());
-        Page<ContentProjection> pageResult = adminContentRepository.findAllContent(search, type, pageable);
+    public PageModelResponse getAllPost(String search,
+                                        int page,
+                                        int limit,
+                                        String type,
+                                        String hashtag,
+                                        String content,
+                                        String authorName,
+                                        LocalDateTime startDate,
+                                        LocalDateTime endDate) {
 
-        return PageModelResponse.<ContentProjection>builder()
-                .pageNo(pageResult.getNumber())
-                .pageSize(pageResult.getSize())
+        Pageable pageable = PageRequest.of(
+                page,
+                limit,
+                Sort.by("created_at").descending()
+        );
+
+        Page<ContentProjection> pageResult =
+                adminContentRepository.findAllContent(
+                        search,
+                        type,
+                        hashtag,
+                        content,
+                        authorName,
+                        startDate,
+                        endDate,
+                        pageable
+                );
+
+        return PageModelResponse.builder()
+                .pageNo(page)
+                .pageSize(limit)
                 .totalElements(pageResult.getTotalElements())
                 .totalPages(pageResult.getTotalPages())
-                .last(pageResult.isLast())
-                .content(pageResult.getContent())
+                .content(Collections.singletonList(pageResult.getContent()))
                 .build();
     }
 

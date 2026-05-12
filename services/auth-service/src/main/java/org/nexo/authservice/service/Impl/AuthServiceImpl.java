@@ -85,10 +85,10 @@ public class AuthServiceImpl implements AuthService {
                             .bodyToMono(TokenResponse.class)
                             .flatMap(tokenResponse -> {
                                 return tokenCacheService.cacheToken(
-                                                loginRequest.getEmail(),
-                                                tokenResponse.getAccessToken(),
-                                                tokenResponse.getRefreshToken(),
-                                                tokenResponse.getExpiresIn())
+                                        loginRequest.getEmail(),
+                                        tokenResponse.getAccessToken(),
+                                        tokenResponse.getRefreshToken(),
+                                        tokenResponse.getExpiresIn())
                                         .thenReturn(tokenResponse);
                             });
                 });
@@ -125,25 +125,30 @@ public class AuthServiceImpl implements AuthService {
         if (userId == null) {
             return Mono.error(new KeycloakClientException(500, "Cannot extract userId"));
         }
+
         return userGrpcClient.createUser(
-                        userId,
-                        registerRequest.getEmail(),
-                        registerRequest.getFullname(),
-                        registerRequest.getUsername())
+                userId,
+                registerRequest.getEmail(),
+                registerRequest.getFullname(),
+                registerRequest.getUsername())
                 .flatMap(grpcResponse -> {
                     if (!grpcResponse.getSuccess()) {
-                        log.error("[SAGA] user-service rejected createUser for userId={}: {}", userId, grpcResponse.getMessage());
+                        log.error("[SAGA] user-service rejected createUser for userId={}: {}", userId,
+                                grpcResponse.getMessage());
+                        // compensate: rollback Keycloak user
                         return rollbackKeycloakUser(userId, adminToken)
                                 .then(Mono.error(new KeycloakClientException(500,
                                         "Registration failed: " + grpcResponse.getMessage())));
                     }
-                    sendVerifyEmail(userId, adminToken)
+                    return sendVerifyEmail(userId, adminToken)
+                            .doOnSuccess(v -> log.info("[SAGA] Verify email sent for userId={}", userId))
                             .doOnError(ex -> {
-                                log.error("Send verify email failed for userId={}: {}", userId, ex.getMessage());
+                                log.error("[SAGA] Send verify email failed for userId={}, scheduling retry: {}", userId,
+                                        ex.getMessage());
                                 enqueueRetry(userId, adminToken, 1);
                             })
-                            .subscribe();
-                    return Mono.just(userId);
+                            .onErrorComplete()
+                            .thenReturn(userId);
                 })
                 .onErrorResume(ex -> {
                     if (ex instanceof KeycloakClientException) {
@@ -164,8 +169,20 @@ public class AuthServiceImpl implements AuthService {
                 .retrieve()
                 .bodyToMono(Void.class)
                 .doOnSuccess(v -> log.info("[SAGA ROLLBACK] Keycloak user deleted successfully userId={}", userId))
-                .doOnError(e -> log.error("[SAGA ROLLBACK] Failed to delete Keycloak user userId={}: {}", userId, e.getMessage()))
+                .doOnError(e -> log.error("[SAGA ROLLBACK] Failed to delete Keycloak user userId={}: {}", userId,
+                        e.getMessage()))
                 .onErrorComplete();
+    }
+
+    private Mono<Void> rollbackAccountStatus(String keycloakUserId, String status) {
+        log.warn("[SAGA ROLLBACK] Reverting account status to {} for userId={}", status, keycloakUserId);
+        return userGrpcClient.updateAccountStatus(keycloakUserId, status)
+                .doOnSuccess(r -> log.info("[SAGA ROLLBACK] Account status reverted to {} for userId={}", status,
+                        keycloakUserId))
+                .doOnError(e -> log.error("[SAGA ROLLBACK] Failed to revert account status for userId={}: {}",
+                        keycloakUserId, e.getMessage()))
+                .onErrorComplete()
+                .then();
     }
 
     private Mono<String> handleRegistrationError(ClientResponse response) {
@@ -355,7 +372,7 @@ public class AuthServiceImpl implements AuthService {
                         + "/execute-actions-email")
                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                .bodyValue(new String[]{"UPDATE_PASSWORD"})
+                .bodyValue(new String[] { "UPDATE_PASSWORD" })
                 .retrieve()
                 .bodyToMono(Void.class);
     }
@@ -394,23 +411,42 @@ public class AuthServiceImpl implements AuthService {
                                 } catch (Exception e) {
                                     return Mono.error(new KeycloakClientException(500, "Failed to parse user info"));
                                 }
-                                verifyEmail(request.getKeycloakId(), adminToken).subscribe();
-                                userGrpcClient.updateAccountStatus(request.getKeycloakId(), "ACTIVE")
-                                        .doOnSuccess(grpcResponse -> {
-                                            if (grpcResponse.getSuccess()) {
-                                                log.info("Account status updated to ACTIVE for userId: {}",
-                                                        request.getKeycloakId());
-                                            } else {
-                                                log.warn("Failed to update account status for userId: {}, message: {}",
+                                // SAGA: update user-service status first, then mark verified in Keycloak
+                                // If user-service fails → rollback Keycloak emailVerified flag
+                                return userGrpcClient.updateAccountStatus(request.getKeycloakId(), "ACTIVE")
+                                        .flatMap(grpcResponse -> {
+                                            if (!grpcResponse.getSuccess()) {
+                                                log.error(
+                                                        "[SAGA] Failed to activate user in user-service for userId={}: {}",
                                                         request.getKeycloakId(), grpcResponse.getMessage());
+                                                return Mono.error(new KeycloakClientException(500,
+                                                        "Failed to activate account: " + grpcResponse.getMessage()));
                                             }
+                                            log.info(
+                                                    "[SAGA] Account status set to ACTIVE in user-service for userId={}",
+                                                    request.getKeycloakId());
+                                            // Step 2: mark email verified in Keycloak
+                                            return verifyEmail(request.getKeycloakId(), adminToken)
+                                                    .doOnSuccess(v -> log.info(
+                                                            "[SAGA] Email verified in Keycloak for userId={}",
+                                                            request.getKeycloakId()))
+                                                    .doOnError(ex -> log.error(
+                                                            "[SAGA] verifyEmail in Keycloak failed for userId={}: {}",
+                                                            request.getKeycloakId(), ex.getMessage()))
+                                                    .onErrorResume(ex -> rollbackAccountStatus(request.getKeycloakId(),
+                                                            "PENDING")
+                                                            .then(Mono.error(new KeycloakClientException(500,
+                                                                    "Email verification failed, account status rolled back"))));
                                         })
-                                        .doOnError(error -> {
-                                            log.error("Failed to update account status for userId: {}, error: {}",
-                                                    request.getKeycloakId(), error.getMessage());
+                                        .onErrorResume(ex -> {
+                                            if (ex instanceof KeycloakClientException)
+                                                return Mono.error(ex);
+                                            log.error("[SAGA] Unexpected error during callback for userId={}: {}",
+                                                    request.getKeycloakId(), ex.getMessage());
+                                            return Mono.error(
+                                                    new KeycloakClientException(500, "Callback processing failed"));
                                         })
-                                        .subscribe();
-                                return Mono.just(userInfo);
+                                        .thenReturn(userInfo);
                             });
                 });
     }
@@ -468,7 +504,7 @@ public class AuthServiceImpl implements AuthService {
     public Mono<List<Map<String, Object>>> getAllUserRoles(String userId, String clientUUID, String adminToken) {
         return webClient.get()
                 .uri(keycloakConfig.getServerUrl()
-                                + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
                         keycloakConfig.getRealm(), userId, clientUUID)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                 .retrieve()
@@ -481,7 +517,7 @@ public class AuthServiceImpl implements AuthService {
         return getAllUserRoles(userId, clientUUID, adminToken)
                 .flatMap(roles -> webClient.method(HttpMethod.DELETE)
                         .uri(keycloakConfig.getServerUrl()
-                                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                                + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
                                 keycloakConfig.getRealm(), userId, clientUUID)
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                         .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
@@ -493,7 +529,7 @@ public class AuthServiceImpl implements AuthService {
     public Mono<Map<String, Object>> getClientRole(String clientUUID, String roleName, String adminToken) {
         return webClient.get()
                 .uri(keycloakConfig.getServerUrl()
-                                + "/admin/realms/{realm}/clients/{clientUUID}/roles/{roleName}",
+                        + "/admin/realms/{realm}/clients/{clientUUID}/roles/{roleName}",
                         keycloakConfig.getRealm(), clientUUID, roleName)
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                 .retrieve()
@@ -508,7 +544,7 @@ public class AuthServiceImpl implements AuthService {
                         .then(getClientRole(clientUUID, newRoleName, adminToken))
                         .flatMap(newRole -> webClient.post()
                                 .uri(keycloakConfig.getServerUrl()
-                                                + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
+                                        + "/admin/realms/{realm}/users/{userId}/role-mappings/clients/{clientUUID}",
                                         keycloakConfig.getRealm(), userId, clientUUID)
                                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
                                 .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
@@ -542,13 +578,32 @@ public class AuthServiceImpl implements AuthService {
                                     return userGrpcClient.getUserIdByEmail(email)
                                             .flatMap(grpc -> {
                                                 if (!grpc.getSuccess()) {
-                                                    tokenResponse.setMissingInfo(true);
-                                                    userGrpcClient.createUserOauth(
-                                                            keycloakId,
-                                                            email,
-                                                            fullname,
-                                                            username).subscribe();
-                                                    return Mono.just(tokenResponse);
+                                                    // SAGA: user doesn't exist yet in user-service → create
+                                                    return userGrpcClient
+                                                            .createUserOauth(keycloakId, email, fullname, username)
+                                                            .flatMap(createResp -> {
+                                                                if (!createResp.getSuccess()) {
+                                                                    log.error(
+                                                                            "[SAGA] createUserOauth failed for keycloakId={}: {}",
+                                                                            keycloakId, createResp.getMessage());
+                                                                    // Cannot rollback OAuth token already issued; mark
+                                                                    // as missing info so frontend prompts user
+                                                                    tokenResponse.setMissingInfo(true);
+                                                                    return Mono.just(tokenResponse);
+                                                                }
+                                                                log.info(
+                                                                        "[SAGA] OAuth user created in user-service for keycloakId={}",
+                                                                        keycloakId);
+                                                                tokenResponse.setMissingInfo(true);
+                                                                return Mono.just(tokenResponse);
+                                                            })
+                                                            .onErrorResume(ex -> {
+                                                                log.error(
+                                                                        "[SAGA] createUserOauth gRPC error for keycloakId={}: {}",
+                                                                        keycloakId, ex.getMessage());
+                                                                tokenResponse.setMissingInfo(true);
+                                                                return Mono.just(tokenResponse);
+                                                            });
                                                 } else {
                                                     tokenResponse.setMissingInfo(false);
                                                     return tokenCacheService.cacheToken(
@@ -620,7 +675,8 @@ public class AuthServiceImpl implements AuthService {
         ArrayNode credentialsArray = objectMapper.createArrayNode();
         ObjectNode credentialNode = objectMapper.createObjectNode();
         credentialNode.put("type", "password");
-        credentialNode.put("value", request.getDefaultPassword() != null ? request.getDefaultPassword() : "Nexo@123456");
+        credentialNode.put("value",
+                request.getDefaultPassword() != null ? request.getDefaultPassword() : "Nexo@123456");
         credentialNode.put("temporary", false);
         credentialsArray.add(credentialNode);
         userNode.set("credentials", credentialsArray);
@@ -635,20 +691,27 @@ public class AuthServiceImpl implements AuthService {
                         String location = response.headers().asHttpHeaders().getFirst(HttpHeaders.LOCATION);
                         String keycloakId = location != null ? location.substring(location.lastIndexOf("/") + 1) : null;
                         if (keycloakId == null) {
-                            return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: no keycloakId", null));
+                            return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(),
+                                    "FAILED: no keycloakId", null));
                         }
-                        return userGrpcClient.createUser(keycloakId, request.getEmail(), request.getFullname(), request.getUsername())
+                        return userGrpcClient
+                                .createUser(keycloakId, request.getEmail(), request.getFullname(),
+                                        request.getUsername())
                                 .flatMap(grpcResp -> userGrpcClient.updateAccountStatus(keycloakId, "ACTIVE"))
-                                .thenReturn(new SyncUserResponse(request.getUsername(), request.getEmail(), "SUCCESS", keycloakId))
+                                .thenReturn(new SyncUserResponse(request.getUsername(), request.getEmail(), "SUCCESS",
+                                        keycloakId))
                                 .onErrorResume(ex -> {
                                     log.error("gRPC failed for {}: {}", request.getEmail(), ex.getMessage());
-                                    return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: grpc - " + ex.getMessage(), keycloakId));
+                                    return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(),
+                                            "FAILED: grpc - " + ex.getMessage(), keycloakId));
                                 });
                     } else if (response.statusCode().value() == 409) {
-                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "CONFLICT_EXISTS", null));
+                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(),
+                                "CONFLICT_EXISTS", null));
                     } else {
                         return response.bodyToMono(String.class)
-                                .map(body -> new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: " + response.statusCode(), null));
+                                .map(body -> new SyncUserResponse(request.getUsername(), request.getEmail(),
+                                        "FAILED: " + response.statusCode(), null));
                     }
                 });
     }
@@ -747,7 +810,8 @@ public class AuthServiceImpl implements AuthService {
         ArrayNode credentialsArray = objectMapper.createArrayNode();
         ObjectNode credentialNode = objectMapper.createObjectNode();
         credentialNode.put("type", "password");
-        credentialNode.put("value", request.getDefaultPassword() != null ? request.getDefaultPassword() : "Nexo@123456");
+        credentialNode.put("value",
+                request.getDefaultPassword() != null ? request.getDefaultPassword() : "Nexo@123456");
         credentialNode.put("temporary", false);
         credentialsArray.add(credentialNode);
 
@@ -762,12 +826,15 @@ public class AuthServiceImpl implements AuthService {
                     if (response.statusCode().is2xxSuccessful()) {
                         String location = response.headers().asHttpHeaders().getFirst(HttpHeaders.LOCATION);
                         String userId = location != null ? location.substring(location.lastIndexOf("/") + 1) : null;
-                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "SUCCESS", userId));
+                        return Mono.just(
+                                new SyncUserResponse(request.getUsername(), request.getEmail(), "SUCCESS", userId));
                     } else if (response.statusCode().value() == 409) {
-                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(), "CONFLICT_EXISTS", null));
+                        return Mono.just(new SyncUserResponse(request.getUsername(), request.getEmail(),
+                                "CONFLICT_EXISTS", null));
                     } else {
                         return response.bodyToMono(String.class)
-                                .map(errorBody -> new SyncUserResponse(request.getUsername(), request.getEmail(), "FAILED: " + response.statusCode(), null));
+                                .map(errorBody -> new SyncUserResponse(request.getUsername(), request.getEmail(),
+                                        "FAILED: " + response.statusCode(), null));
                     }
                 });
     }

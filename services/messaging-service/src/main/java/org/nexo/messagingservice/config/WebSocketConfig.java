@@ -1,6 +1,8 @@
 package org.nexo.messagingservice.config;
 
 import lombok.RequiredArgsConstructor;
+
+import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.util.JwtUtil;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -30,10 +32,11 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final JwtUtil jwtUtil;
     private final JwtDecoder jwtDecoder;
+    private final UserGrpcClient userGrpcClient;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
-        config.enableSimpleBroker("/topic", "/queue", "/user");
+        config.enableSimpleBroker("/topic", "/queue");
         config.setApplicationDestinationPrefixes("/app");
         config.setUserDestinationPrefix("/user");
     }
@@ -59,18 +62,24 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         token = token.substring(7);
                         jwtDecoder.decode(token);
 
-                        String userId = jwtUtil.getUserIdFromToken(token);
-                        String username = jwtUtil.getUsernameFromToken(token);
+                        String keycloakUserId = jwtUtil.getUserIdFromToken(token);
 
-                        if (userId != null && username != null) {
-                            UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                                    username,
-                                    null,
-                                    Collections.emptyList());
-                            authentication.setDetails(userId);
+                        if (keycloakUserId != null) {
+                            try {
+                                org.nexo.grpc.user.UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+                                Long userId = userDto.getUserId();
+                                
+                                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
+                                        userId.toString(),
+                                        null,
+                                        Collections.emptyList());
+                                authentication.setDetails(keycloakUserId);
 
-                            accessor.setUser(authentication);
-                            SecurityContextHolder.getContext().setAuthentication(authentication);
+                                accessor.setUser(authentication);
+                                SecurityContextHolder.getContext().setAuthentication(authentication);
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
                         }
                     }
                 } else if (StompCommand.SEND.equals(accessor.getCommand())) {

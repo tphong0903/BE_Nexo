@@ -3,13 +3,19 @@ package org.nexo.userservice.service.Impl;
 import java.time.Instant;
 import java.time.LocalDateTime;
 
+import java.util.List;
+
 import org.nexo.userservice.dto.ChangePasswordRequest;
+import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.dto.UpdateUserRequest;
+import org.nexo.userservice.dto.UserActivityLogResponse;
 import org.nexo.userservice.dto.UserDTOResponse;
 import org.nexo.userservice.dto.UserProfileDTOResponse;
 import org.nexo.userservice.dto.RecommendationStatusEvent;
 import org.nexo.userservice.dto.UserSearchEvent;
 import org.nexo.userservice.dto.UserStatisticsResponse;
+import org.nexo.userservice.model.UserActivityLogModel;
+import org.nexo.userservice.repository.UserActivityLogRepository;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.enums.ERole;
 import org.nexo.userservice.enums.EStatusFollow;
@@ -26,6 +32,8 @@ import org.nexo.userservice.service.BlockService;
 import org.nexo.userservice.service.UserEventProducer;
 import org.nexo.userservice.service.UserService;
 import org.nexo.userservice.util.JwtUtil;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -48,6 +56,7 @@ public class UserServiceImpl implements UserService {
     private final AuthGrpcClient authGrpcClient;
     private final PostGrpcClient postGrpcClient;
     private final InteractionGrpcClient interactionGrpcClient;
+    private final UserActivityLogRepository userActivityLogRepository;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
         UserModel user = userRepository.findFirstByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
@@ -229,6 +238,34 @@ public class UserServiceImpl implements UserService {
             throw new ResourceNotFoundException("Cannot change password for inactive user");
         }
         authGrpcClient.changePassword(keycloakUserId, request.getOldPassword(), request.getNewPassword());
+    }
+
+    @Override
+    public PageModelResponse<UserActivityLogResponse> getUserActivityLogs(String accessToken, int pageNo, int pageSize) {
+        String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+
+        Page<UserActivityLogModel> page = userActivityLogRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId(), PageRequest.of(pageNo, pageSize));
+
+        List<UserActivityLogResponse> content = page.getContent().stream()
+                .map(log -> UserActivityLogResponse.builder()
+                        .id(log.getId())
+                        .action(log.getAction())
+                        .detailsJson(log.getDetailsJson())
+                        .createdAt(log.getCreatedAt())
+                        .build())
+                .toList();
+
+        return PageModelResponse.<UserActivityLogResponse>builder()
+                .pageNo(pageNo)
+                .pageSize(pageSize)
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .content(content)
+                .build();
     }
 
     @Override

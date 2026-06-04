@@ -1,17 +1,16 @@
 package org.nexo.postservice.dto.response;
 
 import lombok.*;
-import org.nexo.postservice.dto.UserTagDTO;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Data
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class ReelResponseDTO {
+@Builder(toBuilder = true)
+public class ReelResponseDTO implements Serializable {
     private Long reelId;
     private Long userId;
     private String userName;

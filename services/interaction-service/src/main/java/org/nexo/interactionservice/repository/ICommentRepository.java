@@ -30,4 +30,5 @@ public interface ICommentRepository extends JpaRepository<CommentModel, Long> {
 
     long countByUserId(Long userId);
 
+
 }

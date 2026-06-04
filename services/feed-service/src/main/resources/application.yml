@@ -26,8 +26,11 @@ spring:
           jwk-set-uri: http://localhost:9090/realms/nexo-network/protocol/openid-connect/certs
   data:
     redis:
-      port: 6379
       host: localhost
+      port: 6379
+      password: Admin@123
+      timeout: 2000ms
+      connect-timeout: 2000ms
   kafka:
     bootstrap-servers: localhost:9097
     consumer:
@@ -36,9 +39,12 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
       properties:
         spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
+        spring.json.trusted.packages: "*"
         spring.json.value.default.type: org.nexo.feedservice.dto.MessagePostDTO
-        spring.json.trusted-packages: org.nexo
+        spring.json.use.type.headers: false
       auto-offset-reset: earliest
+    producer:
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 eureka:
   client:
     service-url:

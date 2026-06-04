@@ -6,6 +6,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.Collection;
 import java.util.List;
 
 @Repository
@@ -14,6 +15,7 @@ public interface IStoryRepository extends JpaRepository<StoryModel, Long> {
 
     Page<StoryModel> findByUserId(Long userId, Pageable pageable);
 
+    List<StoryModel> findAllByUserIdInAndIsActive(Collection<Long> userIds, boolean isActive);
 
     List<StoryModel> findAllByUserIdAndIsActiveAndIsClosedFriend(Long userId, Boolean isActive, Boolean isClosedFriend);
 }

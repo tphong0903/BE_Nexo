@@ -1,11 +1,16 @@
 package org.nexo.messagingservice.controller;
 
+import org.nexo.messagingservice.dto.AddMembersRequest;
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
+import org.nexo.messagingservice.dto.CreateGroupRequest;
 import org.nexo.messagingservice.dto.NicknameRequest;
 import org.nexo.messagingservice.dto.ResponseData;
+import org.nexo.messagingservice.dto.UpdateGroupRequest;
 import org.nexo.messagingservice.service.ConversationService;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,7 +54,7 @@ public class ConversationController {
                         Authentication authentication) {
                 String keycloakUserId = authentication.getName();
                 return ResponseData.builder()
-                                .data(conversationService.getUserConversations(keycloakUserId, pageable))
+                                .data(conversationService.getUserConversations(keycloakUserId, pageable, search))
                                 .message("User conversations retrieved successfully")
                                 .build();
         }
@@ -171,6 +176,107 @@ public class ConversationController {
                 return ResponseData.builder()
                                 .data(conversation)
                                 .message("Nickname set successfully")
+                                .build();
+        }
+
+        // ─── Group endpoints ──────────────────────────────────────────────────────
+
+        @PostMapping("/group")
+        public ResponseData<?> createGroup(
+                        @RequestBody CreateGroupRequest request,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                ConversationResponseDTO group = conversationService.createGroup(keycloakUserId, request);
+
+                return ResponseData.builder()
+                                .data(group)
+                                .message("Group created successfully")
+                                .build();
+        }
+
+        @PutMapping("/{conversationId}/group")
+        public ResponseData<?> updateGroup(
+                        @PathVariable Long conversationId,
+                        @RequestBody UpdateGroupRequest request,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                ConversationResponseDTO group = conversationService.updateGroup(conversationId, keycloakUserId, request);
+
+                return ResponseData.builder()
+                                .data(group)
+                                .message("Group updated successfully")
+                                .build();
+        }
+
+        @PostMapping("/{conversationId}/group/members")
+        public ResponseData<?> addMembers(
+                        @PathVariable Long conversationId,
+                        @RequestBody AddMembersRequest request,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                ConversationResponseDTO group = conversationService.addMembers(conversationId, keycloakUserId, request);
+
+                return ResponseData.builder()
+                                .data(group)
+                                .message("Members added successfully")
+                                .build();
+        }
+
+        @DeleteMapping("/{conversationId}/group/members/{targetUserId}")
+        public ResponseData<?> removeMember(
+                        @PathVariable Long conversationId,
+                        @PathVariable Long targetUserId,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                conversationService.removeMember(conversationId, keycloakUserId, targetUserId);
+
+                return ResponseData.builder()
+                                .message("Member removed successfully")
+                                .build();
+        }
+
+        @PostMapping("/{conversationId}/group/leave")
+        public ResponseData<?> leaveGroup(
+                        @PathVariable Long conversationId,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                conversationService.leaveGroup(conversationId, keycloakUserId);
+
+                return ResponseData.builder()
+                                .message("Left group successfully")
+                                .build();
+        }
+
+        @PutMapping("/{conversationId}/group/members/{targetUserId}/promote")
+        public ResponseData<?> promoteAdmin(
+                        @PathVariable Long conversationId,
+                        @PathVariable Long targetUserId,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                conversationService.promoteAdmin(conversationId, keycloakUserId, targetUserId);
+
+                return ResponseData.builder()
+                                .message("Member promoted to admin")
+                                .build();
+        }
+
+        @PutMapping("/{conversationId}/group/members/{targetUserId}/demote")
+        public ResponseData<?> demoteAdmin(
+                        @PathVariable Long conversationId,
+                        @PathVariable Long targetUserId,
+                        Authentication authentication) {
+
+                String keycloakUserId = authentication.getName();
+                conversationService.demoteAdmin(conversationId, keycloakUserId, targetUserId);
+
+                return ResponseData.builder()
+                                .message("Admin demoted to member")
                                 .build();
         }
 

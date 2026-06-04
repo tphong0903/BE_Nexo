@@ -24,4 +24,6 @@ public class ReportReelModel extends AbstractEntity<Long> {
     private String reporterName;
     private String ownerPostName;
     private String note;
+    private String predictAI;
+    private Double confidence;
 }

@@ -5,15 +5,16 @@ import lombok.extern.slf4j.Slf4j;
 import org.nexo.postservice.dto.DashBoardDateDTO;
 import org.nexo.postservice.dto.response.ChartDataDto;
 import org.nexo.postservice.dto.response.ResponseData;
-import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.service.IDashboardService;
 import org.nexo.postservice.service.IPostService;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @RestController
 @RequestMapping("/admin")
@@ -66,11 +67,16 @@ public class DashboardController {
     }
 
     @GetMapping("/posts/all")
-    public ResponseData<?> getAllPost(@RequestParam(required = false) String search,
-                                      @RequestParam(defaultValue = "0") int pageNo,
-                                      @RequestParam(defaultValue = "10") int pageSize,
-                                      @RequestParam(defaultValue = "all") String type) {
-        return new ResponseData<>(200, "Success", dashboardService.getAllPost(search, pageNo, pageSize, type));
+    public ResponseData<?> getAllPosts(@RequestParam(required = false) String search,
+                                       @RequestParam(defaultValue = "0") int pageNo,
+                                       @RequestParam(defaultValue = "10") int pageSize,
+                                       @RequestParam(defaultValue = "all") String type,
+                                       @RequestParam(required = false) String hashtag,
+                                       @RequestParam(required = false) String content,
+                                       @RequestParam(required = false) String authorName,
+                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
+                                       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
+        return new ResponseData<>(HttpStatus.OK.value(), "Success", dashboardService.getAllPost(search, pageNo, pageSize, type, hashtag, content, authorName, startDate, endDate));
     }
 
     @GetMapping("/posts/")
@@ -88,7 +94,7 @@ public class DashboardController {
     @DeleteMapping("/posts/{type}/{id}")
     public ResponseData<?> deletePostByIdAndType(@PathVariable String type, @PathVariable Long id) {
         if (type.equals("reel"))
-            return new ResponseData<>(200, "Success", postService.deleteReel2(id));
-        return new ResponseData<>(200, "Success", postService.deletePost2(id));
+            return new ResponseData<>(200, "Success", postService.deleteReel(id));
+        return new ResponseData<>(200, "Success", postService.deletePost(id));
     }
 }

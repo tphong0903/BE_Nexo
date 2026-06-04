@@ -13,45 +13,39 @@ import org.nexo.notificationservice.repository.INotificationRepository;
 import org.nexo.notificationservice.service.INotificationService;
 import org.nexo.notificationservice.util.ENotificationType;
 import org.nexo.notificationservice.util.SecurityUtil;
-
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class NotificationService implements INotificationService {
+    private static final String UNREAD_COUNT_KEY = "noti:unread:count:";
+    private static final String USER_CACHE_KEY = "user:profile:";
     private final INotificationRepository notificationRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final SimpMessagingTemplate messagingTemplate;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Override
     public PageModelResponse<?> getNotifications(Pageable pageable) {
         Long userId = securityUtil.getUserIdFromToken();
-        Page<NotificationModel> notificationPage = notificationRepository.findByRecipientIdAndActorIdNot(userId, userId, pageable);
+        Page<NotificationModel> notificationPage = notificationRepository.findByRecipientIdAndActorIdNotOrderByCreatedAtDesc(userId, userId, pageable);
         List<NotificationModel> rawNotifications = notificationPage.getContent();
 
         if (rawNotifications.isEmpty()) {
-            return PageModelResponse.builder()
-                    .pageNo(notificationPage.getNumber())
-                    .pageSize(notificationPage.getSize())
-                    .totalElements(notificationPage.getTotalElements())
-                    .totalPages(notificationPage.getTotalPages())
-                    .last(notificationPage.isLast())
-                    .content(List.of())
-                    .build();
+            return PageModelResponse.builder().content(List.of()).build();
         }
 
         List<Long> actorIds = rawNotifications.stream()
@@ -59,11 +53,7 @@ public class NotificationService implements INotificationService {
                 .distinct()
                 .collect(Collectors.toList());
 
-        Map<Long, UserDTO> userMap = userGrpcClient.getUsersByIds(actorIds).stream()
-                .collect(Collectors.toMap(
-                        UserServiceProto.UserDTOResponse2::getId,
-                        userProto -> new UserDTO(userProto.getUsername(), userProto.getAvatar())
-                ));
+        Map<Long, UserDTO> userMap = getUsersWithCache(actorIds);
 
         Map<String, List<NotificationModel>> groupedNotifications = rawNotifications.stream()
                 .collect(Collectors.groupingBy(
@@ -118,7 +108,16 @@ public class NotificationService implements INotificationService {
     @Override
     public Long getNotificationsUnread() {
         Long userId = securityUtil.getUserIdFromToken();
-        return notificationRepository.countByRecipientIdAndIsRead(userId, false);
+        String key = UNREAD_COUNT_KEY + userId;
+
+        Integer cachedCount = (Integer) redisTemplate.opsForValue().get(key);
+        if (cachedCount != null) {
+            return cachedCount.longValue();
+        }
+
+        long count = notificationRepository.countByRecipientIdAndIsRead(userId, false);
+        redisTemplate.opsForValue().set(key, (int) count, 10, TimeUnit.MINUTES);
+        return count;
     }
 
     @Override
@@ -127,15 +126,19 @@ public class NotificationService implements INotificationService {
         NotificationModel model = notificationRepository.findById(id).orElse(null);
         if (model == null || !Objects.equals(model.getRecipientId(), userId))
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
-        model.setIsRead(true);
-        notificationRepository.save(model);
+
+        if (!model.getIsRead()) {
+            model.setIsRead(true);
+            notificationRepository.save(model);
+            decrementUnreadCache(userId);
+        }
         return "Success";
     }
 
     @Override
     public String readAllNotification() {
         Long userId = securityUtil.getUserIdFromToken();
-        List<NotificationModel> list = notificationRepository.getAllByRecipientIdAndIsRead(userId, false);
+        List<NotificationModel> list = notificationRepository.findAllByRecipientIdAndIsReadOrderByCreatedAtDesc(userId, false);
         if (!list.isEmpty() && !Objects.equals(list.getFirst().getRecipientId(), userId)) {
             throw new CustomException("Dont allow", HttpStatus.BAD_REQUEST);
         }
@@ -143,6 +146,7 @@ public class NotificationService implements INotificationService {
             model.setIsRead(true);
         }
         notificationRepository.saveAll(list);
+        redisTemplate.delete(UNREAD_COUNT_KEY + userId);
         return "Success";
     }
 
@@ -157,7 +161,7 @@ public class NotificationService implements INotificationService {
             throw new CustomException("Notification type is not valid", HttpStatus.BAD_REQUEST);
         }
 
-        List<NotificationModel> notificationsToUpdate = notificationRepository.findAllByRecipientIdAndTargetUrlAndNotificationTypeAndIsRead(userId, targetUrl, type, false);
+        List<NotificationModel> notificationsToUpdate = notificationRepository.findAllByRecipientIdAndTargetUrlAndNotificationTypeAndIsReadOrderByCreatedAtDesc(userId, targetUrl, type, false);
 
         if (!notificationsToUpdate.isEmpty()) {
             for (NotificationModel model : notificationsToUpdate) {
@@ -198,7 +202,7 @@ public class NotificationService implements INotificationService {
 
             case COMMENT_POST -> actor.getUsername() + " đã bình luận vào bài viết của bạn";
             case COMMENT_REEL -> actor.getUsername() + " đã bình luận vào reel của bạn";
-            case COMMENT_MENTION -> actor.getUsername() + " đã nhắc đến bạn trong một bình luận";
+            case MENTION_COMMENT, COMMENT_MENTION -> "đã nhắc đến bạn trong một bình luận";
 
             case FOLLOW -> actor.getUsername() + " đã theo dõi bạn";
             case TAG -> actor.getUsername() + " đã gắn thẻ bạn trong một bài viết";
@@ -207,28 +211,45 @@ public class NotificationService implements INotificationService {
             default -> "Có một thông báo mới";
         };
         if (notificationRepository.existsByRecipientIdAndActorIdAndMessageAndTargetUrl(recipient.getId(), actor.getId(), message, messageDTO.getTargetUrl())) {
-            log.info("Notification sent to {}: {} is exist", recipient.getUsername(), message);
+            notificationRepository.deleteByRecipientIdAndActorIdAndMessageAndTargetUrl(
+                    recipient.getId(),
+                    actor.getId(),
+                    message,
+                    messageDTO.getTargetUrl()
+            );
+            decrementUnreadCache(recipient.getId());
+            log.info("Đã xóa thông báo tồn tại của {}: {}", recipient.getUsername(), message);
         } else {
-            notificationRepository.save(NotificationModel.builder()
+            NotificationModel newModel = NotificationModel.builder()
                     .notificationType(ENotificationType.valueOf(messageDTO.getNotificationType()))
                     .targetUrl(messageDTO.getTargetUrl())
                     .isRead(false)
                     .actorId(actor.getId())
                     .recipientId(recipient.getId())
                     .message(message)
-                    .build());
-            String destination = "/queue/notifications";
-            log.info("==> [WEBSOCKET] Attempting to send message to user '{}' at destination '{}'. Message: '{}'",
-                    recipient.getUsername(), destination, message);
-            messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", message);
+                    .build();
+            notificationRepository.save(newModel);
+            incrementUnreadCache(recipient.getId());
+            NotificationDTO wsDto = new NotificationDTO(
+                    newModel.getId(),
+                    newModel.getRecipientId(),
+                    newModel.getNotificationType().name(),
+                    newModel.getTargetUrl(),
+                    message,
+                    false,
+                    List.of(new UserDTO(actor.getUsername(), actor.getAvatar())),
+                    newModel.getCreatedAt()
+            );
 
+            log.info("==> [WEBSOCKET] Attempting to send message to user '{}'", recipient.getUsername());
+            messagingTemplate.convertAndSendToUser(recipient.getUsername(), "/queue/notifications", wsDto);
             log.info("Notification sent to {}: {}", recipient.getUsername(), message);
         }
     }
 
     private String generateDynamicMessage(List<UserDTO> users, ENotificationType type) {
         int size = users.size();
-        if (size == 0) return "Có thông báo mới."; // Fallback
+        if (size == 0) return "Có thông báo mới.";
 
         String firstActorName = users.getFirst().getUserName();
         String actionText = switch (type) {
@@ -239,7 +260,7 @@ public class NotificationService implements INotificationService {
 
             case COMMENT_POST -> "đã bình luận vào bài viết của bạn";
             case COMMENT_REEL -> "đã bình luận vào reel của bạn";
-            case COMMENT_MENTION -> "đã nhắc đến bạn trong một bình luận";
+            case MENTION_COMMENT, COMMENT_MENTION -> "đã nhắc đến bạn trong một bình luận";
 
             case FOLLOW -> "đã theo dõi bạn";
             case TAG -> "đã gắn thẻ bạn trong một bài viết";
@@ -252,5 +273,45 @@ public class NotificationService implements INotificationService {
         } else {
             return firstActorName + " và " + (size - 1) + " người khác " + actionText;
         }
+    }
+
+    private void incrementUnreadCache(Long userId) {
+        String key = UNREAD_COUNT_KEY + userId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+            redisTemplate.opsForValue().increment(key);
+        }
+    }
+
+    private void decrementUnreadCache(Long userId) {
+        String key = UNREAD_COUNT_KEY + userId;
+        if (Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+            Long val = redisTemplate.opsForValue().decrement(key);
+            if (val != null && val < 0) redisTemplate.opsForValue().set(key, 0);
+        }
+    }
+
+    private Map<Long, UserDTO> getUsersWithCache(List<Long> actorIds) {
+        Map<Long, UserDTO> result = new HashMap<>();
+        List<Long> missingIds = new ArrayList<>();
+
+        for (Long id : actorIds) {
+            UserDTO cached = (UserDTO) redisTemplate.opsForValue().get(USER_CACHE_KEY + id);
+            if (cached != null) result.put(id, cached);
+            else missingIds.add(id);
+        }
+
+        if (!missingIds.isEmpty()) {
+            Map<Long, UserDTO> remoteUsers = userGrpcClient.getUsersByIds(missingIds).stream()
+                    .collect(Collectors.toMap(
+                            UserServiceProto.UserDTOResponse2::getId,
+                            u -> new UserDTO(u.getUsername(), u.getAvatar())
+                    ));
+
+            remoteUsers.forEach((id, dto) -> {
+                redisTemplate.opsForValue().set(USER_CACHE_KEY + id, dto, 1, TimeUnit.HOURS);
+                result.put(id, dto);
+            });
+        }
+        return result;
     }
 }

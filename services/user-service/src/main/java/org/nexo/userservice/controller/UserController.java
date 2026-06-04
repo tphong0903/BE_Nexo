@@ -2,10 +2,11 @@ package org.nexo.userservice.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.meilisearch.sdk.exceptions.MeilisearchException;
-
-import jakarta.validation.Valid;
 import jakarta.validation.ConstraintViolation;
+import jakarta.validation.Valid;
 import jakarta.validation.Validator;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -13,28 +14,15 @@ import java.util.stream.Collectors;
 import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UpdateUserRequest;
-import org.nexo.userservice.dto.UserSearchResponse;
-import org.nexo.userservice.dto.UserSearchResponseAdmin;
 import org.nexo.userservice.service.MeilisearchService;
 import org.nexo.userservice.service.UserService;
+import org.springframework.http.HttpHeaders;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
-import org.springframework.http.HttpHeaders;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RequestPart;
-import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.bind.annotation.*;
+import org.nexo.userservice.dto.PageModelResponse;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping
@@ -133,10 +121,10 @@ public class UserController {
         @GetMapping("/search")
         public ResponseData<?> searchUsers(
                         @RequestParam(required = false, defaultValue = "") String query,
-                        @RequestParam(required = false, defaultValue = "10") Integer limit,
-                        @RequestParam(required = false, defaultValue = "0") Integer offset,
+                        @RequestParam(defaultValue = "0") int pageNo,
+                        @RequestParam(defaultValue = "10") int pageSize,
                         @RequestParam(required = false) String filter) throws MeilisearchException {
-                UserSearchResponse response = meilisearchService.searchUsers(query, limit, offset, filter);
+                PageModelResponse<?> response = meilisearchService.searchUsers(query, pageNo, pageSize, filter);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("User search completed successfully")
@@ -146,13 +134,12 @@ public class UserController {
 
         @GetMapping
         @PreAuthorize("hasRole('ADMIN')")
-        public ResponseData<?> getUser(@RequestParam(required = false, defaultValue = "") String query,
-                        @RequestParam(required = false, defaultValue = "10") Integer limit,
-                        @RequestParam(required = false, defaultValue = "0") Integer offset,
+        public ResponseData<?> getUser(
+                        @RequestParam(required = false, defaultValue = "") String query,
+                        @RequestParam(defaultValue = "0") int pageNo,
+                        @RequestParam(defaultValue = "10") int pageSize,
                         @RequestParam(required = false) String filter) throws MeilisearchException {
-
-                UserSearchResponseAdmin response = meilisearchService.searchUsersAdmin(query, limit, offset, filter);
-
+                PageModelResponse<?> response = meilisearchService.searchUsersAdmin(query, pageNo, pageSize, filter);
                 return ResponseData.builder()
                                 .status(200)
                                 .message("Admin user search completed successfully")
@@ -214,6 +201,19 @@ public class UserController {
                                 .status(200)
                                 .message("User statistics retrieved successfully")
                                 .data(userService.getUserStatistics(userId))
+                                .build();
+        }
+
+        @GetMapping("/activity-logs")
+        public ResponseData<?> getActivityLogs(
+                        @RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader,
+                        @RequestParam(defaultValue = "0") int pageNo,
+                        @RequestParam(defaultValue = "20") int pageSize) {
+                String accessToken = authHeader.replace("Bearer ", "").trim();
+                return ResponseData.builder()
+                                .status(200)
+                                .message("Activity logs retrieved successfully")
+                                .data(userService.getUserActivityLogs(accessToken, pageNo, pageSize))
                                 .build();
         }
 

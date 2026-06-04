@@ -1,31 +1,17 @@
 package org.nexo.authservice.controller;
 
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import reactor.core.publisher.Mono;
-
-import java.util.Map;
-
-import org.nexo.authservice.dto.CallBackRequest;
-import org.nexo.authservice.dto.ForgotPasswordRequest;
-import org.nexo.authservice.dto.LoginRequest;
-import org.nexo.authservice.dto.OAuthCallbackRequest;
-import org.nexo.authservice.dto.OAuthLoginResponse;
-import org.nexo.authservice.dto.RegisterRequest;
-import org.nexo.authservice.dto.RegisterResponse;
-import org.nexo.authservice.dto.ResendVerifyEmailRequest;
-import org.nexo.authservice.dto.ResponseData;
-import org.nexo.authservice.dto.TokenResponse;
+import org.nexo.authservice.dto.*;
 import org.nexo.authservice.service.AuthService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
-import jakarta.validation.Valid;
+import java.util.List;
 
 @RestController
 @RequestMapping
@@ -132,6 +118,24 @@ public class AuthController {
                                                         .data(tokenResponse)
                                                         .build();
                                 });
+        }
+
+        @PostMapping("/sync-keycloak")
+        public Mono<ResponseEntity<List<SyncUserResponse>>> syncData(@RequestBody List<SyncUserRequest> request) {
+                return authService.syncUsersToKeycloak(request)
+                                .map(ResponseEntity::ok);
+        }
+
+        @PostMapping("/internal/seed-users")
+        public Mono<ResponseData<SeedUsersResponse>> seedUsers(@RequestParam(defaultValue = "10") int count) {
+                log.info("Seeding {} fake users", count);
+                return authService.seedFakeUsers(count)
+                                .map(result -> ResponseData.<SeedUsersResponse>builder()
+                                                .status(200)
+                                                .message("Seeded " + result.getSucceeded() + "/" + result.getRequested()
+                                                                + " users successfully")
+                                                .data(result)
+                                                .build());
         }
 
 }

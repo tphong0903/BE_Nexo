@@ -3,6 +3,7 @@ package org.nexo.postservice.dto.response;
 import lombok.*;
 import org.nexo.postservice.dto.UserTagDTO;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -10,8 +11,8 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class PostResponseDTO {
+@Builder(toBuilder = true)
+public class PostResponseDTO implements Serializable {
     private Long postId;
     private Long userId;
     private String userName;

@@ -88,4 +88,11 @@ public interface ConversationRepository extends JpaRepository<ConversationModel,
         Page<ConversationModel> findArchivedConversationsByUserId(
                         @Param("userId") Long userId,
                         Pageable pageable);
+
+        @Query("SELECT c FROM ConversationModel c " +
+                        "JOIN c.participants p " +
+                        "WHERE p.userId = :userId " +
+                        "AND c.isGroup = true " +
+                        "ORDER BY c.lastMessageAt DESC NULLS LAST")
+        List<ConversationModel> findGroupConversationsByUserId(@Param("userId") Long userId);
 }

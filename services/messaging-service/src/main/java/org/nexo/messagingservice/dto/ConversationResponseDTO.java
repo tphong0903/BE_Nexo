@@ -30,4 +30,11 @@ public class ConversationResponseDTO {
     private boolean isBlockedByMe;
     private Long lastReadMessageId;
     private Boolean onlineStatus;
+
+    // Group fields
+    private boolean isGroup;
+    private String groupName;
+    private String groupAvatarUrl;
+    private Long createdByUserId;
+    private boolean isGroupAdmin;
 }

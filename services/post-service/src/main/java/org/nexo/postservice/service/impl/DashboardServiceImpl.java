@@ -18,12 +18,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class DashboardServiceImpl implements IDashboardService {
 
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd-MM-yyyy");
     private final IPostRepository postRepository;
     private final IReelRepository reelRepository;
     private final IReportReelRepository reportReelRepository;
@@ -35,7 +35,7 @@ public class DashboardServiceImpl implements IDashboardService {
     @Override
     public DashboardResponseDto getDashboardData() {
         Long totalUser = userGrpcClient.getTotalUsers();
-        Long totalPost = postRepository.count();
+        Long totalPost = postRepository.count() + reelRepository.count();
         Long totalInteract = interactionGrpcClient.getTotalInteractions();
         Long quantityReport = reportReelRepository.count() + reportPostRepository.count();
 
@@ -54,20 +54,15 @@ public class DashboardServiceImpl implements IDashboardService {
                 .build();
     }
 
-
     public Double getPercentPostInMonth() {
         LocalDateTime startOfThisMonth = LocalDate.now().withDayOfMonth(1).atStartOfDay();
         LocalDateTime startOfLastMonth = startOfThisMonth.minusMonths(1);
-        LocalDateTime endOfLastMonth = startOfThisMonth;
 
-        long thisMonth = postRepository.countByCreatedAtBetween(startOfThisMonth, startOfThisMonth.plusMonths(1));
-        long lastMonth = postRepository.countByCreatedAtBetween(startOfLastMonth, endOfLastMonth);
+        long thisMonth = countTotalContentBetween(startOfThisMonth, startOfThisMonth.plusMonths(1));
+        long lastMonth = countTotalContentBetween(startOfLastMonth, startOfThisMonth);
 
-        double percent = 0;
-        if (lastMonth > 0) {
-            percent = ((double) (thisMonth - lastMonth) / lastMonth) * 100;
-        }
-        return percent;
+        if (lastMonth == 0) return 0.0;
+        return ((double) (thisMonth - lastMonth) / lastMonth) * 100;
     }
 
     @Override
@@ -75,60 +70,30 @@ public class DashboardServiceImpl implements IDashboardService {
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
 
-        List<Object[]> result = postRepository.countPostsByDate(startDateTime, endDateTime);
+        Map<LocalDate, Long> reportMap = new TreeMap<>();
+        mergeQueryResultToMap(postRepository.countPostsByDate(startDateTime, endDateTime), reportMap);
 
-        List<String> time = new ArrayList<>();
-        List<Long> data = new ArrayList<>();
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-
-        for (Object[] row : result) {
-            LocalDate date = ((java.sql.Date) row[0]).toLocalDate();
-            Long count = ((Number) row[1]).longValue();
-            time.add(date.format(formatter));
-            data.add(count);
-        }
-
-        return ChartDataDto.builder()
-                .time(time)
-                .data(data)
-                .build();
+        return buildChartDataFromMap(reportMap);
     }
 
     @Override
     public ChartDataDto getUsersByTime(LocalDate startDate, LocalDate endDate) {
         List<UserServiceProto.UserCountByDate> userCounts = userGrpcClient.getUsersByTime(startDate, endDate);
 
-        List<String> dates = userCounts.stream()
-                .map(UserServiceProto.UserCountByDate::getDate)
-                .collect(Collectors.toList());
+        List<String> dates = userCounts.stream().map(UserServiceProto.UserCountByDate::getDate).toList();
+        List<Long> counts = userCounts.stream().map(UserServiceProto.UserCountByDate::getCount).toList();
 
-        List<Long> counts = userCounts.stream()
-                .map(UserServiceProto.UserCountByDate::getCount)
-                .collect(Collectors.toList());
-
-        return ChartDataDto.builder()
-                .time(dates)
-                .data(counts)
-                .build();
+        return ChartDataDto.builder().time(dates).data(counts).build();
     }
 
     @Override
     public ChartDataDto getInteractionsByTime(LocalDate startDate, LocalDate endDate) {
         List<InteractionServiceOuterClass.UserCountByDate> userCounts = interactionGrpcClient.getInteractionsByTime(startDate, endDate);
 
-        List<String> dates = userCounts.stream()
-                .map(InteractionServiceOuterClass.UserCountByDate::getDate)
-                .collect(Collectors.toList());
+        List<String> dates = userCounts.stream().map(InteractionServiceOuterClass.UserCountByDate::getDate).toList();
+        List<Long> counts = userCounts.stream().map(InteractionServiceOuterClass.UserCountByDate::getCount).toList();
 
-        List<Long> counts = userCounts.stream()
-                .map(InteractionServiceOuterClass.UserCountByDate::getCount)
-                .collect(Collectors.toList());
-
-        return ChartDataDto.builder()
-                .time(dates)
-                .data(counts)
-                .build();
+        return ChartDataDto.builder().time(dates).data(counts).build();
     }
 
     @Override
@@ -136,51 +101,48 @@ public class DashboardServiceImpl implements IDashboardService {
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.atTime(23, 59, 59);
 
-        List<Object[]> postReports = reportPostRepository.countReportsByDate(startDateTime, endDateTime);
-        List<Object[]> reelReports = reportReelRepository.countReportsByDate(startDateTime, endDateTime);
-
         Map<LocalDate, Long> reportMap = new TreeMap<>();
+        mergeQueryResultToMap(reportPostRepository.countReportsByDate(startDateTime, endDateTime), reportMap);
+        mergeQueryResultToMap(reportReelRepository.countReportsByDate(startDateTime, endDateTime), reportMap);
 
-        for (Object[] row : postReports) {
-            LocalDate date = ((java.sql.Date) row[0]).toLocalDate();
-            Long count = ((Number) row[1]).longValue();
-            reportMap.merge(date, count, Long::sum);
-        }
-
-        for (Object[] row : reelReports) {
-            LocalDate date = ((java.sql.Date) row[0]).toLocalDate();
-            Long count = ((Number) row[1]).longValue();
-            reportMap.merge(date, count, Long::sum);
-        }
-
-        List<String> time = new ArrayList<>();
-        List<Long> data = new ArrayList<>();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy");
-
-        for (Map.Entry<LocalDate, Long> entry : reportMap.entrySet()) {
-            time.add(entry.getKey().format(formatter));
-            data.add(entry.getValue());
-        }
-
-        return ChartDataDto.builder()
-                .time(time)
-                .data(data)
-                .build();
+        return buildChartDataFromMap(reportMap);
     }
 
     @Override
-    public PageModelResponse getAllPost(String search, int page, int limit, String type) {
-        Sort sort = Sort.by("created_at").descending();
-        Pageable pageable = PageRequest.of(page, limit, sort);
-        Page<ContentProjection> pageResult = adminContentRepository.findAllContent(search, type, pageable);
+    public PageModelResponse getAllPost(String search,
+                                        int page,
+                                        int limit,
+                                        String type,
+                                        String hashtag,
+                                        String content,
+                                        String authorName,
+                                        LocalDateTime startDate,
+                                        LocalDateTime endDate) {
 
-        return PageModelResponse.<ContentProjection>builder()
-                .pageNo(pageResult.getNumber())
-                .pageSize(pageResult.getSize())
+        Pageable pageable = PageRequest.of(
+                page,
+                limit,
+                Sort.by("created_at").descending()
+        );
+
+        Page<ContentProjection> pageResult =
+                adminContentRepository.findAllContent(
+                        search,
+                        type,
+                        hashtag,
+                        content,
+                        authorName,
+                        startDate,
+                        endDate,
+                        pageable
+                );
+
+        return PageModelResponse.builder()
+                .pageNo(page)
+                .pageSize(limit)
                 .totalElements(pageResult.getTotalElements())
                 .totalPages(pageResult.getTotalPages())
-                .last(pageResult.isLast())
-                .content(pageResult.getContent())
+                .content(Collections.singletonList(pageResult.getContent()))
                 .build();
     }
 
@@ -196,4 +158,31 @@ public class DashboardServiceImpl implements IDashboardService {
     }
 
 
+    private long countTotalContentBetween(LocalDateTime start, LocalDateTime end) {
+        return postRepository.countByCreatedAtBetween(start, end)
+                + reelRepository.countByCreatedAtBetween(start, end);
+    }
+
+    private void mergeQueryResultToMap(List<Object[]> queryResult, Map<LocalDate, Long> map) {
+        for (Object[] row : queryResult) {
+            LocalDate date = ((java.sql.Date) row[0]).toLocalDate();
+            Long count = ((Number) row[1]).longValue();
+            map.merge(date, count, Long::sum);
+        }
+    }
+
+    private ChartDataDto buildChartDataFromMap(Map<LocalDate, Long> map) {
+        List<String> time = new ArrayList<>();
+        List<Long> data = new ArrayList<>();
+
+        for (Map.Entry<LocalDate, Long> entry : map.entrySet()) {
+            time.add(entry.getKey().format(DATE_FORMATTER));
+            data.add(entry.getValue());
+        }
+
+        return ChartDataDto.builder()
+                .time(time)
+                .data(data)
+                .build();
+    }
 }

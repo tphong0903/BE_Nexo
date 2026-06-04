@@ -14,8 +14,6 @@ import java.util.stream.Collectors;
 import org.nexo.userservice.dto.ChangePasswordRequest;
 import org.nexo.userservice.dto.ResponseData;
 import org.nexo.userservice.dto.UpdateUserRequest;
-import org.nexo.userservice.dto.UserSearchResponse;
-import org.nexo.userservice.dto.UserSearchResponseAdmin;
 import org.nexo.userservice.service.MeilisearchService;
 import org.nexo.userservice.service.UserService;
 import org.springframework.http.HttpHeaders;

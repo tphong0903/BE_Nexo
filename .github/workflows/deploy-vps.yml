@@ -10,11 +10,11 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      # Bước 1: Kéo code từ GitHub Repo về môi trường chạy (GitHub Runner)
+      # Bước 1: Kéo code từ GitHub Repo
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Bước 2: Copy file docker-compose.prod.yml (và các file cần thiết khác) lên VPS
+      # Bước 2: Copy file cấu hình lên VPS
       - name: Copy files via SCP
         uses: appleboy/scp-action@master
         with:
@@ -22,12 +22,11 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           port: ${{ secrets.VPS_PORT }}
-          # Khai báo những file/thư mục cần copy lên VPS. 
-          # Nếu bạn cần copy toàn bộ project thì đổi thành source: "."
-          source: "docker-compose.prod.yml" 
+          # Copy file docker-compose và prometheus để tránh lỗi thiếu file
+          source: "docker-compose.prod.yml, prometheus.yml" 
           target: "/opt/BE_Nexo"
 
-      # Bước 3: SSH vào VPS và chạy lệnh Deploy
+      # Bước 3: SSH vào VPS và Deploy
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -38,8 +37,11 @@ jobs:
           script: |
             set -e
 
+            # Di chuyển vào thư mục dự án
+            mkdir -p /opt/BE_Nexo
             cd /opt/BE_Nexo
 
+            # Kiểm tra Docker Compose V2
             if docker compose version >/dev/null 2>&1; then
               DC="docker compose"
             else
@@ -47,5 +49,7 @@ jobs:
               exit 1
             fi
 
+            # Khởi chạy Docker Compose
+            echo "Đang kéo image và khởi chạy container..."
             $DC -f docker-compose.prod.yml pull
             $DC -f docker-compose.prod.yml up -d --remove-orphans

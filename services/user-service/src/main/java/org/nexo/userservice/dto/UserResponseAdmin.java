@@ -26,6 +26,9 @@ public class UserResponseAdmin {
     @JsonProperty("role")
     private ERole role;
 
+    @JsonProperty("avatar")
+    private String avatar;
+
     @JsonProperty("account_status")
     private EAccountStatus accountStatus;
 

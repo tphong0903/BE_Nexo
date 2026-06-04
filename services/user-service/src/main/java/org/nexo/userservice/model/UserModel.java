@@ -6,6 +6,8 @@ import org.nexo.userservice.enums.ERole;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import org.hibernate.annotations.Check;
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -18,6 +20,7 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
+@Check(name = "users_account_status_check", constraints = "account_status IN ('PENDING', 'ACTIVE', 'INACTIVE', 'LOCKED', 'UPDATE')")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor

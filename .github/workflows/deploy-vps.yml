@@ -25,22 +25,8 @@ jobs:
             if docker compose version >/dev/null 2>&1; then
               DC="docker compose"
             else
-              echo "Docker Compose v2 is not installed, installing..." >&2
-              if command -v apt-get >/dev/null 2>&1; then
-                sudo apt-get update -y
-                if sudo apt-get install -y docker-compose-plugin; then
-                  DC="docker compose"
-                else
-                  echo "docker-compose-plugin not available, installing Compose v2 plugin binary..." >&2
-                  sudo mkdir -p /usr/local/lib/docker/cli-plugins
-                  sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/lib/docker/cli-plugins/docker-compose
-                  sudo chmod +x /usr/local/lib/docker/cli-plugins/docker-compose
-                  DC="docker compose"
-                fi
-              else
-                echo "Unsupported package manager: please install Docker Compose v2 manually" >&2
-                exit 1
-              fi
+              echo "Docker Compose v2 is not installed" >&2
+              exit 1
             fi
 
             $DC -f docker-compose.prod.yml pull

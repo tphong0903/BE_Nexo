@@ -1,0 +1,35 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - deploy
+      - master
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+
+            cd /opt/BE_Nexo
+
+            if docker compose version >/dev/null 2>&1; then
+              DC="docker compose"
+            elif command -v docker-compose >/dev/null 2>&1; then
+              DC="docker-compose"
+            else
+              echo "Docker Compose is not installed" >&2
+              exit 1
+            fi
+
+            $DC -f docker-compose.prod.yml pull
+            $DC -f docker-compose.prod.yml up -d --remove-orphans

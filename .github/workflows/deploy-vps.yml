@@ -10,6 +10,24 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
+      # Bước 1: Kéo code từ GitHub Repo về môi trường chạy (GitHub Runner)
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # Bước 2: Copy file docker-compose.prod.yml (và các file cần thiết khác) lên VPS
+      - name: Copy files via SCP
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          password: ${{ secrets.VPS_PASSWORD }}
+          port: ${{ secrets.VPS_PORT }}
+          # Khai báo những file/thư mục cần copy lên VPS. 
+          # Nếu bạn cần copy toàn bộ project thì đổi thành source: "."
+          source: "docker-compose.prod.yml" 
+          target: "/opt/BE_Nexo"
+
+      # Bước 3: SSH vào VPS và chạy lệnh Deploy
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:

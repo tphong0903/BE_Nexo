@@ -27,8 +27,15 @@ jobs:
             elif command -v docker-compose >/dev/null 2>&1; then
               DC="docker-compose"
             else
-              echo "Docker Compose is not installed" >&2
-              exit 1
+              echo "Docker Compose is not installed, installing..." >&2
+              if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update -y
+                sudo apt-get install -y docker-compose-plugin
+                DC="docker compose"
+              else
+                echo "Unsupported package manager: please install Docker Compose manually" >&2
+                exit 1
+              fi
             fi
 
             $DC -f docker-compose.prod.yml pull

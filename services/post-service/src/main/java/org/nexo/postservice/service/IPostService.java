@@ -42,4 +42,5 @@ public interface IPostService {
     PostResponseDTO getPostByIdGrpc(Long id);
 
     ReelResponseDTO getReelByIdGrpc(Long id);
+
 }

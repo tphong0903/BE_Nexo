@@ -46,7 +46,7 @@ services:
       redis:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       user-service:
         condition: service_started
     deploy:
@@ -106,7 +106,7 @@ services:
       redis:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       eureka-server:
         condition: service_healthy
       kafka:
@@ -332,7 +332,7 @@ services:
       redis:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       kafka:
         condition: service_healthy
       user-service:
@@ -370,7 +370,7 @@ services:
       eureka-server:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       post-service:
         condition: service_started
     restart: unless-stopped
@@ -455,7 +455,7 @@ services:
       redis:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       kafka:
         condition: service_healthy
       post-service:
@@ -511,7 +511,7 @@ services:
       redis:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       kafka:
         condition: service_healthy
       user-service:
@@ -559,7 +559,7 @@ services:
       redis:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       user-service:
         condition: service_healthy
     deploy:
@@ -610,7 +610,7 @@ services:
       redis:
         condition: service_healthy
       keycloak:
-        condition: service_healthy
+        condition: service_started
       kafka:
         condition: service_healthy
     deploy:
@@ -698,7 +698,6 @@ services:
       KC_HOSTNAME_STRICT: false
       KC_HTTP_ENABLED: true
       KC_HTTP_PORT: 8080
-      # Tin tưởng X-Forwarded-* headers từ nginx
       KC_PROXY_HEADERS: xforwarded
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak

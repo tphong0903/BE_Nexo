@@ -38,3 +38,4 @@ build/
 .env.fullstack.*
 .env.recommendation
 .env.recommendation.*
+init-ssl.sh

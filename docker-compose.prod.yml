@@ -716,13 +716,6 @@ services:
       - postgres
     volumes:
       - ./themes:/opt/keycloak/themes
-    healthcheck:
-      test:
-        ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
-      interval: 30s
-      timeout: 10s
-      retries: 8
-      start_period: 120s
     deploy:
       resources:
         limits:

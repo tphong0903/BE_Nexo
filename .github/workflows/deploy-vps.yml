@@ -45,6 +45,9 @@ jobs:
             [ -d nginx/nginx.conf ] && rm -rf nginx/nginx.conf || true
             [ -d nginx/nginx.init.conf ] && rm -rf nginx/nginx.init.conf || true
 
+            # Dọn container nginx-init (từ init-ssl.sh) nếu còn sót → tránh port 80 conflict
+            docker rm -f nginx-init 2>/dev/null || true
+
             # Kiểm tra Docker Compose V2
             if docker compose version >/dev/null 2>&1; then
               DC="docker compose"

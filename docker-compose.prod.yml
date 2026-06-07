@@ -680,7 +680,7 @@ services:
     image: quay.io/keycloak/keycloak:26.0.0
     command: start
     environment:
-      KC_HOSTNAME: nexo.keycloak.nayamishop.id.vn
+      KC_HOSTNAME: auth.nexosocial.id.vn
       KC_HOSTNAME_STRICT: false
       KC_HTTP_ENABLED: true
       KC_HTTP_PORT: 8080

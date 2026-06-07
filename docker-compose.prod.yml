@@ -683,10 +683,9 @@ services:
       KC_HOSTNAME: auth.nexosocial.id.vn
       KC_HOSTNAME_STRICT: false
       KC_HTTP_ENABLED: true
-      KC_HTTP_PORT: 9090
+      KC_HTTP_PORT: 8080
       KC_HEALTH_ENABLED: true
       KC_PROXY_HEADERS: xforwarded
-      KC_PROXY: edge
       KC_HOSTNAME_URL: https://auth.nexosocial.id.vn
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak

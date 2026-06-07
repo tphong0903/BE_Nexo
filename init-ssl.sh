@@ -83,6 +83,7 @@ docker run --rm \
     --email "$EMAIL" \
     --agree-tos \
     --no-eff-email \
+    --keep-until-expiring \
     $STAGING_ARG
 
 echo "=== [4/4] Dọn dẹp nginx tạm ==="

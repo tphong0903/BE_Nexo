@@ -22,8 +22,8 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           password: ${{ secrets.VPS_PASSWORD }}
           port: ${{ secrets.VPS_PORT }}
-          # Copy file docker-compose và prometheus để tránh lỗi thiếu file
-          source: "docker-compose.prod.yml, prometheus.yml" 
+          # Copy docker-compose, prometheus và nginx config
+          source: "docker-compose.prod.yml,prometheus.yml,nginx/,themes/"
           target: "/opt/BE_Nexo"
 
       # Bước 3: SSH vào VPS và Deploy
@@ -40,6 +40,10 @@ jobs:
             # Di chuyển vào thư mục dự án
             mkdir -p /opt/BE_Nexo
             cd /opt/BE_Nexo
+
+            # Xóa thư mục sai nếu Docker đã tạo nhầm (file bị tạo thành dir)
+            [ -d nginx/nginx.conf ] && rm -rf nginx/nginx.conf || true
+            [ -d nginx/nginx.init.conf ] && rm -rf nginx/nginx.init.conf || true
 
             # Kiểm tra Docker Compose V2
             if docker compose version >/dev/null 2>&1; then

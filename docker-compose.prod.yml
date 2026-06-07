@@ -41,10 +41,14 @@ services:
       SPRING_DATA_REDIS_PORT: 6379
       SPRING_DATA_REDIS_PASSWORD: Admin@123
     depends_on:
-      - eureka-server
-      - redis
-      - keycloak
-      - user-service
+      eureka-server:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      user-service:
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -93,12 +97,18 @@ services:
       retries: 8
       start_period: 60s
     depends_on:
-      - user-db
-      - redis
-      - keycloak
-      - eureka-server
-      - kafka
-      - meilisearch
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      meilisearch:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -314,13 +324,13 @@ services:
       eureka-server:
         condition: service_healthy
       user-db:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       kafka:
-        condition: service_started
+        condition: service_healthy
       user-service:
         condition: service_healthy
     restart: unless-stopped
@@ -353,9 +363,12 @@ services:
       GRPC_SERVER_PORT: 9093
       GRPC_CLIENT_POSTS_ADDRESS: static://post-service:9094
     depends_on:
-      - eureka-server
-      - keycloak
-      - post-service
+      eureka-server:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      post-service:
+        condition: service_started
     restart: unless-stopped
     deploy:
       resources:
@@ -427,13 +440,20 @@ services:
       GRPC_CLIENT_POSTS_NEGOTIATION_TYPE: plaintext
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
     depends_on:
-      - eureka-server
-      - user-db
-      - redis
-      - keycloak
-      - kafka
-      - post-service
-      - user-service
+      eureka-server:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      post-service:
+        condition: service_started
+      user-service:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -479,17 +499,15 @@ services:
       eureka-server:
         condition: service_healthy
       user-db:
-        condition: service_started
+        condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
       kafka:
-        condition: service_started
+        condition: service_healthy
       user-service:
         condition: service_healthy
-      post-service:
-        condition: service_started
     deploy:
       resources:
         limits:
@@ -526,11 +544,16 @@ services:
       GRPC_CLIENT_POST-SERVICE_ADDRESS: static://post-service:9094
       GRPC_CLIENT_POST_NEGOTIATION_TYPE: plaintext
     depends_on:
-      - eureka-server
-      - user-db
-      - redis
-      - keycloak
-      - user-service
+      eureka-server:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      user-service:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -572,11 +595,16 @@ services:
       GRPC_CLIENT_USERS_ADDRESS: static://user-service:9092
 
     depends_on:
-      - eureka-server
-      - user-db
-      - redis
-      - keycloak
-      - kafka
+      eureka-server:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -603,8 +631,10 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: Admin@123
     depends_on:
-      - user-db
-      - redis
+      user-db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     deploy:
       resources:
         limits:
@@ -669,6 +699,12 @@ services:
       postgres:
         condition: service_healthy
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 8
+      start_period: 60s
     volumes:
       - ./themes:/opt/keycloak/themes
     deploy:
@@ -692,6 +728,12 @@ services:
     networks:
       - nexo-network
     restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
   user-db:
     container_name: user-db
     image: postgres:15-alpine
@@ -831,6 +873,13 @@ services:
       MEILI_ENV: development
     volumes:
       - meilisearch_data:/meili_data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:7700/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
     deploy:
       resources:
         limits:

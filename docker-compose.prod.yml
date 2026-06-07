@@ -678,7 +678,7 @@ services:
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.0.0
-    command: start --optimized
+    command: start
     environment:
       KC_HOSTNAME: auth.nexosocial.id.vn
       KC_HOSTNAME_STRICT: false

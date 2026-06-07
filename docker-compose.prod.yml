@@ -680,30 +680,25 @@ services:
     image: quay.io/keycloak/keycloak:26.0.0
     command: start
     environment:
-      KC_HOSTNAME: auth.nexosocial.id.vn
+      KC_HOSTNAME: nexo.keycloak.nayamishop.id.vn
       KC_HOSTNAME_STRICT: false
       KC_HTTP_ENABLED: true
       KC_HTTP_PORT: 8080
-      KC_HEALTH_ENABLED: true
+      KC_PROXY_HEADERS: xforwarded
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: password
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_DB_POOL_INITIAL_SIZE: 5
+      KC_DB_POOL_MIN_SIZE: 5
+      KC_DB_POOL_MAX_SIZE: 20
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
       JAVA_OPTS_APPEND: "-Xms256m -Xmx1280m -XX:MetaspaceSize=96m -XX:MaxMetaspaceSize=256m"
     ports:
       - "9090:8080"
     depends_on:
-      postgres:
-        condition: service_healthy
-    restart: unless-stopped
-    healthcheck:
-      test: ["CMD-SHELL", "curl -f http://localhost:8080/health/ready || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 8
-      start_period: 60s
+      - postgres
     volumes:
       - ./themes:/opt/keycloak/themes
     deploy:

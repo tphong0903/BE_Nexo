@@ -1028,8 +1028,6 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
-    depends_on:
-      - recommendation-service
     restart: unless-stopped
     deploy:
       resources:
@@ -1068,6 +1066,7 @@ services:
   nginx:
     image: nginx:alpine
     container_name: nginx
+    profiles: [core]
     ports:
       - "80:80"
       - "443:443"

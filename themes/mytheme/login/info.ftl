@@ -243,7 +243,7 @@
                         } catch (e) {}
                     }
                     if (userId && userEmail) {
-                        fetch('http://localhost:8080/api/auth/verify-email', {
+                        fetch('${properties.apiUrl!"https://api.nexosocial.id.vn"}/api/auth/verify-email', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({ email: userEmail, keycloakId: userId })

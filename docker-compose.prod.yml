@@ -181,7 +181,7 @@ services:
       - recommendation_artifacts:/app/artifacts
     depends_on:
       user-service:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_started
       kafka:
@@ -223,7 +223,7 @@ services:
       - recommendation_artifacts:/app/artifacts
     depends_on:
       user-service:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_started
       kafka:
@@ -265,7 +265,7 @@ services:
       - recommendation_artifacts:/app/artifacts
     depends_on:
       user-service:
-        condition: service_healthy
+        condition: service_started
       redis:
         condition: service_started
       kafka:
@@ -371,7 +371,7 @@ services:
       kafka:
         condition: service_healthy
       user-service:
-        condition: service_healthy
+        condition: service_started
     restart: unless-stopped
     deploy:
       resources:
@@ -525,7 +525,7 @@ services:
       post-service:
         condition: service_started
       user-service:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -589,7 +589,7 @@ services:
       kafka:
         condition: service_healthy
       user-service:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:
@@ -645,7 +645,7 @@ services:
       keycloak:
         condition: service_started
       user-service:
-        condition: service_healthy
+        condition: service_started
     deploy:
       resources:
         limits:

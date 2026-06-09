@@ -59,25 +59,33 @@ jobs:
             # Lấy tên network của project
             NETWORK="be_nexo_nexo-network"
 
-            # Ngắt kết nối các container ngoài compose khỏi network
-            # để tránh lỗi "network has active endpoints" khi Docker cố xóa/tạo lại network
-            echo "Ngắt kết nối container ngoài khỏi network..."
+            # ── Xử lý các container ngoài compose (nginx, certbot) ──────────────
+            # Những container này có thể đang bám vào network hoặc mang label
+            # của project cũ → gây lỗi khi compose cố xóa/tạo lại network.
+            # Giải pháp: stop hẳn trước deploy, restart sau.
+            echo "Dừng container ngoài trước khi deploy..."
             for container in nginx certbot; do
-              docker network disconnect "$NETWORK" "$container" 2>/dev/null || true
+              if docker inspect "$container" >/dev/null 2>&1; then
+                docker stop "$container" >/dev/null 2>&1 || true
+              fi
             done
 
-            # Kéo image mới (bật cả 2 profile để không bị coi là orphan)
+            # ── Kéo image mới ────────────────────────────────────────────────────
             echo "Đang kéo image..."
             $DC -f docker-compose.prod.yml --profile core --profile monitoring pull
 
-            # Khởi chạy / cập nhật container
+            # ── Khởi chạy / cập nhật toàn bộ container ──────────────────────────
             echo "Đang khởi chạy container..."
             $DC -f docker-compose.prod.yml --profile core --profile monitoring up -d --remove-orphans
 
-            # Kết nối lại các container ngoài vào network sau khi compose xong
-            echo "Kết nối lại container ngoài vào network..."
+            # ── Khởi động lại container ngoài sau khi compose xong ───────────────
+            echo "Khởi động lại container ngoài..."
             for container in nginx certbot; do
-              docker network connect "$NETWORK" "$container" 2>/dev/null || true
+              if docker inspect "$container" >/dev/null 2>&1; then
+                docker start "$container" >/dev/null 2>&1 || true
+                # Kết nối lại vào network nếu chưa có
+                docker network connect "$NETWORK" "$container" >/dev/null 2>&1 || true
+              fi
             done
 
-            echo "Deploy hoàn tất!"
+            echo "✅ Deploy hoàn tất!"

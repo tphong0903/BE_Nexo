@@ -56,7 +56,28 @@ jobs:
               exit 1
             fi
 
-            # Khởi chạy Docker Compose
-            echo "Đang kéo image và khởi chạy container..."
-            $DC -f docker-compose.prod.yml --profile core pull
-            $DC -f docker-compose.prod.yml --profile core up -d --remove-orphans
+            # Lấy tên network của project
+            NETWORK="be_nexo_nexo-network"
+
+            # Ngắt kết nối các container ngoài compose khỏi network
+            # để tránh lỗi "network has active endpoints" khi Docker cố xóa/tạo lại network
+            echo "Ngắt kết nối container ngoài khỏi network..."
+            for container in nginx certbot; do
+              docker network disconnect "$NETWORK" "$container" 2>/dev/null || true
+            done
+
+            # Kéo image mới (bật cả 2 profile để không bị coi là orphan)
+            echo "Đang kéo image..."
+            $DC -f docker-compose.prod.yml --profile core --profile monitoring pull
+
+            # Khởi chạy / cập nhật container
+            echo "Đang khởi chạy container..."
+            $DC -f docker-compose.prod.yml --profile core --profile monitoring up -d --remove-orphans
+
+            # Kết nối lại các container ngoài vào network sau khi compose xong
+            echo "Kết nối lại container ngoài vào network..."
+            for container in nginx certbot; do
+              docker network connect "$NETWORK" "$container" 2>/dev/null || true
+            done
+
+            echo "Deploy hoàn tất!"

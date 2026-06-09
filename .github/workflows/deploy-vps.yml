@@ -58,5 +58,5 @@ jobs:
 
             # Khởi chạy Docker Compose
             echo "Đang kéo image và khởi chạy container..."
-            $DC -f docker-compose.prod.yml pull
-            $DC -f docker-compose.prod.yml up -d --remove-orphans
+            $DC -f docker-compose.prod.yml --profile core pull
+            $DC -f docker-compose.prod.yml --profile core up -d --remove-orphans

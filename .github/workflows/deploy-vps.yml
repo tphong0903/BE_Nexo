@@ -56,7 +56,12 @@ jobs:
               exit 1
             fi
 
-            # Khởi chạy Docker Compose
+            # Khởi chạy Docker Compose (phải truyền đủ profiles để start tất cả services)
             echo "Đang kéo image và khởi chạy container..."
             $DC -f docker-compose.prod.yml pull
-            $DC -f docker-compose.prod.yml up -d --remove-orphans
+            $DC -f docker-compose.prod.yml \
+              --profile core \
+              --profile realtime \
+              --profile optional \
+              --profile monitoring \
+              up -d --remove-orphans

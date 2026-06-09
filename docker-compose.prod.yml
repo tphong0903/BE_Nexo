@@ -2,6 +2,7 @@ services:
   api-gateway:
     container_name: api-gateway
     image: phongga088/api-gateway:latest
+    profiles: [core]
     ports:
       - "8080:8080"
     restart: unless-stopped
@@ -35,6 +36,7 @@ services:
   auth-service:
     container_name: auth-service
     image: phongga088/auth-service:latest
+    profiles: [core]
     ports:
       - "8081:8081"
       - "9099:9099"
@@ -80,6 +82,7 @@ services:
   user-service:
     container_name: user-service
     image: phongga088/user-service:latest
+    profiles: [core]
     ports:
       - "8085:8085"
       - "9092:9092"
@@ -154,6 +157,7 @@ services:
   recommendation-service:
     container_name: recommendation-service
     image: phongga088/recommendation-service:latest
+    profiles: [optional]
     ports:
       - "8000:8000"
     restart: unless-stopped
@@ -196,6 +200,7 @@ services:
   recommendation-consumer:
     container_name: recommendation-consumer
     image: phongga088/recommendation-service:latest
+    profiles: [optional]
     command: python kafka_consumer.py
     restart: unless-stopped
     environment:
@@ -237,6 +242,7 @@ services:
   recommendation-worker:
     container_name: recommendation-worker
     image: phongga088/recommendation-service:latest
+    profiles: [optional]
     command: celery -A celery_app.celery_app worker --loglevel=info --pool=solo
     restart: unless-stopped
     environment:
@@ -278,6 +284,7 @@ services:
   recommendation-beat:
     container_name: recommendation-beat
     image: phongga088/recommendation-service:latest
+    profiles: [optional]
     command: celery -A celery_app.celery_app beat --loglevel=info
     restart: unless-stopped
     environment:
@@ -314,6 +321,7 @@ services:
   post-service:
     container_name: post-service
     image: phongga088/post-service:latest
+    profiles: [core]
     ports:
       - "8087:8087"
       - "9094:9094"
@@ -379,6 +387,7 @@ services:
   upload-file-service:
     container_name: upload-file-service
     image: phongga088/upload-file-service:latest
+    profiles: [core]
     ports:
       - "8086:8086"
       - "9093:9093"
@@ -465,6 +474,7 @@ services:
   feed-service:
     container_name: feed-service
     image: phongga088/feed-service:latest
+    profiles: [core]
     ports:
       - "8084:8084"
     restart: unless-stopped
@@ -530,6 +540,7 @@ services:
   interaction-service:
     container_name: interaction-service
     image: phongga088/interaction-service:latest
+    profiles: [core]
     ports:
       - "8083:8083"
       - "9095:9095"
@@ -593,6 +604,7 @@ services:
   messaging-service:
     container_name: messaging-service
     image: phongga088/messaging-service:latest
+    profiles: [realtime]
     ports:
       - "8095:8095"
       - "9098:9098"
@@ -648,6 +660,7 @@ services:
   notification-service:
     container_name: notification-service
     image: phongga088/notification-service:latest
+    profiles: [realtime]
     ports:
       - "8088:8088"
     restart: unless-stopped
@@ -708,6 +721,7 @@ services:
   ai-service:
     container_name: ai-service
     image: phongga088/ai-service-v2:latest
+    profiles: [optional]
     ports:
       - "8001:8000"
     restart: unless-stopped
@@ -954,6 +968,7 @@ services:
   kafka-ui:
     image: provectuslabs/kafka-ui:latest
     container_name: kafka-ui
+    profiles: [monitoring]
     ports:
       - "8090:8080"
     depends_on:
@@ -1003,6 +1018,7 @@ services:
   prometheus:
     image: prom/prometheus:latest
     container_name: prometheus
+    profiles: [monitoring]
     ports:
       - "9091:9090"
     volumes:
@@ -1029,6 +1045,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
+    profiles: [monitoring]
     ports:
       - "3001:3000"
     environment:

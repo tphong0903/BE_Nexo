@@ -29,6 +29,10 @@ echo "=== [2/4] Khởi động nginx tạm (HTTP only) ==="
 # Dọn container cũ nếu còn sót
 docker rm -f nginx-init 2>/dev/null || true
 
+# Nếu nginx reverse proxy chính đang chạy, tắt nó tạm thời để giải phóng port 80
+# compose của dự án dùng container_name=nginx
+docker rm -f nginx 2>/dev/null || true
+
 # Viết config nginx tạm ra /tmp (không phụ thuộc file trong repo)
 cat > /tmp/nginx-certbot-init.conf << 'EOF'
 server {

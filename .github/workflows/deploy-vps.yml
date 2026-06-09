@@ -56,36 +56,7 @@ jobs:
               exit 1
             fi
 
-            # Lấy tên network của project
-            NETWORK="be_nexo_nexo-network"
-
-            # ── Xử lý các container ngoài compose (nginx, certbot) ──────────────
-            # Những container này có thể đang bám vào network hoặc mang label
-            # của project cũ → gây lỗi khi compose cố xóa/tạo lại network.
-            # Giải pháp: stop hẳn trước deploy, restart sau.
-            echo "Dừng container ngoài trước khi deploy..."
-            for container in nginx certbot; do
-              if docker inspect "$container" >/dev/null 2>&1; then
-                docker stop "$container" >/dev/null 2>&1 || true
-              fi
-            done
-
-            # ── Kéo image mới ────────────────────────────────────────────────────
-            echo "Đang kéo image..."
-            $DC -f docker-compose.prod.yml --profile core --profile monitoring pull
-
-            # ── Khởi chạy / cập nhật toàn bộ container ──────────────────────────
-            echo "Đang khởi chạy container..."
-            $DC -f docker-compose.prod.yml --profile core --profile monitoring up -d --remove-orphans
-
-            # ── Khởi động lại container ngoài sau khi compose xong ───────────────
-            echo "Khởi động lại container ngoài..."
-            for container in nginx certbot; do
-              if docker inspect "$container" >/dev/null 2>&1; then
-                docker start "$container" >/dev/null 2>&1 || true
-                # Kết nối lại vào network nếu chưa có
-                docker network connect "$NETWORK" "$container" >/dev/null 2>&1 || true
-              fi
-            done
-
-            echo "✅ Deploy hoàn tất!"
+            # Khởi chạy Docker Compose
+            echo "Đang kéo image và khởi chạy container..."
+            $DC -f docker-compose.prod.yml pull
+            $DC -f docker-compose.prod.yml up -d --remove-orphans

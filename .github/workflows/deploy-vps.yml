@@ -61,14 +61,12 @@ jobs:
             $DC -f docker-compose.prod.yml pull
 
             # Phase 1: Start infrastructure trước (no profile = luôn chạy)
-            # Cho eureka-server và kafka đủ thời gian healthy trước khi app start
+            # --wait: block cho đến khi tất cả healthcheck của infrastructure pass
+            # --wait-timeout 360: timeout tối đa 6 phút (đủ cho eureka JVM cold start)
             echo "[Phase 1] Khởi động infrastructure (redis, kafka, eureka, postgres, keycloak)..."
-            $DC -f docker-compose.prod.yml up -d --remove-orphans
+            $DC -f docker-compose.prod.yml up -d --wait --wait-timeout 360
 
-            echo "Chờ infrastructure ổn định (60s)..."
-            sleep 60
-
-            # Phase 2: Start tất cả application services
+            # Phase 2: Start tất cả application services (infrastructure đã healthy)
             echo "[Phase 2] Khởi động application services..."
             $DC -f docker-compose.prod.yml \
               --profile core \

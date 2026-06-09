@@ -458,8 +458,8 @@ services:
         ]
       interval: 15s
       timeout: 5s
-      retries: 8
-      start_period: 45s
+      retries: 12
+      start_period: 120s
     deploy:
       resources:
         limits:
@@ -947,10 +947,10 @@ services:
           "CMD-SHELL",
           "kafka-broker-api-versions --bootstrap-server localhost:9097 || exit 1",
         ]
-      interval: 30s
+      interval: 20s
       timeout: 10s
-      retries: 5
-      start_period: 60s
+      retries: 10
+      start_period: 120s
 
     restart: unless-stopped
 

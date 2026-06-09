@@ -59,6 +59,17 @@ jobs:
             # Khởi chạy Docker Compose (phải truyền đủ profiles để start tất cả services)
             echo "Đang kéo image và khởi chạy container..."
             $DC -f docker-compose.prod.yml pull
+
+            # Phase 1: Start infrastructure trước (no profile = luôn chạy)
+            # Cho eureka-server và kafka đủ thời gian healthy trước khi app start
+            echo "[Phase 1] Khởi động infrastructure (redis, kafka, eureka, postgres, keycloak)..."
+            $DC -f docker-compose.prod.yml up -d --remove-orphans
+
+            echo "Chờ infrastructure ổn định (60s)..."
+            sleep 60
+
+            # Phase 2: Start tất cả application services
+            echo "[Phase 2] Khởi động application services..."
             $DC -f docker-compose.prod.yml \
               --profile core \
               --profile realtime \

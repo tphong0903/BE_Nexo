@@ -663,6 +663,7 @@ public class AuthServiceImpl implements AuthService {
                 for (int i = 0; i < count; i++) {
                         String uniqueSuffix = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
                         String cleaned = (faker.internet().username() + uniqueSuffix).replaceAll("[^a-zA-Z0-9_.]", "");
+                        cleaned = cleaned.replace('.', '_');
                         String username = cleaned.length() >= 3
                                         ? cleaned.substring(0, Math.min(30, cleaned.length()))
                                         : "user" + uniqueSuffix;

@@ -41,6 +41,11 @@ jobs:
             mkdir -p /opt/BE_Nexo
             cd /opt/BE_Nexo
 
+            # Ghi TURN_EXTERNAL_IP vào .env từ VPS_HOST (dùng lại IP VPS đã có sẵn)
+            sed -i '/^TURN_EXTERNAL_IP=/d' .env 2>/dev/null || true
+            echo "TURN_EXTERNAL_IP=${{ secrets.VPS_HOST }}" >> .env
+            echo "TURN_EXTERNAL_IP set to: ${{ secrets.VPS_HOST }}"
+
             # Xóa thư mục sai nếu Docker đã tạo nhầm (file bị tạo thành dir)
             [ -d nginx/nginx.conf ] && rm -rf nginx/nginx.conf || true
             [ -d nginx/nginx.init.conf ] && rm -rf nginx/nginx.init.conf || true
@@ -73,4 +78,4 @@ jobs:
               --profile realtime \
               --profile optional \
               --profile monitoring \
-              up -d --remove-orphans
+              up -d --remove-orphans

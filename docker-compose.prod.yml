@@ -146,11 +146,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.35"
-          memory: 512M
+          cpus: "0.40"
+          memory: 640M
         reservations:
           cpus: "0.15"
-          memory: 192M
+          memory: 256M
     networks:
       - nexo-network
 

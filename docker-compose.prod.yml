@@ -667,9 +667,11 @@ services:
     image: quay.io/keycloak/keycloak:26.0.0
     command: start-dev
     environment:
-      KC_HOSTNAME: localhost
-      KC_HOSTNAME_PORT: 9090
+      KC_HOSTNAME: auth.nexosocial.id.vn
+      KC_PROXY_HEADERS: xforwarded
+      KC_HOSTNAME_STRICT: false
       KC_HOSTNAME_STRICT_HTTPS: false
+      KC_HTTP_ENABLED: true
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak

@@ -38,56 +38,77 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
     @Override
     public void createUser(UserServiceProto.CreateUserRequest request,
                            StreamObserver<UserServiceProto.CreateUserResponse> responseObserver) {
-        log.info("Received gRPC request to create user: email={}, keycloakUserId={}",
-                request.getEmail(), request.getKeycloakUserId());
+        try {
+            log.info("Received gRPC request to create user: email={}, keycloakUserId={}",
+                    request.getEmail(), request.getKeycloakUserId());
 
-        if (userRepository.existsByEmail(request.getEmail())) {
-            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
-                    .newBuilder()
+            if (userRepository.existsByEmail(request.getEmail())) {
+                UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
+                        .newBuilder()
+                        .setSuccess(false)
+                        .setMessage("User with email " + request.getEmail() + " already exists")
+                        .setUserId(0)
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+                return;
+            }
+
+            if (userRepository.existsByKeycloakUserId(request.getKeycloakUserId())) {
+                UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
+                        .newBuilder()
+                        .setSuccess(false)
+                        .setMessage("User with keycloak ID " + request.getKeycloakUserId()
+                                + " already exists")
+                        .setUserId(0)
+                        .build();
+                responseObserver.onNext(response);
+                responseObserver.onCompleted();
+                return;
+            }
+
+            UserModel user = UserModel.builder()
+                    .keycloakUserId(request.getKeycloakUserId())
+                    .email(request.getEmail())
+                    .username(request.getUsername())
+                    .fullName(request.getFullName())
+                    .accountStatus(EAccountStatus.valueOf(request.getAccountStatus()))
+                    .build();
+
+            UserModel savedUser = userRepository.save(user);
+
+            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse.newBuilder()
+                    .setSuccess(true)
+                    .setMessage("User created successfully")
+                    .setUserId(savedUser.getId())
+                    .build();
+
+            log.info("User created successfully: id={}, email={}, keycloakUserId={}",
+                    savedUser.getId(), savedUser.getEmail(), savedUser.getKeycloakUserId());
+
+            responseObserver.onNext(response);
+            responseObserver.onCompleted();
+
+            publishUserEvent(savedUser, "CREATE");
+        } catch (IllegalArgumentException e) {
+            log.error("Invalid account status '{}': {}", request.getAccountStatus(), e.getMessage());
+            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse.newBuilder()
                     .setSuccess(false)
-                    .setMessage("User with email " + request.getEmail() + " already exists")
+                    .setMessage("Invalid account status: " + request.getAccountStatus())
                     .setUserId(0)
                     .build();
             responseObserver.onNext(response);
             responseObserver.onCompleted();
-            return;
+        } catch (Exception e) {
+            log.error("Error creating user email={}, keycloakUserId={}: {}",
+                    request.getEmail(), request.getKeycloakUserId(), e.getMessage(), e);
+            responseObserver.onError(
+                    io.grpc.Status.INTERNAL
+                            .withDescription("Failed to create user: " + e.getMessage())
+                            .withCause(e)
+                            .asRuntimeException()
+            );
         }
-
-        if (userRepository.existsByKeycloakUserId(request.getKeycloakUserId())) {
-            UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse
-                    .newBuilder()
-                    .setSuccess(false)
-                    .setMessage("User with keycloak ID " + request.getKeycloakUserId()
-                            + " already exists")
-                    .setUserId(0)
-                    .build();
-            responseObserver.onNext(response);
-            responseObserver.onCompleted();
-            return;
-        }
-
-        UserModel user = UserModel.builder()
-                .keycloakUserId(request.getKeycloakUserId())
-                .email(request.getEmail())
-                .username(request.getUsername())
-                .fullName(request.getFullName())
-                .accountStatus(EAccountStatus.valueOf(request.getAccountStatus()))
-                .build();
-
-        UserModel savedUser = userRepository.save(user);
-
-        UserServiceProto.CreateUserResponse response = UserServiceProto.CreateUserResponse.newBuilder()
-                .setSuccess(true)
-                .setMessage("User created successfully")
-                .setUserId(savedUser.getId())
-                .build();
-
-        log.info("User created successfully: id={}, email={}, keycloakUserId={}",
-                savedUser.getId(), savedUser.getEmail(), savedUser.getKeycloakUserId());
-        publishUserEvent(savedUser, "CREATE");
-
-        responseObserver.onNext(response);
-        responseObserver.onCompleted();
     }
 
     private void publishUserEvent(UserModel user, String eventType) {

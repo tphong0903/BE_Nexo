@@ -382,7 +382,7 @@ services:
     restart: unless-stopped
     environment:
       TZ: Asia/Ho_Chi_Minh
-      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
+      JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh -XX:+UseContainerSupport -XX:MaxRAMPercentage=70.0 -XX:InitialRAMPercentage=30.0 -XX:+UseG1GC -XX:MaxGCPauseMillis=100 -Djava.security.egd=file:/dev/./urandom
     healthcheck:
       test:
         [
@@ -396,11 +396,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.4"
-          memory: 512M
+          cpus: "0.5"
+          memory: 640M
         reservations:
-          cpus: "0.2"
-          memory: 256M
+          cpus: "0.25"
+          memory: 320M
     networks:
       - nexo-network
 

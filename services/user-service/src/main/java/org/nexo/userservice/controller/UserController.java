@@ -156,6 +156,7 @@ public class UserController {
                 .build();
     }
 
+
     @PostMapping("/assign-role/{username}")
     @PreAuthorize("hasRole('ADMIN')")
     public ResponseData<?> assignRoleToUser(@PathVariable String username,

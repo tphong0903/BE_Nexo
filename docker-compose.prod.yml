@@ -886,40 +886,6 @@ services:
     networks:
       - nexo-network
 
-  coturn:
-    image: coturn/coturn:latest
-    container_name: coturn
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - coturn_data:/var/lib/coturn
-    command: >
-      --listening-port=3478
-      --tls-listening-port=5349
-      --listening-ip=0.0.0.0
-      --relay-ip=0.0.0.0
-      --external-ip=${TURN_EXTERNAL_IP}
-      --realm=nexosocial.id.vn
-      --server-name=nexosocial.id.vn
-      --lt-cred-mech
-      --user=nexo:nexo@turn123
-      --no-tls
-      --no-dtls
-      --no-multicast-peers
-      --no-cli
-      --fingerprint
-      --log-file=stdout
-      --min-port=49152
-      --max-port=65535
-    deploy:
-      resources:
-        limits:
-          cpus: "0.3"
-          memory: 128M
-        reservations:
-          cpus: "0.1"
-          memory: 64M
-
 networks:
   nexo-network:
     driver: bridge
@@ -935,4 +901,3 @@ volumes:
   prometheus_data:
   grafana_data:
   recommendation_artifacts:
-  coturn_data:

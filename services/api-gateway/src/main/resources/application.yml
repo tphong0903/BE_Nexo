@@ -92,7 +92,7 @@ spring:
             websocket: true
 
         - id: messaging-service-ws
-          uri: lb:ws://messaging
+          uri: lb://messaging
           predicates:
             - Path=/messaging/ws/**
           filters:

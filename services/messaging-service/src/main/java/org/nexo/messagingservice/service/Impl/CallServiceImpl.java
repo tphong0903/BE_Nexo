@@ -139,7 +139,7 @@ public class CallServiceImpl implements CallService {
                         .messageType(EMessageType.CALL)
                         .mediaList(List.of())
                         .reactions(List.of())
-                        .createdAt(callMessage.getCreatedAt())
+                        .createdAt(callMessage.getCreatedAt() != null ? callMessage.getCreatedAt() : now)
                         .build();
             });
         }
@@ -227,7 +227,7 @@ public class CallServiceImpl implements CallService {
                     .messageType(EMessageType.CALL)
                     .mediaList(List.of())
                     .reactions(List.of())
-                    .createdAt(callMessage.getCreatedAt())
+                    .createdAt(callMessage.getCreatedAt() != null ? callMessage.getCreatedAt() : now)
                     .build();
         });
 

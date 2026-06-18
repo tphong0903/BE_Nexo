@@ -316,6 +316,7 @@ services:
       GRPC_CLIENT_INTERACTIONS_NEGOTIATION_TYPE: plaintext
       GRPC_CLIENT_INTERACTION-SERVICE_ADDRESS: static://interaction-service:9095
       GRPC_CLIENT_INTERACTION-SERVICE_NEGOTIATION_TYPE: plaintext
+
     depends_on:
       eureka-server:
         condition: service_healthy

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEXO NETWORK - Xác Nhận</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         * {
             margin: 0;
@@ -253,10 +254,10 @@
                             window.location.href = '${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!"http://localhost:3000"}/auth/login';
                         })
                         .catch(err => {
-                            alert('Lỗi xác thực!');
+                            Swal.fire({ icon: 'error', title: 'Lỗi', text: 'Lỗi xác thực!' });
                         });
                     } else {
-                        alert('Không lấy được thông tin người dùng từ token!');
+                        Swal.fire({ icon: 'warning', title: 'Cảnh báo', text: 'Không lấy được thông tin người dùng từ token!' });
                     }
                 });
             }

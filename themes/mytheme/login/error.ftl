@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEXO NETWORK - Lỗi Xác Nhận</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -110,20 +111,20 @@
                         .then(res => res.json())
                         .then(data => {
                             if(data.status === 200 || data.status === 'success') {
-                                alert('Mã xác minh mới đã được gửi đến email của bạn! Vui lòng kiểm tra hộp thư.');
+                                Swal.fire({ icon: 'success', title: 'Thành công', text: 'Mã xác minh mới đã được gửi đến email của bạn! Vui lòng kiểm tra hộp thư.' });
                             } else {
-                                alert('Có lỗi xảy ra: ' + (data.message || 'Vui lòng thử lại sau.'));
+                                Swal.fire({ icon: 'error', title: 'Thất bại', text: 'Có lỗi xảy ra: ' + (data.message || 'Vui lòng thử lại sau.') });
                             }
                         })
                         .catch(err => {
-                            alert('Lỗi kết nối tới máy chủ!');
+                            Swal.fire({ icon: 'error', title: 'Lỗi', text: 'Lỗi kết nối tới máy chủ!' });
                         })
                         .finally(() => {
                             resendBtn.innerText = 'Gửi Lại Mã Xác Minh';
                             resendBtn.disabled = false;
                         });
                     } else {
-                        alert('Không lấy được thông tin người dùng. Vui lòng quay lại đăng nhập và yêu cầu gửi lại.');
+                        Swal.fire({ icon: 'warning', title: 'Cảnh báo', text: 'Không lấy được thông tin người dùng. Vui lòng quay lại đăng nhập và yêu cầu gửi lại.' });
                     }
                 });
             }

@@ -9,7 +9,7 @@
         <p>Your email <b>${user.email!''}</b> has been successfully verified.</p>
         <p>
           You can now 
-          <a href="${url.redirectUri!'http://localhost:3000/verify-email'}" 
+          <a href="${url.redirectUri!(((realm.attributes.frontendUrl)!'http://localhost:3000') + '/verify-email')}" 
              style="color:#4CAF50; font-weight:bold;">
              log in
           </a> 

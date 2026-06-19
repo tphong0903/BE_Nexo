@@ -195,7 +195,7 @@
         <#else>
            <#-- Nếu có lỗi (token hết hạn/invalid), chỉ hiển thị nút quay lại -->
             <#if message?has_content && message.type == 'error'>
-                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
+                <a href="${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
             <#elseif actionUri?has_content>
                 <#if requiredActions??>
                     <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
@@ -213,9 +213,9 @@
 
                 </#if>
             <#elseif pageRedirectUri?has_content>
-                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <a href="${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#elseif client?? && client.baseUrl?has_content>
-                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <a href="${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#else>
                 <p class="error">Không có liên kết xác nhận khả dụng.</p>
             </#if>
@@ -250,7 +250,7 @@
                         })
                         .then(res => res.json())
                         .then(data => {
-                            window.location.href = '${client.rootUrl!"http://localhost:3000"}/auth/login';
+                            window.location.href = '${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!"http://localhost:3000"}/auth/login';
                         })
                         .catch(err => {
                             alert('Lỗi xác thực!');

@@ -24,49 +24,48 @@ public class UserEventConsumer {
 
     private final MeilisearchService meilisearchService;
     private final UserRepository userRepository;
+    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "${spring.kafka.consumer.group-id}")
     public void consumeUserEvent(Object payload) {
-        if (!(payload instanceof java.util.Map<?, ?> map)) {
+        UserSearchEvent event = null;
+        try {
+            if (payload instanceof UserSearchEvent) {
+                event = (UserSearchEvent) payload;
+            } else if (payload instanceof String) {
+                event = objectMapper.readValue((String) payload, UserSearchEvent.class);
+            } else if (payload != null) {
+                event = objectMapper.convertValue(payload, UserSearchEvent.class);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse user event payload", e);
             return;
         }
 
-        Object eventTypeObj = map.get("eventType");
-        if (!(eventTypeObj instanceof String eventType)) {
+        if (event == null || event.getEventType() == null) {
             return;
         }
 
+        String eventType = event.getEventType();
         if (!("CREATE".equals(eventType) || "UPDATE".equals(eventType) || "DELETE".equals(eventType) || "USER_DEACTIVATED".equals(eventType) || "USER_REACTIVATED".equals(eventType))) {
             return;
         }
 
-        Long id = null;
-        if (map.get("id") instanceof Number idNum) {
-            id = idNum.longValue();
-        } else if (map.get("userId") instanceof Number userIdNum) {
-            id = userIdNum.longValue();
+        if (event.getId() == null) {
+            // Check if payload was a map that had 'userId' instead of 'id'
+            try {
+                java.util.Map<?, ?> map = objectMapper.convertValue(payload, java.util.Map.class);
+                if (map.get("userId") instanceof Number userIdNum) {
+                    event.setId(userIdNum.longValue());
+                }
+            } catch (Exception ignored) {}
         }
 
-        String accountStatus = (String) map.getOrDefault("accountStatus", null);
         if ("USER_DEACTIVATED".equals(eventType)) {
-            accountStatus = "LOCKED";
+            event.setAccountStatus("LOCKED");
         } else if ("USER_REACTIVATED".equals(eventType)) {
-            accountStatus = "ACTIVE";
+            event.setAccountStatus("ACTIVE");
         }
-
-        UserSearchEvent event = UserSearchEvent.builder()
-                .id(id)
-                .username((String) map.getOrDefault("username", null))
-                .fullName((String) map.getOrDefault("fullName", null))
-                .email((String) map.getOrDefault("email", null))
-                .avatar((String) map.getOrDefault("avatar", null))
-                .bio((String) map.getOrDefault("bio", null))
-                .isPrivate((Boolean) map.getOrDefault("isPrivate", null))
-                .accountStatus(accountStatus)
-                .eventType(eventType)
-                .role((String) map.getOrDefault("role", null))
-                .violationCount(map.get("violationCount") instanceof Number v ? v.intValue() : null)
-                .build();
 
         UserSearchDocument document = convertToDocument(event);
         UserResponseAdmin documentAdmin = convertToDocumentAdmin(event);

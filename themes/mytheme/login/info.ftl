@@ -157,9 +157,7 @@
         </#if>
 
         <h2>
-            <#if message?has_content && message.type == 'success'>
-                Thành Công
-            <#elseif requiredActions??>
+            <#if requiredActions??>
                 <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
                     Đặt Lại Mật Khẩu
                 <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
@@ -169,6 +167,8 @@
                 <#else>
                     Xác Nhận Hành Động
                 </#if>
+            <#elseif message?has_content && message.type == 'success'>
+                Thành Công
             <#else>
                 Thông Báo
             </#if>
@@ -177,21 +177,29 @@
         <#if !message?has_content || message.type != 'error'>
             <div class="message">
                 <#if message?has_content && message.type == 'success'>
-                    <div class="success-message" style="background: none; border: none; padding: 0; color: #155724; font-size: 16px; margin: 0; text-align: center;">
+                    <div class="success-message" style="background: none; border: none; padding: 0; color: #155724; font-size: 16px; margin: 0; text-align: center; margin-bottom: 20px;">
                         <span style="font-size: 40px; display: block; margin-bottom: 10px;">✓</span>
                         <p>${message.summary}</p>
                     </div>
-                <#elseif requiredActions??>
-                    <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
-                        <p>Nhấn vào nút bên dưới để đặt lại mật khẩu của bạn.</p>
-                    <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
-                        <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
-                    <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
-                        <p>Nhấn vào nút bên dưới để cập nhật thông tin cá nhân của bạn.</p>
+                <#elseif message?has_content && message.type == 'info'>
+                    <p style="margin-bottom: 20px;">${message.summary}</p>
+                </#if>
+
+                <#if actionUri?has_content>
+                    <#if requiredActions??>
+                        <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
+                            <p>Nhấn vào nút bên dưới để đặt lại mật khẩu của bạn.</p>
+                        <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+                            <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
+                        <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
+                            <p>Nhấn vào nút bên dưới để cập nhật thông tin cá nhân của bạn.</p>
+                        <#else>
+                            <p>Vui lòng nhấn vào nút bên dưới để tiếp tục.</p>
+                        </#if>
                     <#else>
-                        <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác nhận.</p>
+                        <p>Vui lòng nhấn vào nút bên dưới để tiếp tục.</p>
                     </#if>
-                <#else>
+                <#elseif !message?has_content || (message.type != 'success' && message.type != 'info')>
                     <p>${message.summary!'Vui lòng nhấn vào nút bên dưới để hoàn tất xác nhận.'}</p>
                 </#if>
             </div>
@@ -200,23 +208,24 @@
         <#if skipLink??>
             <#-- Không hiển thị link -->
         <#else>
-           <#-- Nếu có lỗi (token hết hạn/invalid) hoặc thông báo thành công, hiển thị nút quay lại -->
-            <#if message?has_content && (message.type == 'error' || message.type == 'success' || message.type == 'info')>
+            <#if message?has_content && message.type == 'error'>
                 <a href="${client.rootUrl!'https://nexo.nayamishop.id.vn'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
             <#elseif actionUri?has_content>
                 <#if requiredActions??>
                     <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
-                        <a href="${actionUri}" class="btn">Đặt Lại Mật Khẩu</a>
+                        <a href="${actionUri}" class="btn">Tiếp Tục Đặt Lại Mật Khẩu</a>
                     <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
-                            <button id="verifyBtn" class="btn">Xác Minh Email</button>
+                        <button id="verifyBtn" class="btn">Xác Minh Email</button>
                     <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
-                        <a href="${actionUri}" class="btn">Cập Nhật Thông Tin</a>
+                        <a href="${actionUri}" class="btn">Tiếp Tục Cập Nhật Thông Tin</a>
                     <#else>
-                        <a href="${actionUri}" class="btn">Xác Nhận</a>
+                        <a href="${actionUri}" class="btn">Tiếp Tục</a>
                     </#if>
                 <#else>
                     <a href="${actionUri}" class="btn">Tiếp Tục</a>
                 </#if>
+            <#elseif message?has_content && (message.type == 'success' || message.type == 'info')>
+                <a href="${client.rootUrl!'https://nexo.nayamishop.id.vn'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
             <#elseif pageRedirectUri?has_content>
                 <a href="${client.rootUrl!'https://nexo.nayamishop.id.vn'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#elseif client?? && client.baseUrl?has_content>

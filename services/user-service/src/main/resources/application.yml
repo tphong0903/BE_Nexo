@@ -85,6 +85,7 @@ meilisearch:
 kafka:
   topics:
     user-events: user-events
+    user-activity-events: user-activity-events
 
 recommendation:
   service:
@@ -102,5 +103,5 @@ management:
 
 logging:
   level:
-    "org.apache.kafka": OFF
-    "org.springframework.kafka": OFF
+    "org.apache.kafka": WARN
+    "org.springframework.kafka": WARN

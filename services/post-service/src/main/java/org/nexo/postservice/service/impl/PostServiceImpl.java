@@ -33,6 +33,7 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
@@ -56,6 +57,9 @@ public class PostServiceImpl implements IPostService {
     private final IHashTagService hashTagService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    @Value("${kafka.topics.user-activity-events:user-activity-events}")
+    private String userActivityEventsTopic;
 
     @Override
     public String savePost(PostRequestDTO request, List<MultipartFile> files) {
@@ -113,7 +117,7 @@ public class PostServiceImpl implements IPostService {
                     .occurredAt(Instant.now())
                     .metadata("{\"source\":\"post-service\"}")
                     .build();
-            kafkaTemplate.send("user-events", String.valueOf(request.getUserId()), activityEvent);
+            kafkaTemplate.send(userActivityEventsTopic, String.valueOf(request.getUserId()), activityEvent);
         }
 
         hashTagService.findAndAddHashTagFromCaption(model);

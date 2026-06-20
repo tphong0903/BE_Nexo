@@ -188,8 +188,13 @@
         <#if message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>
             <#if message.type == 'success'>
                 <div class="success-message">
-                    ✓ Mật khẩu của bạn đã được cập nhật thành công.
+                    ✓ Mật khẩu của bạn đã được cập nhật thành công. Đang chuyển hướng...
                 </div>
+                <script>
+                    setTimeout(function() {
+                        window.location.href = 'https://nexo.nayamishop.id.vn/auth/login';
+                    }, 2000);
+                </script>
             <#elseif message.type == 'error'>
                 <div class="error-message">
                     <#if message.summary?contains('Password confirmation') || message.summary?contains('passwords don\'t match')>

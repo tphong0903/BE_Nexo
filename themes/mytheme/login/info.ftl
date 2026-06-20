@@ -176,13 +176,21 @@
         
         <#if !message?has_content || message.type != 'error'>
             <div class="message">
-                <#if message?has_content && message.type == 'success'>
-                    <div class="success-message" style="background: none; border: none; padding: 0; color: #155724; font-size: 16px; margin: 0; text-align: center; margin-bottom: 20px;">
-                        <span style="font-size: 40px; display: block; margin-bottom: 10px;">✓</span>
-                        <p>${message.summary}</p>
-                    </div>
-                <#elseif message?has_content && message.type == 'info'>
-                    <p style="margin-bottom: 20px;">${message.summary}</p>
+                <#if !actionUri?has_content>
+                    <#if message?has_content && message.type == 'success'>
+                        <div class="success-message" style="background: none; border: none; padding: 0; color: #155724; font-size: 16px; margin: 0; text-align: center; margin-bottom: 20px;">
+                            <span style="font-size: 40px; display: block; margin-bottom: 10px;">✓</span>
+                            <p>${message.summary}</p>
+                            <p style="font-size: 14px; margin-top: 10px;">Đang chuyển hướng về trang đăng nhập...</p>
+                        </div>
+                        <script>
+                            setTimeout(function() {
+                                window.location.href = '${client.rootUrl!"https://nexo.nayamishop.id.vn"}/auth/login';
+                            }, 2000);
+                        </script>
+                    <#elseif message?has_content && message.type == 'info'>
+                        <p style="margin-bottom: 20px;">${message.summary}</p>
+                    </#if>
                 </#if>
 
                 <#if actionUri?has_content>
@@ -213,11 +221,11 @@
             <#elseif actionUri?has_content>
                 <#if requiredActions??>
                     <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
-                        <a href="${actionUri}" class="btn">Tiếp Tục Đặt Lại Mật Khẩu</a>
+                        <a href="${actionUri}" class="btn">Đặt Lại Mật Khẩu</a>
                     <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
                         <button id="verifyBtn" class="btn">Xác Minh Email</button>
                     <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
-                        <a href="${actionUri}" class="btn">Tiếp Tục Cập Nhật Thông Tin</a>
+                        <a href="${actionUri}" class="btn">Cập Nhật Thông Tin</a>
                     <#else>
                         <a href="${actionUri}" class="btn">Tiếp Tục</a>
                     </#if>

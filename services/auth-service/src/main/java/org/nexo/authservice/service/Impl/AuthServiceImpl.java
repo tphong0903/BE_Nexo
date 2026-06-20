@@ -77,7 +77,7 @@ public class AuthServiceImpl implements AuthService {
                                                 .flatMap(uuid -> fetchClientSecret(realm, uuid, adminToken)));
         }
 
-        public Mono<TokenResponse> login(LoginRequest loginRequest) {
+        public Mono<TokenResponse> login(LoginRequest loginRequest, String ipAddress) {
                 return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
                                 .flatMap(clientSecret -> {
                                         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
@@ -89,6 +89,7 @@ public class AuthServiceImpl implements AuthService {
 
                                         return webClient.post()
                                                         .uri(keycloakConfig.getLoginUrl())
+                                                        .header("X-Forwarded-For", ipAddress)
                                                         .body(BodyInserters.fromFormData(formData))
                                                         .retrieve()
                                                         .bodyToMono(TokenResponse.class)
@@ -245,7 +246,7 @@ public class AuthServiceImpl implements AuthService {
                                 .subscribe();
         }
 
-        public Mono<TokenResponse> refreshToken(String refreshToken) {
+        public Mono<TokenResponse> refreshToken(String refreshToken, String ipAddress) {
                 log.info("Starting refresh token process");
                 return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
                                 .flatMap(clientSecret -> {
@@ -257,6 +258,7 @@ public class AuthServiceImpl implements AuthService {
 
                                         return webClient.post()
                                                         .uri(keycloakConfig.getRefreshTokenUrl())
+                                                        .header("X-Forwarded-For", ipAddress)
                                                         .body(BodyInserters.fromFormData(formData))
                                                         .retrieve()
                                                         .bodyToMono(TokenResponse.class)

@@ -74,7 +74,13 @@ public class UserEventConsumer {
             switch (event.getEventType()) {
                 case "CREATE":
                 case "UPDATE":
-                    meilisearchService.updateUser(document, documentAdmin);
+                    if ("LOCKED".equals(event.getAccountStatus())) {
+                        if (event.getId() != null) {
+                            meilisearchService.deactivateUser(event.getId(), documentAdmin);
+                        }
+                    } else {
+                        meilisearchService.updateUser(document, documentAdmin);
+                    }
                     break;
                 case "USER_DEACTIVATED":
                     if (event.getId() != null) {

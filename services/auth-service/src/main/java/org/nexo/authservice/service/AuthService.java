@@ -8,9 +8,9 @@ import java.util.List;
 public interface AuthService {
     Mono<String> register(RegisterRequest registerRequest);
 
-    Mono<TokenResponse> login(LoginRequest loginRequest);
+    Mono<TokenResponse> login(LoginRequest loginRequest, String ipAddress);
 
-    Mono<TokenResponse> refreshToken(String refreshToken);
+    Mono<TokenResponse> refreshToken(String refreshToken, String ipAddress);
 
     Mono<Void> logout(String refreshToken);
 

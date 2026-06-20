@@ -877,7 +877,22 @@ services:
     restart: unless-stopped
     networks:
       - nexo-network
-
+  nginx:
+    image: nginx:alpine
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certbot/conf:/etc/letsencrypt:ro
+      - ./certbot/www:/var/www/certbot:ro
+    depends_on:
+      - keycloak
+      - api-gateway
+    restart: unless-stopped
+    networks:
+      - nexo-network
 networks:
   nexo-network:
     driver: bridge

@@ -85,6 +85,14 @@ public class MeilisearchService {
                 log.info("Updated user in index: {}", document.getId());
         }
 
+        public void deactivateUser(Long userId, UserResponseAdmin documentAdmin)
+                        throws JsonProcessingException, MeilisearchException {
+                usersIndex.deleteDocument(String.valueOf(userId));
+                String jsonAdmin = objectMapper.writeValueAsString(Collections.singletonList(documentAdmin));
+                usersAdminIndex.updateDocuments(jsonAdmin);
+                log.info("Deactivated user in index: {}", userId);
+        }
+
         public void deleteUser(Long userId) throws MeilisearchException {
                 usersIndex.deleteDocument(String.valueOf(userId));
                 log.info("Deleted user from index: {}", userId);

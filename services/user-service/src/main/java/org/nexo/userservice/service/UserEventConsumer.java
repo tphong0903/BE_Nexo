@@ -14,12 +14,16 @@ import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.meilisearch.sdk.exceptions.MeilisearchException;
 
+import org.nexo.userservice.repository.UserRepository;
+import org.nexo.userservice.model.UserModel;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class UserEventConsumer {
 
     private final MeilisearchService meilisearchService;
+    private final UserRepository userRepository;
 
     @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "${spring.kafka.consumer.group-id}")
     public void consumeUserEvent(Object payload) {
@@ -32,7 +36,7 @@ public class UserEventConsumer {
             return;
         }
 
-        if (!("CREATE".equals(eventType) || "UPDATE".equals(eventType) || "DELETE".equals(eventType) || "USER_DEACTIVATED".equals(eventType))) {
+        if (!("CREATE".equals(eventType) || "UPDATE".equals(eventType) || "DELETE".equals(eventType) || "USER_DEACTIVATED".equals(eventType) || "USER_REACTIVATED".equals(eventType))) {
             return;
         }
 
@@ -43,7 +47,12 @@ public class UserEventConsumer {
             id = userIdNum.longValue();
         }
 
-        String accountStatus = "USER_DEACTIVATED".equals(eventType) ? "LOCKED" : (String) map.getOrDefault("accountStatus", null);
+        String accountStatus = (String) map.getOrDefault("accountStatus", null);
+        if ("USER_DEACTIVATED".equals(eventType)) {
+            accountStatus = "LOCKED";
+        } else if ("USER_REACTIVATED".equals(eventType)) {
+            accountStatus = "ACTIVE";
+        }
 
         UserSearchEvent event = UserSearchEvent.builder()
                 .id(id)
@@ -65,8 +74,35 @@ public class UserEventConsumer {
             switch (event.getEventType()) {
                 case "CREATE":
                 case "UPDATE":
-                case "USER_DEACTIVATED":
                     meilisearchService.updateUser(document, documentAdmin);
+                    break;
+                case "USER_DEACTIVATED":
+                    if (event.getId() != null) {
+                        meilisearchService.deactivateUser(event.getId(), documentAdmin);
+                    }
+                    break;
+                case "USER_REACTIVATED":
+                    if (event.getId() != null) {
+                        UserModel user = userRepository.findById(event.getId()).orElse(null);
+                        if (user != null) {
+                            document = UserSearchDocument.builder()
+                                    .id(user.getId())
+                                    .username(user.getUsername())
+                                    .fullName(user.getFullName())
+                                    .avatar(user.getAvatar())
+                                    .build();
+                            documentAdmin = UserResponseAdmin.builder()
+                                    .id(user.getId())
+                                    .username(user.getUsername())
+                                    .fullName(user.getFullName())
+                                    .email(user.getEmail())
+                                    .accountStatus(EAccountStatus.ACTIVE)
+                                    .role(user.getRole() != null ? user.getRole() : ERole.USER)
+                                    .violationCount(user.getViolationCount())
+                                    .build();
+                        }
+                        meilisearchService.updateUser(document, documentAdmin);
+                    }
                     break;
 
                 case "DELETE":

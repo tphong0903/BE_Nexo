@@ -22,7 +22,7 @@ public class UserActivityEventConsumer {
     private final UserRepository userRepository;
     private final UserActivityLogRepository userActivityLogRepository;
 
-    @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "${spring.kafka.consumer.group-id}")
+    @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "user-activity-group")
     public void consumeUserActivityEvent(Object payload) {
         if (!(payload instanceof java.util.Map<?, ?> map)) {
             return;

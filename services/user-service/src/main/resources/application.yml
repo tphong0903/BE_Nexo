@@ -38,7 +38,7 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-        spring.json.value.default.type: org.nexo.userservice.dto.UserSearchEvent
+        spring.json.value.default.type: java.util.Map
       auto-offset-reset: earliest
   security:
     oauth2:

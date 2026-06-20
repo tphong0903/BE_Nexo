@@ -17,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.nexo.userservice.grpc.InteractionGrpcClient;
@@ -70,16 +71,16 @@ public class MeilisearchService {
         }
 
         public void indexUser(UserSearchDocument document) throws JsonProcessingException, MeilisearchException {
-                String json = objectMapper.writeValueAsString(document);
+                String json = objectMapper.writeValueAsString(Collections.singletonList(document));
                 usersIndex.addDocuments(json);
                 log.info("Indexed user: {}", document.getId());
         }
 
         public void updateUser(UserSearchDocument document, UserResponseAdmin documentAdmin)
                         throws JsonProcessingException, MeilisearchException {
-                String json = objectMapper.writeValueAsString(document);
+                String json = objectMapper.writeValueAsString(Collections.singletonList(document));
                 usersIndex.updateDocuments(json);
-                String jsonAdmin = objectMapper.writeValueAsString(documentAdmin);
+                String jsonAdmin = objectMapper.writeValueAsString(Collections.singletonList(documentAdmin));
                 usersAdminIndex.updateDocuments(jsonAdmin);
                 log.info("Updated user in index: {}", document.getId());
         }

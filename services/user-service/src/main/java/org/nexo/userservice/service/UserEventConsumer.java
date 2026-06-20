@@ -22,14 +22,33 @@ public class UserEventConsumer {
     private final MeilisearchService meilisearchService;
 
     @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "${spring.kafka.consumer.group-id}")
-    public void consumeUserEvent(UserSearchEvent event) {
-        if (event == null || event.getEventType() == null) {
+    public void consumeUserEvent(Object payload) {
+        if (!(payload instanceof java.util.Map<?, ?> map)) {
             return;
         }
 
-        if (!("CREATE".equals(event.getEventType()) || "UPDATE".equals(event.getEventType()) || "DELETE".equals(event.getEventType()))) {
+        Object eventTypeObj = map.get("eventType");
+        if (!(eventTypeObj instanceof String eventType)) {
             return;
         }
+
+        if (!("CREATE".equals(eventType) || "UPDATE".equals(eventType) || "DELETE".equals(eventType))) {
+            return;
+        }
+
+        UserSearchEvent event = UserSearchEvent.builder()
+                .id(map.get("id") instanceof Number idNum ? idNum.longValue() : null)
+                .username((String) map.getOrDefault("username", null))
+                .fullName((String) map.getOrDefault("fullName", null))
+                .email((String) map.getOrDefault("email", null))
+                .avatar((String) map.getOrDefault("avatar", null))
+                .bio((String) map.getOrDefault("bio", null))
+                .isPrivate((Boolean) map.getOrDefault("isPrivate", null))
+                .accountStatus((String) map.getOrDefault("accountStatus", null))
+                .eventType(eventType)
+                .role((String) map.getOrDefault("role", null))
+                .violationCount(map.get("violationCount") instanceof Number v ? v.intValue() : null)
+                .build();
 
         UserSearchDocument document = convertToDocument(event);
         UserResponseAdmin documentAdmin = convertToDocumentAdmin(event);

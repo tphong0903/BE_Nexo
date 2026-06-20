@@ -24,24 +24,36 @@ public class UserActivityEventConsumer {
 
     @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "user-activity-group")
     public void consumeUserActivityEvent(Object payload) {
+        log.info("Received payload: class={}, value={}", payload.getClass().getName(), payload);
+
         if (!(payload instanceof java.util.Map<?, ?> map)) {
+            log.warn("Payload is NOT a Map, actual type: {}", payload.getClass().getName());
             return;
         }
 
         Object eventTypeObj = map.get("eventType");
         Object userIdObj = map.get("userId");
 
+        log.info("Parsed fields: eventType={} (class={}), userId={} (class={})",
+                eventTypeObj,
+                eventTypeObj != null ? eventTypeObj.getClass().getName() : "null",
+                userIdObj,
+                userIdObj != null ? userIdObj.getClass().getName() : "null");
+
         if (!(eventTypeObj instanceof String eventType) || !(userIdObj instanceof Number userIdNum)) {
+            log.warn("eventType or userId has wrong type, skipping. eventType={}, userId={}", eventTypeObj, userIdObj);
             return;
         }
 
         if (!("POST_CREATED".equals(eventType) || "POST_LIKED".equals(eventType) || "COMMENT_CREATED".equals(eventType))) {
+            log.info("Event type {} not handled, skipping", eventType);
             return;
         }
 
         Long userId = userIdNum.longValue();
         UserModel user = userRepository.findById(userId).orElse(null);
         if (user == null) {
+            log.warn("User {} not found in DB, skipping event", userId);
             return;
         }
 
@@ -54,6 +66,8 @@ public class UserActivityEventConsumer {
                 "\"metadata\":\"" + (metadata != null ? String.valueOf(metadata) : "") + "\"" +
                 "}";
 
+        log.info("Built detailsJson for userId={}, eventType={}: {}", userId, eventType, detailsJson);
+
         UserActivityLogModel logModel = UserActivityLogModel.builder()
                 .user(user)
                 .action(eventType)
@@ -62,5 +76,7 @@ public class UserActivityEventConsumer {
                 .build();
 
         userActivityLogRepository.save(logModel);
+
+        log.info("Saved UserActivityLogModel for userId={}, eventType={}", userId, eventType);
     }
 }

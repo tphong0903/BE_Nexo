@@ -32,19 +32,28 @@ public class UserEventConsumer {
             return;
         }
 
-        if (!("CREATE".equals(eventType) || "UPDATE".equals(eventType) || "DELETE".equals(eventType))) {
+        if (!("CREATE".equals(eventType) || "UPDATE".equals(eventType) || "DELETE".equals(eventType) || "USER_DEACTIVATED".equals(eventType))) {
             return;
         }
 
+        Long id = null;
+        if (map.get("id") instanceof Number idNum) {
+            id = idNum.longValue();
+        } else if (map.get("userId") instanceof Number userIdNum) {
+            id = userIdNum.longValue();
+        }
+
+        String accountStatus = "USER_DEACTIVATED".equals(eventType) ? "LOCKED" : (String) map.getOrDefault("accountStatus", null);
+
         UserSearchEvent event = UserSearchEvent.builder()
-                .id(map.get("id") instanceof Number idNum ? idNum.longValue() : null)
+                .id(id)
                 .username((String) map.getOrDefault("username", null))
                 .fullName((String) map.getOrDefault("fullName", null))
                 .email((String) map.getOrDefault("email", null))
                 .avatar((String) map.getOrDefault("avatar", null))
                 .bio((String) map.getOrDefault("bio", null))
                 .isPrivate((Boolean) map.getOrDefault("isPrivate", null))
-                .accountStatus((String) map.getOrDefault("accountStatus", null))
+                .accountStatus(accountStatus)
                 .eventType(eventType)
                 .role((String) map.getOrDefault("role", null))
                 .violationCount(map.get("violationCount") instanceof Number v ? v.intValue() : null)
@@ -56,6 +65,7 @@ public class UserEventConsumer {
             switch (event.getEventType()) {
                 case "CREATE":
                 case "UPDATE":
+                case "USER_DEACTIVATED":
                     meilisearchService.updateUser(document, documentAdmin);
                     break;
 

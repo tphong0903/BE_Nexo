@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NEXO NETWORK - Xác Nhận</title>
-    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <style>
         * {
             margin: 0;
@@ -158,7 +157,9 @@
         </#if>
 
         <h2>
-            <#if requiredActions??>
+            <#if message?has_content && message.type == 'success'>
+                Thành Công
+            <#elseif requiredActions??>
                 <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
                     Đặt Lại Mật Khẩu
                 <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
@@ -169,13 +170,18 @@
                     Xác Nhận Hành Động
                 </#if>
             <#else>
-                Xác Nhận Hành Động
+                Thông Báo
             </#if>
         </h2>
         
         <#if !message?has_content || message.type != 'error'>
             <div class="message">
-                <#if requiredActions??>
+                <#if message?has_content && message.type == 'success'>
+                    <div class="success-message" style="background: none; border: none; padding: 0; color: #155724; font-size: 16px; margin: 0; text-align: center;">
+                        <span style="font-size: 40px; display: block; margin-bottom: 10px;">✓</span>
+                        <p>${message.summary}</p>
+                    </div>
+                <#elseif requiredActions??>
                     <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
                         <p>Nhấn vào nút bên dưới để đặt lại mật khẩu của bạn.</p>
                     <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
@@ -186,7 +192,7 @@
                         <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác nhận.</p>
                     </#if>
                 <#else>
-                    <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
+                    <p>${message.summary!'Vui lòng nhấn vào nút bên dưới để hoàn tất xác nhận.'}</p>
                 </#if>
             </div>
         </#if>
@@ -194,31 +200,29 @@
         <#if skipLink??>
             <#-- Không hiển thị link -->
         <#else>
-           <#-- Nếu có lỗi (token hết hạn/invalid), chỉ hiển thị nút quay lại -->
-            <#if message?has_content && message.type == 'error'>
-                <a href="${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
+           <#-- Nếu có lỗi (token hết hạn/invalid) hoặc thông báo thành công, hiển thị nút quay lại -->
+            <#if message?has_content && (message.type == 'error' || message.type == 'success' || message.type == 'info')>
+                <a href="${client.rootUrl!'https://nexo.nayamishop.id.vn'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
             <#elseif actionUri?has_content>
                 <#if requiredActions??>
                     <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
                         <a href="${actionUri}" class="btn">Đặt Lại Mật Khẩu</a>
                     <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
                             <button id="verifyBtn" class="btn">Xác Minh Email</button>
-
                     <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
                         <a href="${actionUri}" class="btn">Cập Nhật Thông Tin</a>
                     <#else>
                         <a href="${actionUri}" class="btn">Xác Nhận</a>
                     </#if>
                 <#else>
-                        <button id="verifyBtn" class="btn">Xác Minh Email</button>
-
+                    <a href="${actionUri}" class="btn">Tiếp Tục</a>
                 </#if>
             <#elseif pageRedirectUri?has_content>
-                <a href="${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <a href="${client.rootUrl!'https://nexo.nayamishop.id.vn'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#elseif client?? && client.baseUrl?has_content>
-                <a href="${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <a href="${client.rootUrl!'https://nexo.nayamishop.id.vn'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
             <#else>
-                <p class="error">Không có liên kết xác nhận khả dụng.</p>
+                <a href="${client.rootUrl!'https://nexo.nayamishop.id.vn'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
             </#if>
         </#if>
 
@@ -251,13 +255,13 @@
                         })
                         .then(res => res.json())
                         .then(data => {
-                            window.location.href = '${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!"http://localhost:3000"}/auth/login';
+                            window.location.href = '${client.rootUrl!"https://nexo.nayamishop.id.vn"}/auth/login';
                         })
                         .catch(err => {
-                            Swal.fire({ icon: 'error', title: 'Lỗi', text: 'Lỗi xác thực!' });
+                            alert('Lỗi xác thực!');
                         });
                     } else {
-                        Swal.fire({ icon: 'warning', title: 'Cảnh báo', text: 'Không lấy được thông tin người dùng từ token!' });
+                        alert('Không lấy được thông tin người dùng từ token!');
                     }
                 });
             }

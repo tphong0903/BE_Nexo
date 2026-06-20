@@ -655,6 +655,7 @@ services:
     environment:
       KC_HOSTNAME: auth.nexosocial.id.vn
       KC_HOSTNAME_URL: https://auth.nexosocial.id.vn
+      KC_HOSTNAME_STRICT: "true"
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
       KC_DB: postgres

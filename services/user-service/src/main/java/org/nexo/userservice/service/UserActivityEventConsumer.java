@@ -26,8 +26,12 @@ public class UserActivityEventConsumer {
     private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = "${kafka.topics.user-activity-events}", groupId = "user-activity-group")
-    public void consumeUserActivityEvent(Object payload) {
-        log.info("Received activity event payload: class={}, value={}", payload.getClass().getName(), payload);
+    public void consumeUserActivityEvent(Object incomingPayload) {
+        Object payload = incomingPayload;
+        if (payload instanceof org.apache.kafka.clients.consumer.ConsumerRecord) {
+            payload = ((org.apache.kafka.clients.consumer.ConsumerRecord<?, ?>) payload).value();
+        }
+        log.info("Received activity event payload: class={}, value={}", payload != null ? payload.getClass().getName() : "null", payload);
 
         UserActivityEvent event = null;
         try {

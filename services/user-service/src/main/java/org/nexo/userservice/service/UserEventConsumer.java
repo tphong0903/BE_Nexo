@@ -27,9 +27,13 @@ public class UserEventConsumer {
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
 
     @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "${spring.kafka.consumer.group-id}")
-    public void consumeUserEvent(Object payload) {
+    public void consumeUserEvent(Object incomingPayload) {
+        Object payload = incomingPayload;
+        if (payload instanceof org.apache.kafka.clients.consumer.ConsumerRecord) {
+            payload = ((org.apache.kafka.clients.consumer.ConsumerRecord<?, ?>) payload).value();
+        }
         log.info("=== BEGIN: consumeUserEvent ===");
-        log.info("Received payload class: {}, value: {}", payload.getClass().getName(), payload);
+        log.info("Received payload class: {}, value: {}", payload != null ? payload.getClass().getName() : "null", payload);
         UserSearchEvent event = null;
         try {
             if (payload instanceof UserSearchEvent) {

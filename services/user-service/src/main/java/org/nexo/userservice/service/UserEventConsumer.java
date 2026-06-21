@@ -28,6 +28,8 @@ public class UserEventConsumer {
 
     @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "${spring.kafka.consumer.group-id}")
     public void consumeUserEvent(Object payload) {
+        log.info("=== BEGIN: consumeUserEvent ===");
+        log.info("Received payload class: {}, value: {}", payload.getClass().getName(), payload);
         UserSearchEvent event = null;
         try {
             if (payload instanceof UserSearchEvent) {
@@ -37,6 +39,7 @@ public class UserEventConsumer {
             } else if (payload != null) {
                 event = objectMapper.convertValue(payload, UserSearchEvent.class);
             }
+            log.info("Successfully parsed event: {}", event);
         } catch (Exception e) {
             log.error("Failed to parse user event payload", e);
             return;
@@ -69,6 +72,7 @@ public class UserEventConsumer {
 
         UserSearchDocument document = convertToDocument(event);
         UserResponseAdmin documentAdmin = convertToDocumentAdmin(event);
+        log.info("Going to update MeiliSearch for eventType: {}, accountStatus: {}", event.getEventType(), event.getAccountStatus());
         try {
             switch (event.getEventType()) {
                 case "CREATE":

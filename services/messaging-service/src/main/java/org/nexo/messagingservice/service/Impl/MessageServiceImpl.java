@@ -18,7 +18,7 @@ import org.nexo.messagingservice.dto.ReactionUpdateDTO;
 import org.nexo.messagingservice.dto.ReplyStoryRequsestDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.dto.UserDTO;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.enums.EMessageType;
 import org.nexo.messagingservice.enums.EReactionType;
@@ -55,7 +55,6 @@ public class MessageServiceImpl implements MessageService {
     private final MessageMediaRepository mediaRepository;
     private final UserGrpcClient userGrpcClient;
     private final StoryGrpcClient storyGrpcClient;
-    private final SimpMessagingTemplate messagingTemplate;
 
     public MessageDTO sendMessage(SendMessageRequest request, Long senderUserId) {
         ConversationModel conversation = conversationRepository.findById(request.getConversationId())
@@ -262,7 +261,7 @@ public class MessageServiceImpl implements MessageService {
         log.info("Message {} deleted by user {}", messageId, userId);
     }
 
-    public void addReaction(Long messageId, Long userId, EReactionType reactionType) {
+    public ReactionUpdateDTO addReaction(Long messageId, Long userId, EReactionType reactionType) {
         MessageModel message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
 
@@ -278,23 +277,19 @@ public class MessageServiceImpl implements MessageService {
             reaction.setMessage(message);
             reaction.setUserId(userId);
             reaction.setReactionType(reactionType);
-
             reactionRepository.save(reaction);
         }
 
         List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(messageId);
         List<ReactionDTO> reactions = aggregateReactions(reactionModels);
-        ReactionUpdateDTO update = ReactionUpdateDTO.builder()
+        return ReactionUpdateDTO.builder()
                 .messageId(messageId)
+                .conversationId(message.getConversation().getId())
                 .reactions(reactions)
                 .build();
-
-        messagingTemplate.convertAndSend(
-                "/topic/conversation/" + message.getConversation().getId() + "/reactions",
-                update);
     }
 
-    public void removeReaction(Long messageId, Long userId, EReactionType reactionType) {
+    public ReactionUpdateDTO removeReaction(Long messageId, Long userId, EReactionType reactionType) {
         MessageModel message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
 
@@ -302,14 +297,11 @@ public class MessageServiceImpl implements MessageService {
 
         List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(messageId);
         List<ReactionDTO> reactions = aggregateReactions(reactionModels);
-        ReactionUpdateDTO update = ReactionUpdateDTO.builder()
+        return ReactionUpdateDTO.builder()
                 .messageId(messageId)
+                .conversationId(message.getConversation().getId())
                 .reactions(reactions)
                 .build();
-
-        messagingTemplate.convertAndSend(
-                "/topic/conversation/" + message.getConversation().getId() + "/reactions",
-                update);
     }
 
     private boolean isParticipant(Long conversationId, Long userId) {

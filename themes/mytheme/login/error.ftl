@@ -70,7 +70,7 @@
         </div>
 
         <button id="resendBtn" class="btn" style="display: none;">Gửi Lại Mã Xác Minh</button>
-        <a href="${(realm.attributes.frontendUrl)!(client.baseUrl)!(client.rootUrl)!'http://localhost:3000'}/auth/login" class="btn btn-secondary">« Quay Lại Đăng Nhập</a>
+        <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn btn-secondary">« Quay Lại Đăng Nhập</a>
 
         <script>
         document.addEventListener('DOMContentLoaded', function() {

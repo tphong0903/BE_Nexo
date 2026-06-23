@@ -153,7 +153,7 @@ public class LikeServiceImpl implements ILikeService {
             postGrpcClient.addLikeQuantityById(id, false, false);
 
             redisTemplate.opsForSet().remove("reel:" + id + ":likes", String.valueOf(currentUserId));
-            redisTemplate.opsForValue().decrement("global:likes:total");
+            redisTemplate.opsForValue().setIfAbsent("global:likes:total", 0L);
             redisTemplate.opsForValue().decrement("user:" + currentUserId + ":likes:total");
 
             updateAffinityScore(currentUserId, authorId, -SCORE_LIKE_POST_REEL);

@@ -68,6 +68,7 @@ public class StoryController {
         return new ResponseData<>(200, "Success", storyService.viewDetailStory(id, pageNo, pageSize));
     }
 
+
     @GetMapping("/view/{id}")
     public ResponseData<?> getAllStoryOfFriend(@PathVariable Long id, @RequestParam(defaultValue = "0") int pageNo, @RequestParam(defaultValue = "20") int pageSize) {
         return new ResponseData<>(200, "Success", storyService.getAllStoryOfFriend(id, pageNo, pageSize));
@@ -114,5 +115,10 @@ public class StoryController {
     @GetMapping("/collections/detail/{id}")
     public ResponseData<?> getFriendCollectionDetail(@PathVariable Long id) {
         return new ResponseData<>(200, "Success", storyService.getFriendCollectionDetail(id));
+    }
+
+    @GetMapping("/view-detail/{id}")
+    public ResponseData<?> getStory(@PathVariable Long id) {
+        return new ResponseData<>(200, "Success", storyService.getStory(id));
     }
 }

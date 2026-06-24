@@ -440,6 +440,29 @@ public class StoryServiceImpl implements IStoryService {
         return buildPageResponse(storyPage, List.of(storyResponse));
     }
 
+    @Override
+    public StoryResponse getStory(Long id) {
+        Optional<StoryModel> story = Optional.ofNullable(storyRepository.findById(id).orElseThrow(() -> new CustomException("Story is not exist", HttpStatus.BAD_REQUEST)));
+        StoryModel storyModel = story.get();
+        Long viewerId = securityUtil.getUserIdFromToken();
+        checkVisibilityAccess(storyModel.getUserId(), viewerId);
+
+
+        UserServiceProto.UserDTOResponse ownerInfo = userGrpcClient.getUserDTOById(storyModel.getUserId());
+        Map<Long, StoryViewModel> viewMap = getBatchStoryViews(List.of(storyModel), viewerId);
+
+        List<StoryResponse.Story> storyList = new ArrayList<>();
+
+        storyList.add(toStoryResponse(storyModel, viewMap.get(storyModel.getId())));
+
+        return StoryResponse.builder()
+                .userName(ownerInfo.getUsername())
+                .avatarUrl(ownerInfo.getAvatar())
+                .userId(storyModel.getUserId())
+                .storyList(storyList)
+                .build();
+    }
+
 
     // =========================================================================
     // 3. KAFKA LISTENER VÀ CÁC HÀM HELPER

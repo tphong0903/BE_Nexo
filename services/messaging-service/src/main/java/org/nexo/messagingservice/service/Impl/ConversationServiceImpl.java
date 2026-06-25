@@ -279,7 +279,7 @@ public class ConversationServiceImpl implements ConversationService {
             displayAvatar = conversation.getGroupAvatarUrl();
         } else {
             UserDTO otherUser = participantDTOs.stream()
-                    .filter(u -> u.getId() != requestingUserId)
+                    .filter(u -> !u.getId().equals(requestingUserId))
                     .findFirst()
                     .orElse(null);
 

@@ -284,8 +284,8 @@ public class ConversationServiceImpl implements ConversationService {
                     .orElse(null);
 
             if (otherUser != null) {
-                if (myParticipant != null && myParticipant.getNickname() != null && !myParticipant.getNickname().isEmpty()) {
-                    displayName = myParticipant.getNickname();
+                if (otherUser.getNickname() != null && !otherUser.getNickname().isEmpty()) {
+                    displayName = otherUser.getNickname();
                 } else {
                     displayName = otherUser.getFullName();
                 }

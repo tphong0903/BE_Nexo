@@ -19,5 +19,6 @@ public class CallResponseDTO {
     private Long responderId;
     private String responderUsername;
     private ECallStatus status;
+    private boolean isGroupCall;
     private MessageDTO callMessage;
 }

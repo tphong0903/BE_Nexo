@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CallSignalRequest {
     private Long callId;
+    private Long targetUserId;
     // OFFER, ANSWER, or ICE_CANDIDATE
     private String type;
     // SDP for OFFER/ANSWER

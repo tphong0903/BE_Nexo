@@ -231,6 +231,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageModelResponse<UserActivityLogResponse> getUserActivityLogs(String accessToken, int pageNo, int pageSize) {
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
         UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)

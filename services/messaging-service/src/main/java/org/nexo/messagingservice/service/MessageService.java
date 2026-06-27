@@ -14,6 +14,8 @@ import java.util.List;
 public interface MessageService {
     MessageDTO sendMessage(SendMessageRequest request, Long senderUserId);
 
+    MessageDTO sendSystemMessage(Long conversationId, Long senderUserId, String content);
+
     MessageDTO replyStory(ReplyStoryRequsestDTO request, Long senderUserId);
 
     Page<MessageDTO> getMessages(Long conversationId, Pageable pageable, Long requestingUserId, String search);

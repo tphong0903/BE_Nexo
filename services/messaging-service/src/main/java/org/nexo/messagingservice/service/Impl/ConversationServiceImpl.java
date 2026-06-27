@@ -646,14 +646,26 @@ public class ConversationServiceImpl implements ConversationService {
         if (!isUserParticipant(conversationId, userId))
             throw new SecurityException("Not a participant");
 
+        List<Long> addedMemberIds = new ArrayList<>();
         for (Long memberId : request.getUserIds()) {
             if (!isUserParticipant(conversationId, memberId)) {
                 ConversationParticipantModel member = new ConversationParticipantModel();
                 member.setConversation(group);
                 member.setUserId(memberId);
                 participantRepository.save(member);
+                addedMemberIds.add(memberId);
             }
         }
+        
+        if (!addedMemberIds.isEmpty()) {
+            List<UserDTOResponse2> addedUsers = userGrpcClient.getUsersByIds(addedMemberIds);
+            String addedNames = addedUsers.stream().map(UserDTOResponse2::getFullName).collect(Collectors.joining(", "));
+            String messageContent = user.getFullName() + " đã thêm " + addedNames + " vào nhóm.";
+            
+            MessageDTO systemMessage = messageService.sendSystemMessage(conversationId, userId, messageContent);
+            messagingTemplate.convertAndSend("/topic/conversation/" + conversationId, systemMessage);
+        }
+        
         return mapToDto(group, userId);
     }
 

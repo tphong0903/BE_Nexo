@@ -582,6 +582,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .groupAvatarUrl(request.getGroupAvatarUrl())
                 .createdByUserId(creatorId)
                 .status(EConversationStatus.NORMAL)
+                .lastMessageAt(java.time.LocalDateTime.now())
                 .build();
         group = conversationRepository.save(group);
 

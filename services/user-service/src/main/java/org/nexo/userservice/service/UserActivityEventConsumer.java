@@ -68,7 +68,7 @@ public class UserActivityEventConsumer {
         String detailsJson = "{" +
                 "\"targetId\":" + (event.getTargetId() != null ? event.getTargetId() : "null") + "," +
                 "\"targetType\":\"" + (event.getTargetType() != null ? event.getTargetType() : "") + "\"," +
-                "\"metadata\":\"" + (event.getMetadata() != null ? event.getMetadata() : "") + "\"" +
+                "\"metadata\":" + (event.getMetadata() != null && !event.getMetadata().isEmpty() ? event.getMetadata() : "{}") +
                 "}";
 
         UserActivityLogModel logModel = UserActivityLogModel.builder()

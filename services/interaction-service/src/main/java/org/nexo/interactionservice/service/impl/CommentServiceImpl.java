@@ -126,13 +126,26 @@ public class CommentServiceImpl implements ICommentService {
                     .build();
             kafkaTemplate.send("notification", messageDTO);
 
+            String authorName = "ai đó";
+            try {
+                org.nexo.grpc.user.UserServiceProto.UserDTOResponse author = userGrpcClient.getUserDTOById(authorId);
+                authorName = author.getFullName();
+            } catch (Exception e) {
+                log.warn("Failed to fetch author name for COMMENT_CREATED event: {}", e.getMessage());
+            }
+
+            Long sourceId = model.getPostId() != null && model.getPostId() != 0 ? model.getPostId() : model.getReelId();
+            String typeStr = model.getPostId() != null && model.getPostId() != 0 ? "post" : "reel";
+            String metadata = String.format("{\"source\":\"interaction-service\", \"authorName\":\"%s\", \"url\":\"/%s/%d\"}", 
+                authorName.replace("\"", "\\\""), typeStr, sourceId);
+
             UserActivityEvent activityEvent = UserActivityEvent.builder()
                     .eventType("COMMENT_CREATED")
                     .userId(dto.getUserId())
                     .targetId(authorId)
-                    .targetType(model.getPostId() != null && model.getPostId() != 0 ? "POST" : "REEL")
+                    .targetType(typeStr.toUpperCase())
                     .occurredAt(Instant.now())
-                    .metadata("{\"source\":\"interaction-service\"}")
+                    .metadata(metadata)
                     .build();
             kafkaTemplate.send("user-activity-events", String.valueOf(dto.getUserId()), activityEvent);
             kafkaTemplate.send("user-events", String.valueOf(dto.getUserId()), activityEvent);

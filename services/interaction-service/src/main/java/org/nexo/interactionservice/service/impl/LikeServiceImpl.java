@@ -124,13 +124,24 @@ public class LikeServiceImpl implements ILikeService {
                 sendNotification(currentUserId, authorId, ENotificationType.LIKE_POST, "/posts/" + id);
             }
 
+            String authorName = "ai đó";
+            try {
+                org.nexo.grpc.user.UserServiceProto.UserDTOResponse author = userGrpcClient.getUserDTOById(authorId);
+                authorName = author.getFullName();
+            } catch (Exception e) {
+                log.warn("Failed to fetch author name for POST_LIKED event: {}", e.getMessage());
+            }
+
+            String metadata = String.format("{\"source\":\"interaction-service\", \"authorName\":\"%s\", \"url\":\"/post/%d\"}", 
+                authorName.replace("\"", "\\\""), id);
+
             UserActivityEvent activityEvent = UserActivityEvent.builder()
                     .eventType("POST_LIKED")
                     .userId(currentUserId)
                     .targetId(id)
                     .targetType("POST")
                     .occurredAt(java.time.Instant.now())
-                    .metadata("{\"source\":\"interaction-service\"}")
+                    .metadata(metadata)
                     .build();
             kafkaTemplate.send("user-events", String.valueOf(currentUserId), activityEvent);
             kafkaTemplate.send("user-activity-events", String.valueOf(currentUserId), activityEvent);

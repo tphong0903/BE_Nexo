@@ -94,3 +94,7 @@ grpc:
       enable-keep-alive: true
       keep-alive-without-calls: true
       negotiationType: plaintext
+
+kafka:
+  topics:
+    user-activity-events: user-activity-events

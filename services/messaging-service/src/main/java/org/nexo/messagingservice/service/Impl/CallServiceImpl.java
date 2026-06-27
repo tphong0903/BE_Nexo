@@ -10,8 +10,10 @@ import org.nexo.messagingservice.enums.EMessageType;
 import org.nexo.messagingservice.exception.ResourceNotFoundException;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.CallModel;
+import org.nexo.messagingservice.model.CallParticipantModel;
 import org.nexo.messagingservice.model.ConversationModel;
 import org.nexo.messagingservice.model.MessageModel;
+import org.nexo.messagingservice.repository.CallParticipantRepository;
 import org.nexo.messagingservice.repository.CallRepository;
 import org.nexo.messagingservice.repository.ConversationParticipantRepository;
 import org.nexo.messagingservice.repository.ConversationRepository;
@@ -32,6 +34,7 @@ import java.util.List;
 public class CallServiceImpl implements CallService {
 
     private final CallRepository callRepository;
+    private final CallParticipantRepository callParticipantRepository;
     private final ConversationParticipantRepository participantRepository;
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
@@ -45,13 +48,18 @@ public class CallServiceImpl implements CallService {
             throw new AccessDeniedException("Caller is not a participant of this conversation");
         }
 
-        Long calleeUserId = participantIds.stream()
-                .filter(id -> !id.equals(callerUserId))
-                .findFirst()
-                .orElseThrow(() -> new ResourceNotFoundException("No callee found in conversation"));
+        boolean isGroupCall = participantIds.size() > 2;
+        Long calleeUserId = null;
 
-        if (userGrpcClient.isUserBlocked(callerUserId, calleeUserId)) {
-            throw new AccessDeniedException("Cannot call a blocked user");
+        if (!isGroupCall) {
+            calleeUserId = participantIds.stream()
+                    .filter(id -> !id.equals(callerUserId))
+                    .findFirst()
+                    .orElseThrow(() -> new ResourceNotFoundException("No callee found in conversation"));
+
+            if (userGrpcClient.isUserBlocked(callerUserId, calleeUserId)) {
+                throw new AccessDeniedException("Cannot call a blocked user");
+            }
         }
 
         List<ECallStatus> activeStatuses = List.of(ECallStatus.INITIATED, ECallStatus.RINGING);
@@ -66,10 +74,19 @@ public class CallServiceImpl implements CallService {
                 .conversationId(request.getConversationId())
                 .callerUserId(callerUserId)
                 .calleeUserId(calleeUserId)
+                .isGroupCall(isGroupCall)
                 .callType(request.getCallType())
                 .status(ECallStatus.RINGING)
                 .build();
         call = callRepository.save(call);
+
+        CallParticipantModel callerParticipant = CallParticipantModel.builder()
+                .call(call)
+                .userId(callerUserId)
+                .status(ECallStatus.ACCEPTED)
+                .joinedAt(LocalDateTime.now())
+                .build();
+        callParticipantRepository.save(callerParticipant);
 
         UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(callerUserId);
 
@@ -81,6 +98,28 @@ public class CallServiceImpl implements CallService {
                 .callerFullName(callerInfo.getFullName())
                 .callerAvatarUrl(callerInfo.getAvatar())
                 .callType(call.getCallType())
+                .isGroupCall(isGroupCall)
+                .startedAt(call.getStartedAt())
+                .build();
+    }
+
+    @Override
+    public CallNotificationDTO pingUser(Long callId, Long targetUserId, Long callerUserId) {
+        CallModel call = callRepository.findById(callId)
+                .orElseThrow(() -> new ResourceNotFoundException("Call not found"));
+        if (!call.isGroupCall()) {
+            throw new IllegalArgumentException("Ping is only available for group calls");
+        }
+        UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(callerUserId);
+        return CallNotificationDTO.builder()
+                .callId(call.getId())
+                .conversationId(call.getConversationId())
+                .callerId(callerUserId)
+                .callerUsername(callerInfo.getUsername())
+                .callerFullName(callerInfo.getFullName())
+                .callerAvatarUrl(callerInfo.getAvatar())
+                .callType(call.getCallType())
+                .isGroupCall(true)
                 .startedAt(call.getStartedAt())
                 .build();
     }
@@ -90,58 +129,36 @@ public class CallServiceImpl implements CallService {
         CallModel call = callRepository.findByIdAndParticipant(request.getCallId(), calleeUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Call not found or access denied"));
 
-        if (call.getStatus() != ECallStatus.RINGING) {
-            throw new IllegalStateException("Call is no longer ringing (status: " + call.getStatus() + ")");
+        if (!call.isGroupCall() && call.getStatus() != ECallStatus.RINGING) {
+            throw new IllegalStateException("Call is no longer ringing");
         }
 
-        ECallStatus newStatus;
+        ECallStatus newStatus = Boolean.TRUE.equals(request.getAccepted()) ? ECallStatus.ACCEPTED : ECallStatus.REJECTED;
         LocalDateTime now = LocalDateTime.now();
-        if (Boolean.TRUE.equals(request.getAccepted())) {
-            newStatus = ECallStatus.ACCEPTED;
-            call.setAnsweredAt(now);
+
+        if (!call.isGroupCall()) {
+            if (newStatus == ECallStatus.ACCEPTED) call.setAnsweredAt(now);
+            else call.setEndedAt(now);
+            call.setStatus(newStatus);
+            callRepository.save(call);
         } else {
-            newStatus = ECallStatus.REJECTED;
-            call.setEndedAt(now);
+            CallParticipantModel cp = callParticipantRepository.findByCallIdAndUserId(call.getId(), calleeUserId)
+                .orElse(CallParticipantModel.builder().call(call).userId(calleeUserId).build());
+            cp.setStatus(newStatus);
+            if (newStatus == ECallStatus.ACCEPTED) cp.setJoinedAt(now);
+            callParticipantRepository.save(cp);
+            
+            if (newStatus == ECallStatus.ACCEPTED && call.getStatus() == ECallStatus.RINGING) {
+                call.setStatus(ECallStatus.ACCEPTED);
+                call.setAnsweredAt(now);
+                callRepository.save(call);
+            }
         }
-        call.setStatus(newStatus);
-        callRepository.save(call);
 
         UserServiceProto.UserDTOResponse calleeInfo = userGrpcClient.getUserById(calleeUserId);
-
         final MessageDTO[] savedCallMessageDTO = {null};
-        if (newStatus == ECallStatus.REJECTED) {
-            conversationRepository.findById(call.getConversationId()).ifPresent(conversation -> {
-                String content = buildCallMessageContent(call.getCallType(), ECallStatus.REJECTED, null);
-                MessageModel callMessage = MessageModel.builder()
-                        .conversation(conversation)
-                        .senderUserId(call.getCallerUserId())
-                        .content(content)
-                        .messageType(EMessageType.CALL)
-                        .isActive(true)
-                        .build();
-                messageRepository.save(callMessage);
-                conversation.setLastMessageId(callMessage.getId());
-                conversation.setLastMessageAt(now);
-                conversationRepository.save(conversation);
-
-                UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(call.getCallerUserId());
-                UserDTO senderDTO = UserDTO.builder()
-                        .id(call.getCallerUserId())
-                        .username(callerInfo.getUsername())
-                        .fullName(callerInfo.getFullName())
-                        .avatarUrl(callerInfo.getAvatar())
-                        .build();
-                savedCallMessageDTO[0] = MessageDTO.builder()
-                        .id(callMessage.getId())
-                        .conversationId(conversation.getId())
-                        .sender(senderDTO)
-                        .content(content)
-                        .messageType(EMessageType.CALL)
-                        .mediaList(List.of())
-                        .reactions(List.of())
-                        .createdAt(callMessage.getCreatedAt())
-                        .build();
-            });
+        if (!call.isGroupCall() && newStatus == ECallStatus.REJECTED) {
+            savedCallMessageDTO[0] = saveCallMessage(call, ECallStatus.REJECTED, null, now);
         }
 
         return CallResponseDTO.builder()
@@ -150,7 +167,40 @@ public class CallServiceImpl implements CallService {
                 .responderId(calleeUserId)
                 .responderUsername(calleeInfo.getUsername())
                 .status(newStatus)
+                .isGroupCall(call.isGroupCall())
                 .callMessage(savedCallMessageDTO[0])
+                .build();
+    }
+
+    @Override
+    public CallResponseDTO joinActiveCall(Long callId, Long userId) {
+        CallModel call = callRepository.findByIdAndParticipant(callId, userId)
+                .orElseThrow(() -> new ResourceNotFoundException("Call not found or access denied"));
+        if (!call.isGroupCall() || (call.getStatus() != ECallStatus.RINGING && call.getStatus() != ECallStatus.ACCEPTED)) {
+            throw new IllegalStateException("Call is not active or not a group call");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        CallParticipantModel cp = callParticipantRepository.findByCallIdAndUserId(callId, userId)
+                .orElse(CallParticipantModel.builder().call(call).userId(userId).build());
+        cp.setStatus(ECallStatus.ACCEPTED);
+        cp.setJoinedAt(now);
+        callParticipantRepository.save(cp);
+
+        if (call.getStatus() == ECallStatus.RINGING) {
+            call.setStatus(ECallStatus.ACCEPTED);
+            call.setAnsweredAt(now);
+            callRepository.save(call);
+        }
+
+        UserServiceProto.UserDTOResponse calleeInfo = userGrpcClient.getUserById(userId);
+        return CallResponseDTO.builder()
+                .callId(call.getId())
+                .conversationId(call.getConversationId())
+                .responderId(userId)
+                .responderUsername(calleeInfo.getUsername())
+                .status(ECallStatus.ACCEPTED)
+                .isGroupCall(true)
                 .build();
     }
 
@@ -166,6 +216,8 @@ public class CallServiceImpl implements CallService {
         return CallSignalDTO.builder()
                 .callId(call.getId())
                 .senderId(senderUserId)
+                .targetUserId(request.getTargetUserId())
+                .isGroupCall(call.isGroupCall())
                 .type(request.getType())
                 .sdp(request.getSdp())
                 .candidate(request.getCandidate())
@@ -180,12 +232,33 @@ public class CallServiceImpl implements CallService {
         ECallStatus finalStatus;
         LocalDateTime now = LocalDateTime.now();
 
-        if (call.getStatus() == ECallStatus.RINGING) {
-            finalStatus = userId.equals(call.getCallerUserId()) ? ECallStatus.ENDED : ECallStatus.MISSED;
-        } else if (call.getStatus() == ECallStatus.ACCEPTED) {
+        if (call.isGroupCall()) {
+            callParticipantRepository.findByCallIdAndUserId(call.getId(), userId).ifPresent(cp -> {
+                cp.setStatus(ECallStatus.ENDED);
+                cp.setLeftAt(now);
+                callParticipantRepository.save(cp);
+            });
+            
+            boolean activeRemain = callParticipantRepository.findByCallId(call.getId()).stream()
+                    .anyMatch(cp -> cp.getStatus() == ECallStatus.ACCEPTED || cp.getStatus() == ECallStatus.RINGING);
+            if (activeRemain && !userId.equals(call.getCallerUserId())) {
+                return CallEndedDTO.builder()
+                    .callId(call.getId())
+                    .conversationId(call.getConversationId())
+                    .endedByUserId(userId)
+                    .finalStatus(ECallStatus.ENDED)
+                    .endedAt(now)
+                    .build();
+            }
             finalStatus = ECallStatus.ENDED;
         } else {
-            finalStatus = call.getStatus();
+            if (call.getStatus() == ECallStatus.RINGING) {
+                finalStatus = userId.equals(call.getCallerUserId()) ? ECallStatus.ENDED : ECallStatus.MISSED;
+            } else if (call.getStatus() == ECallStatus.ACCEPTED) {
+                finalStatus = ECallStatus.ENDED;
+            } else {
+                finalStatus = call.getStatus();
+            }
         }
 
         final Long durationSeconds = call.getAnsweredAt() != null
@@ -197,9 +270,23 @@ public class CallServiceImpl implements CallService {
         call.setDurationSeconds(durationSeconds);
         callRepository.save(call);
 
-        final MessageDTO[] savedCallMessageDTO = {null};
+        MessageDTO savedMsg = saveCallMessage(call, finalStatus, durationSeconds, now);
+
+        return CallEndedDTO.builder()
+                .callId(call.getId())
+                .conversationId(call.getConversationId())
+                .endedByUserId(userId)
+                .finalStatus(finalStatus)
+                .durationSeconds(durationSeconds)
+                .endedAt(now)
+                .callMessage(savedMsg)
+                .build();
+    }
+
+    private MessageDTO saveCallMessage(CallModel call, ECallStatus status, Long durationSeconds, LocalDateTime now) {
+        final MessageDTO[] saved = {null};
         conversationRepository.findById(call.getConversationId()).ifPresent(conversation -> {
-            String content = buildCallMessageContent(call.getCallType(), finalStatus, durationSeconds);
+            String content = buildCallMessageContent(call.getCallType(), status, durationSeconds);
             MessageModel callMessage = MessageModel.builder()
                     .conversation(conversation)
                     .senderUserId(call.getCallerUserId())
@@ -219,7 +306,7 @@ public class CallServiceImpl implements CallService {
                     .fullName(callerInfo.getFullName())
                     .avatarUrl(callerInfo.getAvatar())
                     .build();
-            savedCallMessageDTO[0] = MessageDTO.builder()
+            saved[0] = MessageDTO.builder()
                     .id(callMessage.getId())
                     .conversationId(conversation.getId())
                     .sender(senderDTO)
@@ -227,19 +314,10 @@ public class CallServiceImpl implements CallService {
                     .messageType(EMessageType.CALL)
                     .mediaList(List.of())
                     .reactions(List.of())
-                    .createdAt(callMessage.getCreatedAt())
+                    .createdAt(callMessage.getCreatedAt() != null ? callMessage.getCreatedAt() : now)
                     .build();
         });
-
-        return CallEndedDTO.builder()
-                .callId(call.getId())
-                .conversationId(call.getConversationId())
-                .endedByUserId(userId)
-                .finalStatus(finalStatus)
-                .durationSeconds(durationSeconds)
-                .endedAt(now)
-                .callMessage(savedCallMessageDTO[0])
-                .build();
+        return saved[0];
     }
 
     private String buildCallMessageContent(ECallType callType, ECallStatus status, Long durationSeconds) {

@@ -16,6 +16,8 @@ import lombok.NoArgsConstructor;
 public class CallSignalDTO {
     private Long callId;
     private Long senderId;
+    private Long targetUserId;
+    private boolean isGroupCall;
     private String type;
     private String sdp;
     private String candidate;

@@ -2,6 +2,7 @@ package org.nexo.messagingservice.service;
 
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.ReactionDetailDTO;
+import org.nexo.messagingservice.dto.ReactionUpdateDTO;
 import org.nexo.messagingservice.dto.ReplyStoryRequsestDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.enums.EReactionType;
@@ -25,9 +26,9 @@ public interface MessageService {
 
     Long getLastReadMessageId(Long conversationId, Long userId);
 
-    void addReaction(Long messageId, Long userId, EReactionType reactionType);
+    ReactionUpdateDTO addReaction(Long messageId, Long userId, EReactionType reactionType);
 
-    void removeReaction(Long messageId, Long userId, EReactionType reactionType);
+    ReactionUpdateDTO removeReaction(Long messageId, Long userId, EReactionType reactionType);
 
     List<ReactionDetailDTO> getMessageReactions(Long messageId, Long requestingUserId);
 }

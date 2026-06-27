@@ -8,11 +8,12 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
-public class ReactionUpdateDTO {
-    private Long messageId;
+public class NicknameUpdateEvent {
     private Long conversationId;
-    private List<ReactionDTO> reactions;
+    private Long targetUserId;
+    private String nickname;
+    private List<UserDTO> participants;
 }

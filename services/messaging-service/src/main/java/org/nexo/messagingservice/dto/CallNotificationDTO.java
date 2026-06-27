@@ -24,5 +24,6 @@ public class CallNotificationDTO {
     private String callerAvatarUrl;
     // VIDEO_CALL (with cam) or AUDIO_CALL (no cam)
     private ECallType callType;
+    private boolean isGroupCall;
     private LocalDateTime startedAt;
 }

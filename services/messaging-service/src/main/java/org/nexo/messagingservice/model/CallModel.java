@@ -30,8 +30,12 @@ public class CallModel {
     @Column(name = "caller_user_id", nullable = false)
     private Long callerUserId;
 
-    @Column(name = "callee_user_id", nullable = false)
+    @Column(name = "callee_user_id")
     private Long calleeUserId;
+
+    @Column(name = "is_group_call", nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private boolean isGroupCall = false;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "call_type", nullable = false)

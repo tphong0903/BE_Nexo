@@ -12,5 +12,9 @@ public interface CallService {
 
     CallEndedDTO endCall(CallEndRequest request, Long userId);
 
+    CallNotificationDTO pingUser(Long callId, Long targetUserId, Long callerUserId);
+
+    CallResponseDTO joinActiveCall(Long callId, Long userId);
+
     Long getOtherParticipantId(Long callId, Long currentUserId);
 }

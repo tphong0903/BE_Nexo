@@ -19,6 +19,18 @@ public class KeycloakConfig {
     private String adminUsername;
     private String adminPassword;
 
+    /**
+     * URL FE để Keycloak điều hướng về sau khi user xác minh email xong.
+     * Phải nằm trong "Valid Redirect URIs" của client {@link #verifyEmailClientId}.
+     */
+    private String verifyEmailRedirectUri;
+
+    /**
+     * Client dùng cho redirect sau khi verify email. Mặc định trùng clientId, nhưng
+     * thường nên trỏ tới client của FE (client có đăng ký redirect URI ở trên).
+     */
+    private String verifyEmailClientId;
+
     public String getTokenUrl() {
         return serverUrl + "/realms/master/protocol/openid-connect/token";
     }

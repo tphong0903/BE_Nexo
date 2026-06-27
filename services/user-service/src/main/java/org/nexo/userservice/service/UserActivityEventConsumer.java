@@ -11,6 +11,8 @@ import org.nexo.userservice.repository.UserRepository;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -21,37 +23,52 @@ public class UserActivityEventConsumer {
 
     private final UserRepository userRepository;
     private final UserActivityLogRepository userActivityLogRepository;
+    private final ObjectMapper objectMapper;
 
-    @KafkaListener(topics = "${kafka.topics.user-events}", groupId = "${spring.kafka.consumer.group-id}")
-    public void consumeUserActivityEvent(Object payload) {
-        if (!(payload instanceof java.util.Map<?, ?> map)) {
+    @KafkaListener(topics = "${kafka.topics.user-activity-events}", groupId = "user-activity-group")
+    public void consumeUserActivityEvent(Object incomingPayload) {
+        Object payload = incomingPayload;
+        if (payload instanceof org.apache.kafka.clients.consumer.ConsumerRecord) {
+            payload = ((org.apache.kafka.clients.consumer.ConsumerRecord<?, ?>) payload).value();
+        }
+        log.info("Received activity event payload: class={}, value={}", payload != null ? payload.getClass().getName() : "null", payload);
+
+        UserActivityEvent event = null;
+        try {
+            if (payload instanceof UserActivityEvent directEvent) {
+                event = directEvent;
+            } else {
+                event = objectMapper.convertValue(payload, UserActivityEvent.class);
+            }
+        } catch (Exception e) {
+            log.error("Failed to parse UserActivityEvent payload: {}", e.getMessage(), e);
             return;
         }
 
-        Object eventTypeObj = map.get("eventType");
-        Object userIdObj = map.get("userId");
-
-        if (!(eventTypeObj instanceof String eventType) || !(userIdObj instanceof Number userIdNum)) {
+        if (event == null || event.getEventType() == null || event.getUserId() == null) {
+            log.warn("Skipping: eventType or userId is null. event={}", event);
             return;
         }
 
-        if (!("POST_CREATED".equals(eventType) || "POST_LIKED".equals(eventType) || "COMMENT_CREATED".equals(eventType))) {
+        String eventType = event.getEventType();
+        if (!(  "POST_CREATED".equals(eventType) ||
+                "POST_LIKED".equals(eventType) ||
+                "COMMENT_CREATED".equals(eventType))) {
+            log.info("Event type '{}' not handled by activity consumer, skipping", eventType);
             return;
         }
 
-        Long userId = userIdNum.longValue();
+        Long userId = event.getUserId();
         UserModel user = userRepository.findById(userId).orElse(null);
         if (user == null) {
+            log.warn("User {} not found in DB, skipping event '{}'", userId, eventType);
             return;
         }
 
-        Object targetId = map.get("targetId");
-        Object targetType = map.get("targetType");
-        Object metadata = map.get("metadata");
         String detailsJson = "{" +
-                "\"targetId\":" + (targetId != null ? String.valueOf(targetId) : "null") + "," +
-                "\"targetType\":\"" + (targetType != null ? String.valueOf(targetType) : "") + "\"," +
-                "\"metadata\":\"" + (metadata != null ? String.valueOf(metadata) : "") + "\"" +
+                "\"targetId\":" + (event.getTargetId() != null ? event.getTargetId() : "null") + "," +
+                "\"targetType\":\"" + (event.getTargetType() != null ? event.getTargetType() : "") + "\"," +
+                "\"metadata\":\"" + (event.getMetadata() != null ? event.getMetadata() : "") + "\"" +
                 "}";
 
         UserActivityLogModel logModel = UserActivityLogModel.builder()
@@ -62,5 +79,7 @@ public class UserActivityEventConsumer {
                 .build();
 
         userActivityLogRepository.save(logModel);
+
+        log.info("Saved UserActivityLog for userId={}, eventType={}", userId, eventType);
     }
 }

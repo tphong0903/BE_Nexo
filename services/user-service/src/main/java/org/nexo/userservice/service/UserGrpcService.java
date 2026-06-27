@@ -143,26 +143,38 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                 return;
             }
 
+            EAccountStatus currentStatus = user.getAccountStatus();
+            boolean statusChanged = false;
+
             if (request.getEmailVerified()) {
-                user.setAccountStatus(EAccountStatus.ACTIVE);
-                log.info("User account activated for keycloakUserId: {}", request.getKeycloakUserId());
+                if (currentStatus == EAccountStatus.PENDING) {
+                    user.setAccountStatus(EAccountStatus.ACTIVE);
+                    statusChanged = true;
+                }
             } else {
-                user.setAccountStatus(EAccountStatus.PENDING);
+                if (currentStatus == EAccountStatus.ACTIVE) {
+                    user.setAccountStatus(EAccountStatus.PENDING);
+                    statusChanged = true;
+                }
             }
 
-            UserModel updatedUser = userRepository.save(user);
-
-            publishUserEvent(updatedUser, "UPDATE");
+            UserModel resultUser = user;
+            if (statusChanged) {
+                resultUser = userRepository.save(user);
+                publishUserEvent(resultUser, "UPDATE");
+                log.info("Email verification changed account status: keycloakUserId={}, {} -> {}",
+                        request.getKeycloakUserId(), currentStatus, resultUser.getAccountStatus());
+            } else {
+                log.debug("Email verification no-op (status unchanged): keycloakUserId={}, status={}",
+                        request.getKeycloakUserId(), currentStatus);
+            }
 
             UserServiceProto.UpdateEmailVerificationResponse response = UserServiceProto.UpdateEmailVerificationResponse
                     .newBuilder()
                     .setSuccess(true)
-                    .setMessage("Email verification status updated successfully. Account status: " +
-                            updatedUser.getAccountStatus())
+                    .setMessage("Email verification status processed. Account status: " +
+                            resultUser.getAccountStatus())
                     .build();
-
-            log.info("Email verification updated successfully: keycloakUserId={}, accountStatus={}",
-                    updatedUser.getKeycloakUserId(), updatedUser.getAccountStatus());
 
             responseObserver.onNext(response);
             responseObserver.onCompleted();
@@ -667,10 +679,13 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
     public void getUserIdByEmail(UserServiceProto.GetUserIdByEmailRequest request,
                                  StreamObserver<UserServiceProto.GetUserIdByEmailResponse> responseObserver) {
 
-        UserModel user = userRepository.findByEmailAndAccountStatus(request.getEmail(), EAccountStatus.ACTIVE)
+        UserModel user = userRepository.findByEmail(request.getEmail())
                 .orElse(null);
 
-        if (user == null) {
+        // Cho phép quên mật khẩu với mọi user tồn tại trừ tài khoản bị khóa (LOCKED).
+        // Bao gồm cả user PENDING (chưa xác thực email) để họ không bị kẹt: vừa không
+        // login được (Keycloak chặn vì còn VERIFY_EMAIL) vừa không reset được mật khẩu.
+        if (user == null || user.getAccountStatus() == EAccountStatus.LOCKED) {
             UserServiceProto.GetUserIdByEmailResponse response = UserServiceProto.GetUserIdByEmailResponse
                     .newBuilder()
                     .setSuccess(false)
@@ -678,7 +693,7 @@ public class UserGrpcService extends UserServiceGrpc.UserServiceImplBase {
                     .setKeycloakUserId("")
                     .build();
 
-            log.warn("User not found with email: {}", request.getEmail());
+            log.warn("User not found or locked for email: {}", request.getEmail());
             responseObserver.onNext(response);
             responseObserver.onCompleted();
             return;

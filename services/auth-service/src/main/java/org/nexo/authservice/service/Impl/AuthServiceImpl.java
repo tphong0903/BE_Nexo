@@ -63,6 +63,9 @@ public class AuthServiceImpl implements AuthService {
         private static final String STATUS_CONFLICT = "CONFLICT_EXISTS";
         private static final String DEFAULT_PASSWORD = "Nexo@123456";
 
+        private static final int RESEND_COOLDOWN_SECONDS = 60;
+        private static final long RESEND_MAX_PER_HOUR = 5;
+
         private final WebClient webClient;
         private final KeycloakConfig keycloakConfig;
         private final TokenCacheService tokenCacheService;
@@ -77,7 +80,7 @@ public class AuthServiceImpl implements AuthService {
                                                 .flatMap(uuid -> fetchClientSecret(realm, uuid, adminToken)));
         }
 
-        public Mono<TokenResponse> login(LoginRequest loginRequest) {
+        public Mono<TokenResponse> login(LoginRequest loginRequest, String ipAddress) {
                 return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
                                 .flatMap(clientSecret -> {
                                         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
@@ -89,6 +92,7 @@ public class AuthServiceImpl implements AuthService {
 
                                         return webClient.post()
                                                         .uri(keycloakConfig.getLoginUrl())
+                                                        .header("X-Forwarded-For", ipAddress)
                                                         .body(BodyInserters.fromFormData(formData))
                                                         .retrieve()
                                                         .bodyToMono(TokenResponse.class)
@@ -97,8 +101,32 @@ public class AuthServiceImpl implements AuthService {
                                                                         tokenResponse.getAccessToken(),
                                                                         tokenResponse.getRefreshToken(),
                                                                         tokenResponse.getExpiresIn())
+                                                                        .thenReturn(tokenResponse))
+                                                        .flatMap(tokenResponse -> syncAccountActivation(
+                                                                        tokenResponse.getAccessToken())
                                                                         .thenReturn(tokenResponse));
                                 });
+        }
+
+
+        private Mono<Void> syncAccountActivation(String accessToken) {
+                if (accessToken == null || !jwtUtil.isEmailVerified(accessToken)) {
+                        return Mono.empty();
+                }
+                String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+                if (keycloakUserId == null) {
+                        return Mono.empty();
+                }
+                return userGrpcClient.updateUserEmailVerification(keycloakUserId, true)
+                                .doOnSuccess(r -> log.info(
+                                                "[LAZY-SYNC] Account activation synced for userId={}: {}",
+                                                keycloakUserId, r.getMessage()))
+                                .onErrorResume(ex -> {
+                                        log.warn("[LAZY-SYNC] Failed to sync activation for userId={}: {}",
+                                                        keycloakUserId, ex.getMessage());
+                                        return Mono.empty();
+                                })
+                                .then();
         }
 
         @Override
@@ -185,19 +213,6 @@ public class AuthServiceImpl implements AuthService {
                                 .onErrorComplete();
         }
 
-        private Mono<Void> rollbackAccountStatus(String keycloakUserId, String status) {
-                log.warn("[SAGA ROLLBACK] Reverting account status to {} for userId={}", status, keycloakUserId);
-                return userGrpcClient.updateAccountStatus(keycloakUserId, status)
-                                .doOnSuccess(r -> log.info(
-                                                "[SAGA ROLLBACK] Account status reverted to {} for userId={}",
-                                                status, keycloakUserId))
-                                .doOnError(e -> log.error(
-                                                "[SAGA ROLLBACK] Failed to revert account status for userId={}: {}",
-                                                keycloakUserId, e.getMessage()))
-                                .onErrorComplete()
-                                .then();
-        }
-
         private Mono<String> handleRegistrationError(ClientResponse response) {
                 return response.bodyToMono(String.class)
                                 .flatMap(body -> {
@@ -214,13 +229,65 @@ public class AuthServiceImpl implements AuthService {
         }
 
         public Mono<Void> resendVerifyEmail(String userId) {
-                return getAdminToken()
-                                .flatMap(adminToken -> sendVerifyEmail(userId, adminToken));
+                String cooldownKey = "resend-verify:cooldown:" + userId;
+                String countKey = "resend-verify:count:" + userId;
+
+                // Rate-limit: tối thiểu 60s giữa 2 lần gửi lại, và tối đa 5 lần trong 1 giờ.
+                return redisTemplate.opsForValue()
+                                .setIfAbsent(cooldownKey, "1", Duration.ofSeconds(RESEND_COOLDOWN_SECONDS))
+                                .flatMap(acquired -> {
+                                        if (Boolean.FALSE.equals(acquired)) {
+                                                return Mono.<Void>error(new KeycloakClientException(429,
+                                                                "Bạn vừa yêu cầu gửi lại email. Vui lòng đợi "
+                                                                                + RESEND_COOLDOWN_SECONDS
+                                                                                + " giây rồi thử lại."));
+                                        }
+                                        return redisTemplate.opsForValue().increment(countKey)
+                                                        .flatMap(count -> {
+                                                                Mono<Boolean> ttlMono = (count != null && count == 1L)
+                                                                                ? redisTemplate.expire(countKey,
+                                                                                                Duration.ofHours(1))
+                                                                                : Mono.just(Boolean.TRUE);
+                                                                return ttlMono.then(Mono.defer(() -> {
+                                                                        if (count != null
+                                                                                        && count > RESEND_MAX_PER_HOUR) {
+                                                                                return Mono.<Void>error(
+                                                                                                new KeycloakClientException(
+                                                                                                                429,
+                                                                                                                "Bạn đã yêu cầu gửi lại email quá nhiều lần. Vui lòng thử lại sau 1 giờ."));
+                                                                        }
+                                                                        return getAdminToken().flatMap(
+                                                                                        adminToken -> sendVerifyEmail(
+                                                                                                        userId,
+                                                                                                        adminToken));
+                                                                }));
+                                                        });
+                                });
         }
 
         private Mono<Void> sendVerifyEmail(String userId, String adminToken) {
+                String redirectUri = keycloakConfig.getVerifyEmailRedirectUri();
+                String baseUri = keycloakConfig.getUsersUrl() + "/" + userId + "/send-verify-email";
+
+                // Nếu có cấu hình redirect, kèm client_id + redirect_uri để sau khi verify
+                // Keycloak điều hướng người dùng về trang login của FE.
+                String uri;
+                if (redirectUri != null && !redirectUri.isBlank()) {
+                        String clientId = (keycloakConfig.getVerifyEmailClientId() != null
+                                        && !keycloakConfig.getVerifyEmailClientId().isBlank())
+                                                        ? keycloakConfig.getVerifyEmailClientId()
+                                                        : keycloakConfig.getClientId();
+                        uri = org.springframework.web.util.UriComponentsBuilder.fromHttpUrl(baseUri)
+                                        .queryParam("client_id", clientId)
+                                        .queryParam("redirect_uri", redirectUri)
+                                        .encode()
+                                        .toUriString();
+                } else {
+                        uri = baseUri;
+                }
+
                 return webClient.put()
-                                .uri(keycloakConfig.getUsersUrl() + "/" + userId + "/send-verify-email")
+                                .uri(uri)
                                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
                                 .retrieve()
                                 .bodyToMono(Void.class);
@@ -245,7 +312,7 @@ public class AuthServiceImpl implements AuthService {
                                 .subscribe();
         }
 
-        public Mono<TokenResponse> refreshToken(String refreshToken) {
+        public Mono<TokenResponse> refreshToken(String refreshToken, String ipAddress) {
                 log.info("Starting refresh token process");
                 return getClientSecret(keycloakConfig.getRealm(), keycloakConfig.getClientId())
                                 .flatMap(clientSecret -> {
@@ -257,6 +324,7 @@ public class AuthServiceImpl implements AuthService {
 
                                         return webClient.post()
                                                         .uri(keycloakConfig.getRefreshTokenUrl())
+                                                        .header("X-Forwarded-For", ipAddress)
                                                         .body(BodyInserters.fromFormData(formData))
                                                         .retrieve()
                                                         .bodyToMono(TokenResponse.class)
@@ -385,116 +453,46 @@ public class AuthServiceImpl implements AuthService {
         }
 
         private Mono<Void> sendResetPasswordEmail(String userId, String adminToken) {
-                return webClient.put()
-                                .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
-                                                + "/users/" + userId + "/execute-actions-email")
-                                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
-                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                                .bodyValue(new String[] { "UPDATE_PASSWORD" })
-                                .retrieve()
-                                .bodyToMono(Void.class);
+                return isEmailVerifiedInKeycloak(userId, adminToken)
+                                .flatMap(verified -> {
+                                        List<String> actions = new ArrayList<>();
+                                        actions.add("UPDATE_PASSWORD");
+                                        if (!verified) {
+                                                actions.add("VERIFY_EMAIL");
+                                        }
+                                        return webClient.put()
+                                                        .uri(keycloakConfig.getServerUrl() + "/admin/realms/"
+                                                                        + keycloakConfig.getRealm()
+                                                                        + "/users/" + userId
+                                                                        + "/execute-actions-email")
+                                                        .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                                                        .header(HttpHeaders.CONTENT_TYPE,
+                                                                        MediaType.APPLICATION_JSON_VALUE)
+                                                        .bodyValue(actions)
+                                                        .retrieve()
+                                                        .bodyToMono(Void.class);
+                                });
         }
 
-        // callBack is split into focused private methods to keep types unambiguous for
-        // the compiler
-        public Mono<String> callBack(CallBackRequest request) {
-                return getAdminToken()
-                                .flatMap(adminToken -> fetchKeycloakUser(request.getKeycloakId(), adminToken)
-                                                .flatMap(userInfo -> validateCallbackUser(request, userInfo))
-                                                .flatMap(userInfo -> activateUserSaga(request.getKeycloakId(),
-                                                                adminToken)
-                                                                .thenReturn(userInfo)));
-        }
-
-        private Mono<String> fetchKeycloakUser(String keycloakId, String adminToken) {
+        private Mono<Boolean> isEmailVerifiedInKeycloak(String userId, String adminToken) {
                 return webClient.get()
-                                .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
-                                                + "/users/" + keycloakId)
-                                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
-                                .retrieve()
-                                .bodyToMono(String.class)
-                                .flatMap(userInfo -> {
-                                        if (userInfo == null || userInfo.isEmpty()) {
-                                                log.error("User not found in Keycloak for keycloakId: {}", keycloakId);
-                                                return Mono.<String>error(
-                                                                new KeycloakClientException(404, "User not found"));
-                                        }
-                                        return Mono.just(userInfo);
-                                });
-        }
-
-        private Mono<String> validateCallbackUser(CallBackRequest request, String userInfo) {
-                try {
-                        JsonNode userNode = objectMapper.readTree(userInfo);
-                        String keycloakUserId = userNode.has("id") ? userNode.get("id").asText() : null;
-                        String keycloakEmail = userNode.has("email") ? userNode.get("email").asText() : null;
-
-                        if (!request.getKeycloakId().equals(keycloakUserId)) {
-                                log.error("Keycloak user id mismatch. Expected: {}, Actual: {}",
-                                                request.getKeycloakId(), keycloakUserId);
-                                return Mono.error(new KeycloakClientException(400, "User id mismatch"));
-                        }
-                        if (request.getEmail() != null && !request.getEmail().equals(keycloakEmail)) {
-                                log.error("Email mismatch. Expected: {}, Actual: {}", request.getEmail(),
-                                                keycloakEmail);
-                                return Mono.error(new KeycloakClientException(400, "Email mismatch"));
-                        }
-                        return Mono.just(userInfo);
-                } catch (Exception e) {
-                        return Mono.error(new KeycloakClientException(500, "Failed to parse user info"));
-                }
-        }
-
-        // SAGA: update user-service ACTIVE → verify email in Keycloak
-        // If Keycloak step fails → rollback user-service back to PENDING
-        private Mono<Void> activateUserSaga(String keycloakId, String adminToken) {
-                return userGrpcClient.updateAccountStatus(keycloakId, "ACTIVE")
-                                .flatMap(grpcResponse -> {
-                                        if (!grpcResponse.getSuccess()) {
-                                                log.error("[SAGA] Failed to activate user in user-service for userId={}: {}",
-                                                                keycloakId, grpcResponse.getMessage());
-                                                return Mono.<Void>error(new KeycloakClientException(500,
-                                                                "Failed to activate account: "
-                                                                                + grpcResponse.getMessage()));
-                                        }
-                                        log.info("[SAGA] Account status set to ACTIVE in user-service for userId={}",
-                                                        keycloakId);
-                                        return verifyEmail(keycloakId, adminToken)
-                                                        .doOnSuccess(v -> log.info(
-                                                                        "[SAGA] Email verified in Keycloak for userId={}",
-                                                                        keycloakId))
-                                                        .onErrorResume(ex -> {
-                                                                log.error("[SAGA] verifyEmail in Keycloak failed for userId={}: {}",
-                                                                                keycloakId, ex.getMessage());
-                                                                return rollbackAccountStatus(keycloakId, "PENDING")
-                                                                                .then(Mono.<Void>error(
-                                                                                                new KeycloakClientException(
-                                                                                                                500,
-                                                                                                                "Email verification failed, account status rolled back")));
-                                                        });
-                                })
-                                .onErrorResume(ex -> {
-                                        if (ex instanceof KeycloakClientException)
-                                                return Mono.error(ex);
-                                        log.error("[SAGA] Unexpected error during callback for userId={}: {}",
-                                                        keycloakId, ex.getMessage());
-                                        return Mono.error(
-                                                        new KeycloakClientException(500, "Callback processing failed"));
-                                });
-        }
-
-        private Mono<Void> verifyEmail(String userId, String adminToken) {
-                Map<String, Object> payload = new HashMap<>();
-                payload.put(EMAIL_VERIFIED, true);
-                payload.put("requiredActions", Collections.emptyList());
-                return webClient.put()
                                 .uri(keycloakConfig.getServerUrl() + "/admin/realms/" + keycloakConfig.getRealm()
                                                 + "/users/" + userId)
                                 .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
-                                .header(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
-                                .bodyValue(payload)
                                 .retrieve()
-                                .bodyToMono(Void.class);
+                                .bodyToMono(String.class)
+                                .map(body -> {
+                                        try {
+                                                JsonNode node = objectMapper.readTree(body);
+                                                return node.has(EMAIL_VERIFIED)
+                                                                && node.get(EMAIL_VERIFIED).asBoolean();
+                                        } catch (Exception e) {
+                                                log.warn("Cannot parse Keycloak user when checking emailVerified for userId={}: {}",
+                                                                userId, e.getMessage());
+                                                return false;
+                                        }
+                                })
+                                .onErrorReturn(false);
         }
 
         public Mono<Void> banUser(String userId) {
@@ -503,6 +501,18 @@ public class AuthServiceImpl implements AuthService {
 
         public Mono<Void> unBanUser(String userId) {
                 return getAdminToken().flatMap(adminToken -> enableUser(userId, adminToken));
+        }
+
+        @Override
+        public Mono<Void> deleteUser(String userId) {
+                return getAdminToken().flatMap(adminToken -> webClient.delete()
+                                .uri(keycloakConfig.getUsersUrl() + "/" + userId)
+                                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                                .retrieve()
+                                .bodyToMono(Void.class)
+                                .doOnSuccess(v -> log.info("Deleted Keycloak user userId={}", userId))
+                                .doOnError(e -> log.error("Failed to delete Keycloak user userId={}: {}",
+                                                userId, e.getMessage())));
         }
 
         private Mono<Void> disableUser(String userId, String adminToken) {

@@ -86,6 +86,16 @@ services:
       GRPC_CLIENT_INTERACTION-SERVICE_ADDRESS: static://interaction-service:9095
       GRPC_CLIENT_INTERACTION-SERVICE_NEGOTIATION_TYPE: plaintext
       SPRING_KAFKA_BOOTSTRAP-SERVERS: kafka:9097
+      SPRING_KAFKA_CONSUMER_GROUP-ID: user-search-group
+      SPRING_KAFKA_CONSUMER_KEY-DESERIALIZER: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      SPRING_KAFKA_CONSUMER_VALUE-DESERIALIZER: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_DESERIALIZER_KEY_DELEGATE_CLASS: org.apache.kafka.common.serialization.StringDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_DESERIALIZER_VALUE_DELEGATE_CLASS: org.springframework.kafka.support.serializer.JsonDeserializer
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_TRUSTED_PACKAGES: "*"
+      SPRING_KAFKA_CONSUMER_PROPERTIES_SPRING_JSON_VALUE_DEFAULT_TYPE: java.util.Map
+      SPRING_KAFKA_CONSUMER_AUTO-OFFSET-RESET: earliest
+      KAFKA_TOPICS_USER_EVENTS: user-events
+      KAFKA_TOPICS_USER_ACTIVITY_EVENTS: user-activity-events
       MEILISEARCH_HOST: http://meilisearch:7700
       MEILISEARCH_APIKEY: masterKey
       RECOMMENDATION_INTERNAL_TOKEN: ${RECOMMENDATION_INTERNAL_TOKEN:-nexo-internal-token}
@@ -634,13 +644,13 @@ services:
     environment:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: Quang@2040
       POSTGRES_MAX_CONNECTIONS: 100
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    command: postgres -c max_connections=50 -c shared_buffers=256MB
+      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf
+
+    command: postgres -c max_connections=50 -c shared_buffers=256MB -c hba_file=/etc/postgresql/pg_hba.conf
     deploy:
       resources:
         limits:
@@ -664,7 +674,7 @@ services:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: password
+      KC_DB_PASSWORD: Quang@2040
       KEYCLOAK_ADMIN: admin
       KEYCLOAK_ADMIN_PASSWORD: admin
       KC_DB_POOL_INITIAL_SIZE: 10

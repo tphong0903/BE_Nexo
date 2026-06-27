@@ -22,9 +22,10 @@ spring:
           "[/api/**]":
             allowedOrigins:
               - "https://nexo.nayamishop.id.vn"
+              - "https://auth.nexosocial.id.vn"
+              - "https://api.nexosocial.id.vn"
               - "http://localhost:3000"
               - "http://localhost:9090"
-              - "https://api.nexosocial.id.vn"
             allowedMethods:
               - GET
               - POST
@@ -91,7 +92,7 @@ spring:
             websocket: true
 
         - id: messaging-service-ws
-          uri: lb:ws://messaging
+          uri: lb://messaging
           predicates:
             - Path=/messaging/ws/**
           filters:

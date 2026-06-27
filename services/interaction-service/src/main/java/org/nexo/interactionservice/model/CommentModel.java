@@ -27,4 +27,7 @@ public class CommentModel extends AbstractEntity<Long> {
 
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "parentComment", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CommentModel> childComments;
+
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "commentModel", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<LikeCommentModel> likeCommentModels;
 }

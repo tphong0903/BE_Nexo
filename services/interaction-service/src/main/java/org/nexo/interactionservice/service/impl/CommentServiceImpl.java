@@ -228,14 +228,14 @@ public class CommentServiceImpl implements ICommentService {
     @Override
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-        long version = getCacheVersion("reply", commentId);
-        String cacheKey = String.format("cache:comments:reply:%d:v:%d:p:%d:s:%d:u:%d",
-                commentId, version, pageNo, pageSize, currentUserId);
-
-        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedResponse != null) {
-            return cachedResponse;
-        }
+//        long version = getCacheVersion("reply", commentId);
+//        String cacheKey = String.format("cache:comments:reply:%d:v:%d:p:%d:s:%d:u:%d",
+//                commentId, version, pageNo, pageSize, currentUserId);
+//
+//        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
+//        if (cachedResponse != null) {
+//            return cachedResponse;
+//        }
 
         CommentModel parentComment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
@@ -245,9 +245,8 @@ public class CommentServiceImpl implements ICommentService {
 
         Long sourceId = (parentComment.getPostId() != null) ? parentComment.getPostId() : parentComment.getReelId();
 
-        ListCommentResponse response = commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
-        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
-        return response;
+//        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        return commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
     }
 
     private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {

@@ -13,6 +13,7 @@ def start_fastapi():
     uvicorn.run(app, host=host, port=port)
 
 
+
 if __name__ == "__main__":
 
     print("Registering Eureka...")

@@ -14,7 +14,6 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -34,9 +33,15 @@ public class CommentMapper {
                 PageRequest.of(0, 2, Sort.by("createdAt").ascending())
         );
 
+        Set<Long> replyUserIds = repliesPage.getContent().stream()
+                .map(CommentModel::getUserId)
+                .collect(Collectors.toSet());
+
+        Map<Long, UserServiceProto.UserDTOResponse2> replyUserMap = userGrpcClient.getUsersByIds(replyUserIds);
+
         List<CommentResponse> replyResponses = repliesPage.getContent().stream()
                 .map(reply -> {
-                    UserServiceProto.UserDTOResponse replyUser = userGrpcClient.getUserDTOById(reply.getUserId());
+                    UserServiceProto.UserDTOResponse2 replyUser = replyUserMap.get(reply.getUserId());
                     return CommentResponse.builder()
                             .id(reply.getId())
                             .userId(reply.getUserId())
@@ -59,7 +64,7 @@ public class CommentMapper {
                 .avatarUrl(userDto.getAvatar())
                 .content(model.getContent())
                 .quantityLike(likeCommentRepository.countByCommentModel_Id(model.getId()))
-                .parentId(model.getParentComment() != null ? model.getParentComment().getPostId() : null)
+                .parentId(model.getParentComment() != null ? model.getParentComment().getId() : null)
                 .responseChildList(replyResponses)
                 .createdAt(model.getCreatedAt())
                 .hasMoreReplies(repliesPage.getTotalElements() > 2)

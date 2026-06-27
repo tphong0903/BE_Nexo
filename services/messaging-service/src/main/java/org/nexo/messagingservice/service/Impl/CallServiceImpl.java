@@ -62,13 +62,18 @@ public class CallServiceImpl implements CallService {
             }
         }
 
-        List<ECallStatus> activeStatuses = List.of(ECallStatus.INITIATED, ECallStatus.RINGING);
-        callRepository.findActiveCallsByUserId(callerUserId, activeStatuses)
-                .forEach(staleCall -> {
-                    staleCall.setStatus(ECallStatus.MISSED);
-                    staleCall.setEndedAt(LocalDateTime.now());
-                    callRepository.save(staleCall);
-                });
+        // Dọn cuộc gọi cũ đang treo (nếu có) — try-catch để không ảnh hưởng flow chính
+        try {
+            List<ECallStatus> activeStatuses = List.of(ECallStatus.INITIATED, ECallStatus.RINGING);
+            callRepository.findActiveCallsByUserId(callerUserId, activeStatuses)
+                    .forEach(staleCall -> {
+                        staleCall.setStatus(ECallStatus.MISSED);
+                        staleCall.setEndedAt(LocalDateTime.now());
+                        callRepository.save(staleCall);
+                    });
+        } catch (Exception e) {
+            log.warn("Failed to cleanup stale calls for userId={}: {}", callerUserId, e.getMessage());
+        }
 
         CallModel call = CallModel.builder()
                 .conversationId(request.getConversationId())

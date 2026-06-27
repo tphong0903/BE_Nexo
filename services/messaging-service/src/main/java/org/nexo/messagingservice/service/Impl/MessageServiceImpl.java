@@ -199,18 +199,28 @@ public class MessageServiceImpl implements MessageService {
         if (!isParticipant(conversationId, requestingUserId)) {
             throw new SecurityException("User is not a participant in this conversation");
         }
+
+        Page<MessageModel> messages;
         if (search != null && !search.isEmpty()) {
-            Page<MessageModel> messages = messageRepository
-                    .searchMessagesByKeyword(conversationId, search, pageable);
-
-            return messages.map(this::mapToDto);
+            messages = messageRepository.searchMessagesByKeyword(conversationId, search, pageable);
         } else {
-            Page<MessageModel> messages = messageRepository
-                    .findByConversationIdAndIsActiveTrueOrderByCreatedAtDesc(conversationId, pageable);
-
-            return messages.map(this::mapToDto);
+            messages = messageRepository.findByConversationIdAndIsActiveTrueOrderByCreatedAtDesc(conversationId, pageable);
         }
 
+        List<Long> senderIds = messages.getContent().stream()
+                .map(MessageModel::getSenderUserId)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+
+        Map<Long, String> nicknameMap = participantRepository
+                .findByConversationIdAndUserIdIn(conversationId, senderIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ConversationParticipantModel::getUserId,
+                        p -> p.getNickname() != null ? p.getNickname() : "",
+                        (a, b) -> a));
+
+        return messages.map(msg -> mapToDto(msg, nicknameMap));
     }
 
     public void markAsRead(Long messageId, Long userId) {
@@ -308,13 +318,64 @@ public class MessageServiceImpl implements MessageService {
         return participantRepository.existsByConversationIdAndUserId(conversationId, userId);
     }
 
-    private MessageDTO mapToDto(MessageModel message) {
+    /**
+     * Overload dùng nicknameMap đã được batch-load để tránh N+1 query.
+     */
+    private MessageDTO mapToDto(MessageModel message, Map<Long, String> nicknameMap) {
         UserDTOResponse sender = userGrpcClient.getUserById(message.getSenderUserId());
+        String senderNickname = nicknameMap.getOrDefault(message.getSenderUserId(), null);
+        if (senderNickname != null && senderNickname.isEmpty()) {
+            senderNickname = null;
+        }
         UserDTO senderUserDTO = UserDTO.builder()
                 .id(sender.getId())
                 .username(sender.getUsername())
                 .fullName(sender.getFullName())
                 .avatarUrl(sender.getAvatar())
+                .nickname(senderNickname)
+                .build();
+        List<MessageMediaModel> mediaModels = mediaRepository.findByMessageId(message.getId());
+        List<MessageMediaDTO> mediaList = mediaModels.stream()
+                .map(this::mapMediaToDto)
+                .collect(Collectors.toList());
+        List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(message.getId());
+        List<ReactionDTO> reactions = aggregateReactions(reactionModels);
+        MessageDTO replyToMessage = null;
+        if (message.getReplyToMessage() != null) {
+            replyToMessage = mapToDto(message.getReplyToMessage());
+        }
+        return MessageDTO.builder()
+                .id(message.getId())
+                .conversationId(message.getConversation().getId())
+                .status(message.getConversation().getStatus())
+                .sender(senderUserDTO)
+                .content(message.getContent())
+                .messageType(message.getMessageType())
+                .replyToMessageId(message.getReplyToMessage() != null ? message.getReplyToMessage().getId() : null)
+                .replyToMessage(replyToMessage)
+                .mediaList(mediaList)
+                .reactions(reactions)
+                .createdAt(message.getCreatedAt())
+                .storyId(message.getStoryId())
+                .storyMediaUrl(message.getStoryId() != null
+                        ? storyGrpcClient.getStoryMediaIfActive(message.getStoryId()) : null)
+                .build();
+    }
+
+    private MessageDTO mapToDto(MessageModel message) {
+        UserDTOResponse sender = userGrpcClient.getUserById(message.getSenderUserId());
+
+        String senderNickname = participantRepository
+                .findByConversationIdAndUserId(message.getConversation().getId(), message.getSenderUserId())
+                .map(org.nexo.messagingservice.model.ConversationParticipantModel::getNickname)
+                .orElse(null);
+
+        UserDTO senderUserDTO = UserDTO.builder()
+                .id(sender.getId())
+                .username(sender.getUsername())
+                .fullName(sender.getFullName())
+                .avatarUrl(sender.getAvatar())
+                .nickname(senderNickname)
                 .build();
         List<MessageMediaModel> mediaModels = mediaRepository.findByMessageId(message.getId());
         List<MessageMediaDTO> mediaList = mediaModels.stream()

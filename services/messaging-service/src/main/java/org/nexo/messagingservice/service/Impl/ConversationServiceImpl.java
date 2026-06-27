@@ -16,6 +16,7 @@ import org.nexo.messagingservice.dto.ConversationResponseDTO;
 import org.nexo.messagingservice.dto.CreateGroupRequest;
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.NicknameRequest;
+import org.nexo.messagingservice.dto.NicknameUpdateEvent;
 import org.nexo.messagingservice.dto.PageModelResponse;
 import org.nexo.messagingservice.dto.UpdateGroupRequest;
 import org.nexo.messagingservice.dto.UserDTO;
@@ -32,6 +33,7 @@ import org.nexo.messagingservice.service.ConversationService;
 import org.nexo.messagingservice.service.MessageService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
@@ -47,6 +49,7 @@ public class ConversationServiceImpl implements ConversationService {
     private final ConversationParticipantRepository participantRepository;
     private final MessageRepository messageRepository;
     private final MessageService messageService;
+    private final SimpMessagingTemplate messagingTemplate;
 
     @Transactional
     public ConversationResponseDTO getOrCreateDirectConversation(String keycloakUserId, Long recipientUserId) {
@@ -533,7 +536,21 @@ public class ConversationServiceImpl implements ConversationService {
         participant.setNickname(request.getNickname());
         participantRepository.save(participant);
 
-        return mapToDto(conversation, userId);
+        ConversationResponseDTO response = mapToDto(conversation, userId);
+
+        // Broadcast WebSocket event cho tất cả thành viên trong nhóm
+        NicknameUpdateEvent event = NicknameUpdateEvent.builder()
+                .conversationId(conversationId)
+                .targetUserId(targetUserId)
+                .nickname(request.getNickname())
+                .participants(response.getParticipants())
+                .build();
+
+        messagingTemplate.convertAndSend(
+                "/topic/conversation/" + conversationId + "/nickname",
+                event);
+
+        return response;
     }
 
     public ConversationResponseDTO getNickname(Long conversationId, String keycloakUserId) {

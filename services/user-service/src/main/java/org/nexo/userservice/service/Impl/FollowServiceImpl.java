@@ -590,7 +590,7 @@ public class FollowServiceImpl implements FollowService {
                                         .map(user -> {
                                                 PublicUserDTOResponse dto = userMapper.toPublicUserDTOResponse(user);
                                                 // Set follow status (false vì đã filter ở trên, nhưng đảm bảo field có giá trị)
-                                                dto.setIsFollowing(false);
+                                                dto.setFollowed(false);
                                                 return dto;
                                         })
                                         .collect(Collectors.toList());
@@ -646,7 +646,7 @@ public class FollowServiceImpl implements FollowService {
                 Page<PublicUserDTOResponse> dtoPage = finalSuggestedPage.map(user -> {
                         if (user == null) return null;
                         PublicUserDTOResponse dto = userMapper.toPublicUserDTOResponse(user);
-                        dto.setIsFollowing(false);
+                        dto.setFollowed(false);
                         return dto;
                 });
                 // Filter out nulls

@@ -35,7 +35,7 @@ public interface IReportReelRepository extends JpaRepository<ReportReelModel, Lo
                 r.reason as reason, 
                 r.report_status as reportStatus, 
                 r.created_at as createdAt,
-                r.owner_reel_name as ownerName,
+                r.owner_post_name as ownerName,
                 r.reporter_name as reporterName,
                 r.predictai as predictAI,        
                 r.confidence as confidence

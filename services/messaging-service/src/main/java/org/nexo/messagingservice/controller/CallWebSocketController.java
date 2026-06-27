@@ -119,16 +119,12 @@ public class CallWebSocketController {
 
         CallEndedDTO endedDTO = callService.endCall(request, userId);
 
-        if (endedDTO.getCallMessage() != null) {
-            callParticipantRepository.findByCallId(request.getCallId()).forEach(cp -> {
-                messagingTemplate.convertAndSendToUser(cp.getUserId().toString(), "/queue/call/ended", endedDTO);
-            });
-        } else {
-            Long otherUserId = callService.getOtherParticipantId(request.getCallId(), userId);
-            messagingTemplate.convertAndSendToUser(userId.toString(), "/queue/call/ended", endedDTO);
-            messagingTemplate.convertAndSendToUser(otherUserId.toString(), "/queue/call/ended", endedDTO);
-        }
+        // Broadcast call ended tới tất cả participants
+        callParticipantRepository.findByCallId(request.getCallId()).forEach(cp -> {
+            messagingTemplate.convertAndSendToUser(cp.getUserId().toString(), "/queue/call/ended", endedDTO);
+        });
 
+        // Nếu có call message (cuộc gọi kết thúc hoàn toàn), broadcast tin nhắn lịch sử
         if (endedDTO.getCallMessage() != null && endedDTO.getConversationId() != null) {
             messagingTemplate.convertAndSend("/topic/conversation/" + endedDTO.getConversationId(), endedDTO.getCallMessage());
         }

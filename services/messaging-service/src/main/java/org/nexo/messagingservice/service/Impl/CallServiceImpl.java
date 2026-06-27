@@ -88,6 +88,19 @@ public class CallServiceImpl implements CallService {
                 .build();
         callParticipantRepository.save(callerParticipant);
 
+        if (isGroupCall) {
+            for (Long memberId : participantIds) {
+                if (!memberId.equals(callerUserId)) {
+                    CallParticipantModel memberParticipant = CallParticipantModel.builder()
+                            .call(call)
+                            .userId(memberId)
+                            .status(ECallStatus.RINGING)
+                            .build();
+                    callParticipantRepository.save(memberParticipant);
+                }
+            }
+        }
+
         UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(callerUserId);
 
         return CallNotificationDTO.builder()
@@ -233,15 +246,21 @@ public class CallServiceImpl implements CallService {
         LocalDateTime now = LocalDateTime.now();
 
         if (call.isGroupCall()) {
+            // Đánh dấu participant hiện tại là ENDED
             callParticipantRepository.findByCallIdAndUserId(call.getId(), userId).ifPresent(cp -> {
                 cp.setStatus(ECallStatus.ENDED);
                 cp.setLeftAt(now);
                 callParticipantRepository.save(cp);
             });
             
-            boolean activeRemain = callParticipantRepository.findByCallId(call.getId()).stream()
-                    .anyMatch(cp -> cp.getStatus() == ECallStatus.ACCEPTED || cp.getStatus() == ECallStatus.RINGING);
-            if (activeRemain && !userId.equals(call.getCallerUserId())) {
+            // Kiểm tra còn ai active không (ACCEPTED hoặc RINGING)
+            long activeCount = callParticipantRepository.findByCallId(call.getId()).stream()
+                    .filter(cp -> cp.getStatus() == ECallStatus.ACCEPTED)
+                    .count();
+
+            // Nếu còn >= 2 người active (trừ người vừa rời) và không phải caller kết thúc
+            // → chỉ thông báo người này rời, không kết thúc call
+            if (activeCount >= 1 && !userId.equals(call.getCallerUserId())) {
                 return CallEndedDTO.builder()
                     .callId(call.getId())
                     .conversationId(call.getConversationId())
@@ -250,7 +269,23 @@ public class CallServiceImpl implements CallService {
                     .endedAt(now)
                     .build();
             }
-            finalStatus = ECallStatus.ENDED;
+
+            // Caller kết thúc HOẶC không còn ai active → kết thúc toàn bộ cuộc gọi
+            // Nếu cuộc gọi vẫn đang RINGING (chưa ai accept) → đó là cuộc gọi nhỡ (MISSED)
+            if (call.getStatus() == ECallStatus.RINGING) {
+                finalStatus = ECallStatus.MISSED;
+            } else {
+                finalStatus = ECallStatus.ENDED;
+            }
+
+            // Đánh dấu tất cả participant còn lại là ENDED
+            callParticipantRepository.findByCallId(call.getId()).forEach(cp -> {
+                if (cp.getStatus() == ECallStatus.ACCEPTED || cp.getStatus() == ECallStatus.RINGING) {
+                    cp.setStatus(ECallStatus.ENDED);
+                    cp.setLeftAt(now);
+                    callParticipantRepository.save(cp);
+                }
+            });
         } else {
             if (call.getStatus() == ECallStatus.RINGING) {
                 finalStatus = userId.equals(call.getCallerUserId()) ? ECallStatus.ENDED : ECallStatus.MISSED;
@@ -270,6 +305,7 @@ public class CallServiceImpl implements CallService {
         call.setDurationSeconds(durationSeconds);
         callRepository.save(call);
 
+        // Lưu tin nhắn lịch sử cuộc gọi vào conversation
         MessageDTO savedMsg = saveCallMessage(call, finalStatus, durationSeconds, now);
 
         return CallEndedDTO.builder()

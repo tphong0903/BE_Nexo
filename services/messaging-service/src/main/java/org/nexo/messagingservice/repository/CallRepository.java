@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -19,6 +20,6 @@ public interface CallRepository extends JpaRepository<CallModel, Long> {
     @Query("SELECT c FROM CallModel c WHERE (c.callerUserId = :userId OR c.calleeUserId = :userId OR (c.isGroupCall = true AND c.conversationId IN (SELECT cp.conversation.id FROM ConversationParticipantModel cp WHERE cp.userId = :userId))) AND c.status IN :statuses ORDER BY c.startedAt DESC")
     List<CallModel> findActiveCallsByUserId(@Param("userId") Long userId, @Param("statuses") List<ECallStatus> statuses);
 
-    @Query("SELECT c FROM CallModel c WHERE c.conversationId = :conversationId ORDER BY c.startedAt DESC")
-    List<CallModel> findByConversationIdOrderByStartedAtDesc(@Param("conversationId") Long conversationId);
+    @Query("SELECT c FROM CallModel c WHERE c.status = :status AND c.startedAt < :threshold")
+    List<CallModel> findByStatusAndStartedAtBefore(@Param("status") ECallStatus status, @Param("threshold") LocalDateTime threshold);
 }

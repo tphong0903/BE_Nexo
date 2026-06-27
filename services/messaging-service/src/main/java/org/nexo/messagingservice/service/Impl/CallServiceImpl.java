@@ -80,6 +80,7 @@ public class CallServiceImpl implements CallService {
                 .build();
         call = callRepository.save(call);
 
+        // Tạo CallParticipantModel cho caller (ACCEPTED ngay)
         CallParticipantModel callerParticipant = CallParticipantModel.builder()
                 .call(call)
                 .userId(callerUserId)
@@ -87,6 +88,17 @@ public class CallServiceImpl implements CallService {
                 .joinedAt(LocalDateTime.now())
                 .build();
         callParticipantRepository.save(callerParticipant);
+
+        // Tạo CallParticipantModel cho callee (RINGING) — cần thiết để khi endCall,
+        // findByCallId trả về cả callee để broadcast ended event tới họ.
+        if (!isGroupCall && calleeUserId != null) {
+            CallParticipantModel calleeParticipant = CallParticipantModel.builder()
+                    .call(call)
+                    .userId(calleeUserId)
+                    .status(ECallStatus.RINGING)
+                    .build();
+            callParticipantRepository.save(calleeParticipant);
+        }
 
         UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(callerUserId);
 

@@ -9,6 +9,8 @@ import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordResponse;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangeUserRoleResponse;
+import org.nexo.grpc.auth.AuthServiceProto.DeleteUserRequest;
+import org.nexo.grpc.auth.AuthServiceProto.DeleteUserResponse;
 import org.nexo.grpc.auth.AuthServiceProto.UnBanUserRequest;
 import org.nexo.grpc.auth.AuthServiceProto.UnBanUserResponse;
 import org.nexo.userservice.exception.ResourceNotFoundException;
@@ -57,6 +59,19 @@ public class AuthGrpcClient {
             log.info("Successfully unbanned userId: {}", userId);
         } else {
             log.warn("Failed to unban userId: {}, message: {}", userId, response.getMessage());
+        }
+        return response.getSuccess();
+    }
+
+    public boolean deleteUser(String userId) {
+        DeleteUserRequest request = DeleteUserRequest.newBuilder()
+                .setUserId(userId)
+                .build();
+        DeleteUserResponse response = authServiceBlockingStub.deleteUser(request);
+        if (response.getSuccess()) {
+            log.info("Successfully deleted userId in auth-service: {}", userId);
+        } else {
+            log.warn("Failed to delete userId: {}, message: {}", userId, response.getMessage());
         }
         return response.getSuccess();
     }

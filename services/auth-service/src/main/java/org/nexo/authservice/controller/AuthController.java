@@ -115,16 +115,6 @@ public class AuthController {
                                                 .build()));
         }
 
-        @PostMapping("verify-email")
-        public Mono<ResponseData<?>> verifyEmail(
-                        @Valid @RequestBody CallBackRequest request) {
-                return authService.callBack(request)
-                                .map(success -> ResponseData.<Void>builder()
-                                                .status(HttpStatus.OK.value())
-                                                .message("Email verified and updated successfully")
-                                                .build());
-        }
-
         @PostMapping("oauth/callback")
         public Mono<ResponseData<?>> oauthCallback(@Valid @RequestBody OAuthCallbackRequest request) {
                 return authService.oauthCallback(request)

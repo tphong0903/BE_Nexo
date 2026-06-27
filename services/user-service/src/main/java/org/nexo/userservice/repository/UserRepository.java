@@ -17,6 +17,8 @@ import java.util.Optional;
 public interface UserRepository extends JpaRepository<UserModel, Long> {
     List<UserModel> findAllByAccountStatusAndRole(EAccountStatus status, ERole role);
 
+    List<UserModel> findAllByAccountStatusAndCreatedAtBefore(EAccountStatus status, LocalDateTime threshold);
+
 
     Optional<UserModel> findByUsername(String username);
 

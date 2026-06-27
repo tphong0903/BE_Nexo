@@ -14,6 +14,8 @@ import org.nexo.grpc.auth.AuthServiceProto.UnBanUserRequest;
 import org.nexo.grpc.auth.AuthServiceProto.UnBanUserResponse;
 import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordRequest;
 import org.nexo.grpc.auth.AuthServiceProto.ChangePasswordResponse;
+import org.nexo.grpc.auth.AuthServiceProto.DeleteUserRequest;
+import org.nexo.grpc.auth.AuthServiceProto.DeleteUserResponse;
 
 @GrpcService
 @RequiredArgsConstructor
@@ -90,6 +92,30 @@ public class AuthServiceGrpcImpl extends AuthServiceGrpc.AuthServiceImplBase {
                     responseObserver.onNext(UnBanUserResponse.newBuilder()
                             .setSuccess(false)
                             .setMessage("Failed to unban user: " + e.getMessage())
+                            .build());
+                    responseObserver.onCompleted();
+                })
+                .subscribe();
+    }
+
+    @Override
+    public void deleteUser(DeleteUserRequest request, StreamObserver<DeleteUserResponse> responseObserver) {
+        String userId = request.getUserId();
+
+        authService.deleteUser(userId)
+                .doOnSuccess(v -> {
+                    log.info("Successfully deleted userId: {}", userId);
+                    responseObserver.onNext(DeleteUserResponse.newBuilder()
+                            .setSuccess(true)
+                            .setMessage("User deleted successfully")
+                            .build());
+                    responseObserver.onCompleted();
+                })
+                .doOnError(e -> {
+                    log.error("Failed to delete userId: {}", userId, e);
+                    responseObserver.onNext(DeleteUserResponse.newBuilder()
+                            .setSuccess(false)
+                            .setMessage("Failed to delete user: " + e.getMessage())
                             .build());
                     responseObserver.onCompleted();
                 })

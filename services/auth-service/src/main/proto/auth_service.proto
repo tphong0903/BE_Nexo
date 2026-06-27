@@ -11,6 +11,7 @@ service AuthService {
   rpc UnBanUser(UnBanUserRequest) returns (UnBanUserResponse);
 
   rpc ChangePassword(ChangePasswordRequest) returns (ChangePasswordResponse);
+  rpc DeleteUser(DeleteUserRequest) returns (DeleteUserResponse);
 }
 
 message ChangeUserRoleRequest {
@@ -47,6 +48,15 @@ message ChangePasswordRequest {
 }
 
 message ChangePasswordResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message DeleteUserRequest {
+  string user_id = 1;
+}
+
+message DeleteUserResponse {
   bool success = 1;
   string message = 2;
 }

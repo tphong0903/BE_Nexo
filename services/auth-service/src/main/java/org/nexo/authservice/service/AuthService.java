@@ -18,8 +18,6 @@ public interface AuthService {
 
     Mono<Void> forgotPassword(String email);
 
-    Mono<String> callBack(CallBackRequest request);
-
     Mono<String> getAdminToken();
 
     Mono<Void> changeUserRole(String userId, String roleName, String adminToken);
@@ -27,6 +25,8 @@ public interface AuthService {
     Mono<Void> banUser(String userId);
 
     Mono<Void> unBanUser(String userId);
+
+    Mono<Void> deleteUser(String userId);
 
     Mono<OAuthLoginResponse> oauthCallback(OAuthCallbackRequest request);
 

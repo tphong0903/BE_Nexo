@@ -127,12 +127,15 @@ public class CallWebSocketController {
 
         CallEndedDTO endedDTO = callService.endCall(request, userId);
 
-        callParticipantRepository.findByCallId(request.getCallId()).forEach(cp -> {
-            messagingTemplate.convertAndSendToUser(cp.getUserId().toString(), "/queue/call/ended", endedDTO);
-        });
-
-        if (endedDTO.getCallMessage() != null && endedDTO.getConversationId() != null) {
-            messagingTemplate.convertAndSend("/topic/conversation/" + endedDTO.getConversationId(), endedDTO.getCallMessage());
+        if (endedDTO.getCallMessage() != null) {
+            callParticipantRepository.findByCallId(request.getCallId()).forEach(cp -> {
+                messagingTemplate.convertAndSendToUser(cp.getUserId().toString(), "/queue/call/ended", endedDTO);
+            });
+            if (endedDTO.getConversationId() != null) {
+                messagingTemplate.convertAndSend("/topic/conversation/" + endedDTO.getConversationId(), endedDTO.getCallMessage());
+            }
+        } else {
+            messagingTemplate.convertAndSendToUser(userId.toString(), "/queue/call/ended", endedDTO);
         }
     }
 

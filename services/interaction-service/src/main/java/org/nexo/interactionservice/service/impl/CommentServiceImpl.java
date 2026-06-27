@@ -134,7 +134,9 @@ public class CommentServiceImpl implements ICommentService {
                     .occurredAt(Instant.now())
                     .metadata("{\"source\":\"interaction-service\"}")
                     .build();
+            kafkaTemplate.send("user-activity-events", String.valueOf(dto.getUserId()), activityEvent);
             kafkaTemplate.send("user-events", String.valueOf(dto.getUserId()), activityEvent);
+
         }
 
         return "Success";
@@ -228,14 +230,16 @@ public class CommentServiceImpl implements ICommentService {
     @Override
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-//        long version = getCacheVersion("reply", commentId);
-//        String cacheKey = String.format("cache:comments:reply:%d:v:%d:p:%d:s:%d:u:%d",
-//                commentId, version, pageNo, pageSize, currentUserId);
-//
-//        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
-//        if (cachedResponse != null) {
-//            return cachedResponse;
-//        }
+        // long version = getCacheVersion("reply", commentId);
+        // String cacheKey =
+        // String.format("cache:comments:reply:%d:v:%d:p:%d:s:%d:u:%d",
+        // commentId, version, pageNo, pageSize, currentUserId);
+        //
+        // ListCommentResponse cachedResponse = (ListCommentResponse)
+        // redisTemplate.opsForValue().get(cacheKey);
+        // if (cachedResponse != null) {
+        // return cachedResponse;
+        // }
 
         CommentModel parentComment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
@@ -245,7 +249,7 @@ public class CommentServiceImpl implements ICommentService {
 
         Long sourceId = (parentComment.getPostId() != null) ? parentComment.getPostId() : parentComment.getReelId();
 
-//        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
+        // redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
         return commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
     }
 

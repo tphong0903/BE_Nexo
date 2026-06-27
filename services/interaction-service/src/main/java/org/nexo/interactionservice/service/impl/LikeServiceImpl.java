@@ -133,6 +133,7 @@ public class LikeServiceImpl implements ILikeService {
                     .metadata("{\"source\":\"interaction-service\"}")
                     .build();
             kafkaTemplate.send("user-events", String.valueOf(currentUserId), activityEvent);
+            kafkaTemplate.send("user-activity-events", String.valueOf(currentUserId), activityEvent);
         }
 
         incrementCacheVersion("post", id);

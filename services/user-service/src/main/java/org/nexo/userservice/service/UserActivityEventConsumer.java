@@ -75,7 +75,7 @@ public class UserActivityEventConsumer {
                 .user(user)
                 .action(eventType)
                 .detailsJson(detailsJson)
-                .createdAt(LocalDateTime.now(ZoneId.of("UTC")))
+                .createdAt(LocalDateTime.now())
                 .build();
 
         userActivityLogRepository.save(logModel);

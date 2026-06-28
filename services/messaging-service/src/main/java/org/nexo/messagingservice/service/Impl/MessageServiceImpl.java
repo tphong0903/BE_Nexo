@@ -118,6 +118,26 @@ public class MessageServiceImpl implements MessageService {
         return mapToDto(messageModel);
     }
 
+    public MessageDTO sendSystemMessage(Long conversationId, Long senderUserId, String content) {
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+        MessageModel messageModel = MessageModel.builder()
+                .conversation(conversation)
+                .senderUserId(senderUserId)
+                .content(content)
+                .messageType(EMessageType.SYSTEM)
+                .build();
+
+        messageModel = messageRepository.save(messageModel);
+
+        conversation.setLastMessageId(messageModel.getId());
+        conversation.setLastMessageAt(messageModel.getCreatedAt());
+        conversationRepository.save(conversation);
+
+        return mapToDto(messageModel);
+    }
+
     public MessageDTO replyStory(ReplyStoryRequsestDTO request, Long senderUserId) {
         Long recipientUserId = request.getUserId();
 

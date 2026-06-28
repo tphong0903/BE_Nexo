@@ -1,6 +1,6 @@
 package org.nexo.userservice.service.Impl;
 
-import jakarta.transaction.Transactional;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.userservice.dto.*;
@@ -231,6 +231,7 @@ public class UserServiceImpl implements UserService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PageModelResponse<UserActivityLogResponse> getUserActivityLogs(String accessToken, int pageNo, int pageSize) {
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
         UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)

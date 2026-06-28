@@ -626,20 +626,47 @@ public class AuthServiceImpl implements AuthService {
                         return Mono.just(tokenResponse);
                 }
 
-                return userGrpcClient.getUserIdByEmail(email)
-                                .flatMap(grpc -> {
-                                        if (grpc.getSuccess()) {
-                                                tokenResponse.setMissingInfo(false);
-                                                return tokenCacheService.cacheToken(
-                                                                email,
-                                                                tokenResponse.getAccessToken(),
-                                                                tokenResponse.getRefreshToken(),
-                                                                tokenResponse.getExpiresIn())
-                                                                .thenReturn(tokenResponse);
+                return isUserEnabledInKeycloak(keycloakId)
+                                .flatMap(enabled -> {
+                                        if (Boolean.FALSE.equals(enabled)) {
+                                                log.warn("[OAUTH] Blocked login for disabled/banned account: email={}, keycloakId={}",
+                                                                email, keycloakId);
+                                                return Mono.<OAuthLoginResponse>error(
+                                                                new KeycloakClientException(403, "Account is disabled"));
                                         }
-                                        return createOAuthUserSaga(keycloakId, email, fullname, username,
-                                                        tokenResponse);
+                                        return userGrpcClient.getUserIdByEmail(email)
+                                                        .flatMap(grpc -> {
+                                                                if (grpc.getSuccess()) {
+                                                                        tokenResponse.setMissingInfo(false);
+                                                                        return tokenCacheService.cacheToken(
+                                                                                        email,
+                                                                                        tokenResponse.getAccessToken(),
+                                                                                        tokenResponse.getRefreshToken(),
+                                                                                        tokenResponse.getExpiresIn())
+                                                                                        .thenReturn(tokenResponse);
+                                                                }
+                                                                return createOAuthUserSaga(keycloakId, email, fullname,
+                                                                                username, tokenResponse);
+                                                        });
                                 });
+        }
+
+        /**
+         * Checks the Keycloak user's {@code enabled} flag via the admin API.
+         * A banned user is disabled in Keycloak, so this returns {@code false} for them.
+         * Defaults to {@code true} (allow) only when the flag is genuinely absent.
+         */
+        private Mono<Boolean> isUserEnabledInKeycloak(String keycloakId) {
+                if (keycloakId == null) {
+                        return Mono.just(true);
+                }
+                return getAdminToken()
+                                .flatMap(adminToken -> webClient.get()
+                                                .uri(keycloakConfig.getUsersUrl() + "/" + keycloakId)
+                                                .header(HttpHeaders.AUTHORIZATION, BEARER_PREFIX + adminToken)
+                                                .retrieve()
+                                                .bodyToMono(JsonNode.class)
+                                                .map(node -> node.path(ENABLED).asBoolean(true)));
         }
 
         private Mono<OAuthLoginResponse> createOAuthUserSaga(

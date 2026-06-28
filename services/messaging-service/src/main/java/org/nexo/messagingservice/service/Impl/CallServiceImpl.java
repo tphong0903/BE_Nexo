@@ -62,13 +62,18 @@ public class CallServiceImpl implements CallService {
             }
         }
 
-        List<ECallStatus> activeStatuses = List.of(ECallStatus.INITIATED, ECallStatus.RINGING);
-        callRepository.findActiveCallsByUserId(callerUserId, activeStatuses)
-                .forEach(staleCall -> {
-                    staleCall.setStatus(ECallStatus.MISSED);
-                    staleCall.setEndedAt(LocalDateTime.now());
-                    callRepository.save(staleCall);
-                });
+        // Dọn cuộc gọi cũ đang treo (nếu có) — try-catch để không ảnh hưởng flow chính
+        try {
+            List<ECallStatus> activeStatuses = List.of(ECallStatus.INITIATED, ECallStatus.RINGING);
+            callRepository.findActiveCallsByUserId(callerUserId, activeStatuses)
+                    .forEach(staleCall -> {
+                        staleCall.setStatus(ECallStatus.MISSED);
+                        staleCall.setEndedAt(LocalDateTime.now());
+                        callRepository.save(staleCall);
+                    });
+        } catch (Exception e) {
+            log.warn("Failed to cleanup stale calls for userId={}: {}", callerUserId, e.getMessage());
+        }
 
         CallModel call = CallModel.builder()
                 .conversationId(request.getConversationId())
@@ -80,6 +85,7 @@ public class CallServiceImpl implements CallService {
                 .build();
         call = callRepository.save(call);
 
+        // Tạo CallParticipantModel cho caller (ACCEPTED ngay)
         CallParticipantModel callerParticipant = CallParticipantModel.builder()
                 .call(call)
                 .userId(callerUserId)
@@ -87,6 +93,17 @@ public class CallServiceImpl implements CallService {
                 .joinedAt(LocalDateTime.now())
                 .build();
         callParticipantRepository.save(callerParticipant);
+
+        // Tạo CallParticipantModel cho callee (RINGING) — cần thiết để khi endCall,
+        // findByCallId trả về cả callee để broadcast ended event tới họ.
+        if (!isGroupCall && calleeUserId != null) {
+            CallParticipantModel calleeParticipant = CallParticipantModel.builder()
+                    .call(call)
+                    .userId(calleeUserId)
+                    .status(ECallStatus.RINGING)
+                    .build();
+            callParticipantRepository.save(calleeParticipant);
+        }
 
         UserServiceProto.UserDTOResponse callerInfo = userGrpcClient.getUserById(callerUserId);
 

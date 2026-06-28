@@ -7,12 +7,13 @@ import lombok.extern.slf4j.Slf4j;
 import net.devh.boot.grpc.server.service.GrpcService;
 import org.nexo.grpc.interaction.InteractionServiceGrpc;
 import org.nexo.grpc.interaction.InteractionServiceOuterClass;
+import org.nexo.interactionservice.cache.CacheKeys;
+import org.nexo.interactionservice.cache.InteractionCacheService;
 import org.nexo.interactionservice.model.CommentModel;
 import org.nexo.interactionservice.repository.ICommentRepository;
 import org.nexo.interactionservice.repository.ILikeRepository;
 import org.springframework.data.redis.core.RedisTemplate;
 
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -25,10 +26,10 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 @Slf4j
 public class InteractionGrpcService extends InteractionServiceGrpc.InteractionServiceImplBase {
-    private static final Duration CACHE_TTL = Duration.ofDays(7);
     private final ILikeRepository likeRepository;
     private final ICommentRepository commentRepository;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final InteractionCacheService cacheService;
 
     @Override
     public void existLikesByUserAndPostIds(InteractionServiceOuterClass.BatchIsLikeRequest request,
@@ -77,8 +78,8 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
     public void getTotalInteractions(InteractionServiceOuterClass.Empty request,
                                      StreamObserver<InteractionServiceOuterClass.QuantityTotalInteract> responseObserver) {
 
-        long totalLikes = getCounterWithFallback("global:likes:total", () -> likeRepository.count());
-        long totalComments = getCounterWithFallback("global:comments:total", () -> commentRepository.count());
+        long totalLikes = cacheService.getGlobalCounterWithFallback("likes", () -> likeRepository.count());
+        long totalComments = cacheService.getGlobalCounterWithFallback("comments", () -> commentRepository.count());
 
         InteractionServiceOuterClass.QuantityTotalInteract response = InteractionServiceOuterClass.QuantityTotalInteract
                 .newBuilder()
@@ -143,8 +144,8 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
                                          StreamObserver<InteractionServiceOuterClass.GetUserInteractionsCountResponse> responseObserver) {
         Long userId = request.getUserId();
 
-        long likesCount = getCounterWithFallback("user:" + userId + ":likes:total", () -> likeRepository.countByUserId(userId));
-        long commentsCount = getCounterWithFallback("user:" + userId + ":comments:total", () -> commentRepository.countByUserId(userId));
+        long likesCount = cacheService.getUserCounterWithFallback(userId, "likes", () -> likeRepository.countByUserId(userId));
+        long commentsCount = cacheService.getUserCounterWithFallback(userId, "comments", () -> commentRepository.countByUserId(userId));
 
         InteractionServiceOuterClass.GetUserInteractionsCountResponse response =
                 InteractionServiceOuterClass.GetUserInteractionsCountResponse.newBuilder()
@@ -196,7 +197,7 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
         commentRepository.findById(request.getCommentId()).ifPresentOrElse(
                 comment -> {
                     commentRepository.delete(comment);
-                    redisTemplate.delete("comment_cache:" + comment.getId());
+                    invalidateDeletedComment(comment);
                     response.setIsSuccess(true);
                 },
                 () -> response.setIsSuccess(false)
@@ -214,26 +215,22 @@ public class InteractionGrpcService extends InteractionServiceGrpc.InteractionSe
         }
     }
 
-    private long getCounterWithFallback(String key, java.util.function.Supplier<Long> dbFallback) {
-        Object cachedValue = redisTemplate.opsForValue().get(key);
-        if (cachedValue != null) {
-            return Long.parseLong(cachedValue.toString());
-        }
-        long dbValue = dbFallback.get();
-        redisTemplate.opsForValue().set(key, String.valueOf(dbValue));
-        return dbValue;
+    private CommentModel getCommentWithCache(Long commentId) {
+        return commentRepository.findById(commentId).orElse(null);
     }
 
-    private CommentModel getCommentWithCache(Long commentId) {
-//        String cacheKey = "comment_cache:" + commentId;
-//        CommentModel cachedComment = (CommentModel) redisTemplate.opsForValue().get(cacheKey);
-//
-//        if (cachedComment != null) return cachedComment;
+    private void invalidateDeletedComment(CommentModel comment) {
+        cacheService.invalidateCommentLists(comment);
+        redisTemplate.delete(CacheKeys.comment(comment.getId()));
+        cacheService.incrementGlobalCounter("comments", -1L);
+        cacheService.incrementUserCounter(comment.getUserId(), "comments", -1L);
 
-        CommentModel dbComment = commentRepository.findById(commentId).orElse(null);
-//        if (dbComment != null) {
-//            redisTemplate.opsForValue().set(cacheKey, dbComment, CACHE_TTL);
-//        }
-        return dbComment;
+        if (comment.getParentComment() != null) {
+            cacheService.incrementCounter("comment", comment.getParentComment().getId(), "replies", -1L);
+        } else if (comment.getPostId() != null) {
+            cacheService.incrementCounter("post", comment.getPostId(), "comments", -1L);
+        } else if (comment.getReelId() != null) {
+            cacheService.incrementCounter("reel", comment.getReelId(), "comments", -1L);
+        }
     }
 }

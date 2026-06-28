@@ -136,8 +136,9 @@ public class CommentServiceImpl implements ICommentService {
 
             Long sourceId = model.getPostId() != null && model.getPostId() != 0 ? model.getPostId() : model.getReelId();
             String typeStr = model.getPostId() != null && model.getPostId() != 0 ? "post" : "reel";
+            String urlTypeStr = model.getPostId() != null && model.getPostId() != 0 ? "posts" : "reels";
             String metadata = String.format("{\"source\":\"interaction-service\", \"authorName\":\"%s\", \"url\":\"/%s/%d\"}", 
-                authorName.replace("\"", "\\\""), typeStr, sourceId);
+                authorName.replace("\"", "\\\""), urlTypeStr, sourceId);
 
             UserActivityEvent activityEvent = UserActivityEvent.builder()
                     .eventType("COMMENT_CREATED")

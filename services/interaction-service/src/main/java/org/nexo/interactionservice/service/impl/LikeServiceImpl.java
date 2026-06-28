@@ -132,7 +132,7 @@ public class LikeServiceImpl implements ILikeService {
                 log.warn("Failed to fetch author name for POST_LIKED event: {}", e.getMessage());
             }
 
-            String metadata = String.format("{\"source\":\"interaction-service\", \"authorName\":\"%s\", \"url\":\"/post/%d\"}", 
+            String metadata = String.format("{\"source\":\"interaction-service\", \"authorName\":\"%s\", \"url\":\"/posts/%d\"}", 
                 authorName.replace("\"", "\\\""), id);
 
             UserActivityEvent activityEvent = UserActivityEvent.builder()

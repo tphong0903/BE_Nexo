@@ -4,6 +4,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.post.PostServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.interactionservice.cache.CacheKeys;
+import org.nexo.interactionservice.cache.CachedPage;
+import org.nexo.interactionservice.cache.InteractionCacheService;
 import org.nexo.interactionservice.dto.MessageDTO;
 import org.nexo.interactionservice.dto.UserActivityEvent;
 import org.nexo.interactionservice.dto.request.CommentDto;
@@ -18,10 +21,7 @@ import org.nexo.interactionservice.service.ICommentMentionService;
 import org.nexo.interactionservice.service.ICommentService;
 import org.nexo.interactionservice.util.Enum.ENotificationType;
 import org.nexo.interactionservice.util.Enum.SecurityUtil;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
+import org.springframework.data.domain.*;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.HttpStatus;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -29,7 +29,12 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.util.concurrent.TimeUnit;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -45,6 +50,7 @@ public class CommentServiceImpl implements ICommentService {
     private final CommentMapper commentMapper;
     private final KafkaTemplate<String, Object> kafkaTemplate;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final InteractionCacheService cacheService;
 
     @Override
     @Transactional
@@ -63,8 +69,7 @@ public class CommentServiceImpl implements ICommentService {
             model.setContent(dto.getContent());
             commentRepository.save(model);
 
-            redisTemplate.delete("comment_cache:" + model.getId());
-            invalidateListCache(model);
+            cacheService.invalidateCommentLists(model);
             if (dto.getListMentionUserId() != null) {
                 commentMentionService.syncMentionComment(dto.getListMentionUserId(), model);
             }
@@ -90,9 +95,16 @@ public class CommentServiceImpl implements ICommentService {
         }
 
         commentRepository.save(model);
-        invalidateListCache(model);
-        redisTemplate.opsForValue().setIfAbsent("global:likes:total", 0L);
-        redisTemplate.opsForValue().increment("user:" + currentUserId + ":comments:total");
+        cacheService.invalidateCommentLists(model);
+        cacheService.incrementUserCounter(currentUserId, "comments", 1L);
+        cacheService.incrementGlobalCounter("comments", 1L);
+        if (model.getParentComment() != null) {
+            cacheService.incrementCounter("comment", model.getParentComment().getId(), "replies", 1L);
+        } else if (model.getPostId() != null) {
+            cacheService.incrementCounter("post", model.getPostId(), "comments", 1L);
+        } else if (model.getReelId() != null) {
+            cacheService.incrementCounter("reel", model.getReelId(), "comments", 1L);
+        }
 
         if (dto.getListMentionUserId() != null && !dto.getListMentionUserId().isEmpty()) {
             commentMentionService.syncMentionComment(dto.getListMentionUserId(), model);
@@ -176,10 +188,16 @@ public class CommentServiceImpl implements ICommentService {
 
         commentRepository.delete(model);
 
-        redisTemplate.delete("comment_cache:" + id);
-        invalidateListCache(model);
-        redisTemplate.opsForValue().decrement("global:comments:total");
-        redisTemplate.opsForValue().decrement("user:" + model.getUserId() + ":comments:total");
+        cacheService.invalidateCommentLists(model);
+        cacheService.incrementGlobalCounter("comments", -1L);
+        cacheService.incrementUserCounter(model.getUserId(), "comments", -1L);
+        if (model.getParentComment() != null) {
+            cacheService.incrementCounter("comment", model.getParentComment().getId(), "replies", -1L);
+        } else if (model.getPostId() != null) {
+            cacheService.incrementCounter("post", model.getPostId(), "comments", -1L);
+        } else if (model.getReelId() != null) {
+            cacheService.incrementCounter("reel", model.getReelId(), "comments", -1L);
+        }
 
         if (model.getPostId() != null) {
             postGrpcClient.addCommentQuantityById(model.getPostId(), true, false);
@@ -196,75 +214,78 @@ public class CommentServiceImpl implements ICommentService {
     @Override
     public ListCommentResponse getCommentOfPost(Long postId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-        long version = getCacheVersion("post", postId);
-        String cacheKey = String.format("cache:comments:post:%d:v:%d:p:%d:s:%d:u:%d",
-                postId, version, pageNo, pageSize, currentUserId);
-
-        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedResponse != null) {
-            return cachedResponse;
-        }
 
         PostServiceOuterClass.PostResponse post = postGrpcClient.getPostById(postId);
 
         checkVisibilityAccess(post.getUserId(), currentUserId);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
-        Page<CommentModel> commentsPage = commentRepository.findByPostIdAndParentComment(postId, pageable, null);
+        long version = cacheService.commentsVersion("post", postId);
+        String cacheKey = CacheKeys.commentsPage("post", postId, version, pageNo, pageSize);
+        CachedPage<Long> commentIds = cacheService.getOrLoadPageIds(cacheKey, cacheService.commentPageTtl(), () -> {
+            Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+            return cacheService.toCommentIdPage(commentRepository.findByPostIdAndParentComment(postId, pageable, null));
+        });
 
-        ListCommentResponse response = commentMapper.toListResponse(postId, commentsPage, currentUserId);
-
-        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
-        return response;
+        return buildCommentResponse(postId, commentIds, currentUserId);
     }
 
     @Override
     public ListCommentResponse getCommentOfReel(Long reelId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
 
-        long version = getCacheVersion("reel", reelId);
-        String cacheKey = String.format("cache:comments:reel:%d:v:%d:p:%d:s:%d:u:%d",
-                reelId, version, pageNo, pageSize, currentUserId);
-        ListCommentResponse cachedResponse = (ListCommentResponse) redisTemplate.opsForValue().get(cacheKey);
-        if (cachedResponse != null) {
-            return cachedResponse;
-        }
-
         PostServiceOuterClass.ReelResponse reel = postGrpcClient.getReelById(reelId);
         checkVisibilityAccess(reel.getUserId(), currentUserId);
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
-        Page<CommentModel> commentsPage = commentRepository.findByReelIdAndParentComment(reelId, pageable, null);
+        long version = cacheService.commentsVersion("reel", reelId);
+        String cacheKey = CacheKeys.commentsPage("reel", reelId, version, pageNo, pageSize);
+        CachedPage<Long> commentIds = cacheService.getOrLoadPageIds(cacheKey, cacheService.commentPageTtl(), () -> {
+            Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+            return cacheService.toCommentIdPage(commentRepository.findByReelIdAndParentComment(reelId, pageable, null));
+        });
 
-        ListCommentResponse response = commentMapper.toListResponse(reelId, commentsPage, currentUserId);
-        redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
-        return response;
+        return buildCommentResponse(reelId, commentIds, currentUserId);
     }
 
     @Override
     public ListCommentResponse getReplies(Long commentId, int pageNo, int pageSize) {
         Long currentUserId = securityUtil.getUserIdFromToken();
-        // long version = getCacheVersion("reply", commentId);
-        // String cacheKey =
-        // String.format("cache:comments:reply:%d:v:%d:p:%d:s:%d:u:%d",
-        // commentId, version, pageNo, pageSize, currentUserId);
-        //
-        // ListCommentResponse cachedResponse = (ListCommentResponse)
-        // redisTemplate.opsForValue().get(cacheKey);
-        // if (cachedResponse != null) {
-        // return cachedResponse;
-        // }
 
         CommentModel parentComment = commentRepository.findById(commentId)
                 .orElseThrow(() -> new CustomException("Comment does not exist", HttpStatus.BAD_REQUEST));
 
-        Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
-        Page<CommentModel> repliesPage = commentRepository.findByParentCommentId(commentId, pageable);
-
         Long sourceId = (parentComment.getPostId() != null) ? parentComment.getPostId() : parentComment.getReelId();
 
-        // redisTemplate.opsForValue().set(cacheKey, response, 10, TimeUnit.MINUTES);
-        return commentMapper.toListResponse(sourceId, repliesPage, currentUserId);
+        long version = cacheService.repliesVersion(commentId);
+        String cacheKey = CacheKeys.repliesPage(commentId, version, pageNo, pageSize);
+        CachedPage<Long> replyIds = cacheService.getOrLoadPageIds(cacheKey, cacheService.commentPageTtl(), () -> {
+            Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("createdAt").ascending());
+            return cacheService.toCommentIdPage(commentRepository.findByParentCommentId(commentId, pageable));
+        });
+
+        return buildCommentResponse(sourceId, replyIds, currentUserId);
+    }
+
+    private ListCommentResponse buildCommentResponse(Long sourceId, CachedPage<Long> cachedPage, Long currentUserId) {
+        if (cachedPage.getContent() == null || cachedPage.getContent().isEmpty()) {
+            Page<CommentModel> emptyPage = new PageImpl<>(
+                    new ArrayList<>(),
+                    PageRequest.of(cachedPage.getPageNo(), cachedPage.getPageSize(), Sort.by("createdAt").ascending()),
+                    cachedPage.getTotalElements()
+            );
+            return commentMapper.toListResponse(sourceId, emptyPage, currentUserId);
+        }
+
+        Map<Long, Integer> orderById = cachedPage.getContent().stream()
+                .collect(Collectors.toMap(Function.identity(), cachedPage.getContent()::indexOf));
+        List<CommentModel> comments = commentRepository.findAllById(cachedPage.getContent()).stream()
+                .sorted(Comparator.comparingInt(comment -> orderById.getOrDefault(comment.getId(), Integer.MAX_VALUE)))
+                .toList();
+        Page<CommentModel> page = new PageImpl<>(
+                comments,
+                PageRequest.of(cachedPage.getPageNo(), cachedPage.getPageSize(), Sort.by("createdAt").ascending()),
+                cachedPage.getTotalElements()
+        );
+        return commentMapper.toListResponse(sourceId, page, currentUserId);
     }
 
     private void updateAffinityScore(Long followerId, Long authorId, long scoreDelta) {
@@ -308,24 +329,4 @@ public class CommentServiceImpl implements ICommentService {
         }
     }
 
-    private long getCacheVersion(String prefix, Long id) {
-        Object v = redisTemplate.opsForValue().get(prefix + ":version:" + id);
-        return v != null ? ((Number) v).longValue() : 1L;
-    }
-
-    private void incrementCacheVersion(String prefix, Long id) {
-        redisTemplate.opsForValue().increment(prefix + ":version:" + id);
-    }
-
-    private void invalidateListCache(CommentModel model) {
-        if (model.getPostId() != null) {
-            incrementCacheVersion("post", model.getPostId());
-        }
-        if (model.getReelId() != null) {
-            incrementCacheVersion("reel", model.getReelId());
-        }
-        if (model.getParentComment() != null) {
-            incrementCacheVersion("reply", model.getParentComment().getId());
-        }
-    }
 }

@@ -8,12 +8,15 @@ import org.nexo.postservice.dto.response.ReportInfoDTO;
 import org.nexo.postservice.dto.response.ReportResponseDTO;
 import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.exception.CustomException;
+import org.nexo.postservice.grpc.PostMediaServiceProto;
 import org.nexo.postservice.model.*;
 import org.nexo.postservice.repository.*;
 import org.nexo.postservice.service.GrpcServiceImpl.client.AiModerationClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
+import org.nexo.postservice.service.IPostMediaService;
 import org.nexo.postservice.service.IReportService;
+import org.nexo.postservice.util.Enum.EMediaType;
 import org.nexo.postservice.util.Enum.EReportStatus;
 import org.nexo.postservice.util.SecurityUtil;
 import org.springframework.data.domain.Page;
@@ -42,6 +45,8 @@ public class ReportServiceImpl implements IReportService {
     private final UserGrpcClient userGrpcClient;
     private final InteractionGrpcClient interactionGrpcClient;
     private final AiModerationClient aiModerationClient;
+    private final IPostMediaService postMediaService;
+    private final GeminiService geminiService;
 
 
     private Map<Long, UserServiceProto.UserDTOResponse2> getUserMap(List<Long> ids) {
@@ -338,24 +343,50 @@ public class ReportServiceImpl implements IReportService {
     @Async
     public void callAIServiceToCheck(String content, String type, Long reportId) {
         try {
-            Moderation.PredictionResponse prediction = aiModerationClient.checkText(content);
-            double conf = (double) prediction.getConfidence();
-            String label = prediction.getLabel();
+            // 1. Lấy kết quả từ Text Moderation (dùng biến final để lambda có thể truy cập)
+            final Moderation.PredictionResponse prediction = aiModerationClient.checkText(content);
+            final String initialLabel = prediction.getLabel();
+            final double initialConf = (double) prediction.getConfidence();
 
             switch (type) {
                 case "POST" -> reportPostRepository.findById(reportId).ifPresent(r -> {
-                    r.setPredictAI(label);
-                    r.setConfidence(conf);
+                    String finalLabel = initialLabel;
+                    double finalConf = initialConf;
+
+                    List<String> imageUrls = postMediaService.findPostMediasOfPost(r.getPostModel().getId()).stream()
+                            .filter(media -> EMediaType.PICTURE.name().equals(media.getMediaType()))
+                            .map(PostMediaServiceProto.PostMediaRequestDTO::getMediaUrl)
+                            .toList();
+
+                    if (!imageUrls.isEmpty()) {
+                        boolean isImageViolated = false;
+                        for (String url : imageUrls) {
+                            if (geminiService.isImageViolated(url)) {
+                                isImageViolated = true;
+                                break;
+                            }
+                        }
+
+                        if (isImageViolated) {
+                            finalLabel = "negative";
+                            finalConf = 1.0;
+                        }
+                    }
+
+                    r.setPredictAI(finalLabel);
+                    r.setConfidence(finalConf);
                     reportPostRepository.save(r);
                 });
+
                 case "REEL" -> reportReelRepository.findById(reportId).ifPresent(r -> {
-                    r.setPredictAI(label);
-                    r.setConfidence(conf);
+                    r.setPredictAI(initialLabel);
+                    r.setConfidence(initialConf);
                     reportReelRepository.save(r);
                 });
+
                 case "COMMENT" -> reportCommentRepository.findById(reportId).ifPresent(r -> {
-                    r.setPredictAI(label);
-                    r.setConfidence(conf);
+                    r.setPredictAI(initialLabel);
+                    r.setConfidence(initialConf);
                     reportCommentRepository.save(r);
                 });
             }

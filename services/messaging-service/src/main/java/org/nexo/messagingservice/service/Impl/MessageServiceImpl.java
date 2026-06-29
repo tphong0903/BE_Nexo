@@ -247,10 +247,6 @@ public class MessageServiceImpl implements MessageService {
         MessageModel message = messageRepository.findByIdAndIsActiveTrue(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
 
-        if (message.getSenderUserId().equals(userId)) {
-            return;
-        }
-
         ConversationParticipantModel participant = participantRepository
                 .findByConversationIdAndUserId(message.getConversation().getId(), userId)
                 .orElseThrow(() -> new IllegalArgumentException("Participant not found"));

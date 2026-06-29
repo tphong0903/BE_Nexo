@@ -41,4 +41,7 @@ public class ConversationResponseDTO {
     private Long createdByUserId;
     @JsonProperty("isGroupAdmin")
     private boolean isGroupAdmin;
+
+    private Long activeCallId;
+    private String activeCallType;
 }

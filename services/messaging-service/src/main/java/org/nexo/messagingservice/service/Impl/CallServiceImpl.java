@@ -264,7 +264,7 @@ public class CallServiceImpl implements CallService {
 
             boolean activeRemain = callParticipantRepository.findByCallId(call.getId()).stream()
                     .anyMatch(cp -> cp.getStatus() == ECallStatus.ACCEPTED || cp.getStatus() == ECallStatus.RINGING);
-            if (activeRemain && !userId.equals(call.getCallerUserId())) {
+            if (activeRemain && (!userId.equals(call.getCallerUserId()) || !Boolean.TRUE.equals(request.getEndForAll()))) {
                 return CallEndedDTO.builder()
                         .callId(call.getId())
                         .conversationId(call.getConversationId())

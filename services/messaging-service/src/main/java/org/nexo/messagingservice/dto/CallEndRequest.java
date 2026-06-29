@@ -9,4 +9,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class CallEndRequest {
     private Long callId;
+    private Boolean endForAll;
 }

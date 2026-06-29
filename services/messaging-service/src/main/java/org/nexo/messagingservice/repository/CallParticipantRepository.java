@@ -13,4 +13,6 @@ public interface CallParticipantRepository extends JpaRepository<CallParticipant
     List<CallParticipantModel> findByCallId(Long callId);
     
     Optional<CallParticipantModel> findByCallIdAndUserId(Long callId, Long userId);
+
+    List<CallParticipantModel> findByUserId(Long userId);
 }

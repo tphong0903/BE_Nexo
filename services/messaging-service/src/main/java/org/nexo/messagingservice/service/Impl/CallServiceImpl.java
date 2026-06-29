@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.List;
 
 @Service
@@ -377,5 +378,33 @@ public class CallServiceImpl implements CallService {
             saveCallMessage(call, ECallStatus.MISSED, 0L, LocalDateTime.now());
             log.info("Cleaned up ghost ringing call ID: {}", call.getId());
         }
+    }
+
+    @Override
+    public List<CallEndedDTO> handleUserDisconnect(Long userId) {
+        List<CallEndedDTO> endedCalls = new ArrayList<>();
+        List<CallParticipantModel> activeParticipations = callParticipantRepository.findByUserId(userId).stream()
+                .filter(cp -> cp.getStatus() == ECallStatus.RINGING || cp.getStatus() == ECallStatus.ACCEPTED)
+                .toList();
+
+        for (CallParticipantModel cp : activeParticipations) {
+            CallModel call = cp.getCall();
+            if (call.getStatus() != ECallStatus.RINGING && call.getStatus() != ECallStatus.ACCEPTED) {
+                continue;
+            }
+
+            CallEndRequest request = new CallEndRequest();
+            request.setCallId(call.getId());
+            try {
+                CallEndedDTO dto = endCall(request, userId);
+                if (dto != null) {
+                    endedCalls.add(dto);
+                }
+                log.info("Auto-ended/left call {} for disconnected user {}", call.getId(), userId);
+            } catch (Exception e) {
+                log.error("Failed to auto-end/leave call {} on disconnect: {}", call.getId(), e.getMessage());
+            }
+        }
+        return endedCalls;
     }
 }

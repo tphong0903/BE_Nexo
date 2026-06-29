@@ -11,7 +11,6 @@ import org.nexo.messagingservice.exception.ResourceNotFoundException;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.CallModel;
 import org.nexo.messagingservice.model.CallParticipantModel;
-import org.nexo.messagingservice.model.ConversationModel;
 import org.nexo.messagingservice.model.MessageModel;
 import org.nexo.messagingservice.repository.CallParticipantRepository;
 import org.nexo.messagingservice.repository.CallRepository;
@@ -19,6 +18,7 @@ import org.nexo.messagingservice.repository.ConversationParticipantRepository;
 import org.nexo.messagingservice.repository.ConversationRepository;
 import org.nexo.messagingservice.repository.MessageRepository;
 import org.nexo.messagingservice.service.CallService;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -150,21 +150,25 @@ public class CallServiceImpl implements CallService {
             throw new IllegalStateException("Call is no longer ringing");
         }
 
-        ECallStatus newStatus = Boolean.TRUE.equals(request.getAccepted()) ? ECallStatus.ACCEPTED : ECallStatus.REJECTED;
+        ECallStatus newStatus = Boolean.TRUE.equals(request.getAccepted()) ? ECallStatus.ACCEPTED
+                : ECallStatus.REJECTED;
         LocalDateTime now = LocalDateTime.now();
 
         if (!call.isGroupCall()) {
-            if (newStatus == ECallStatus.ACCEPTED) call.setAnsweredAt(now);
-            else call.setEndedAt(now);
+            if (newStatus == ECallStatus.ACCEPTED)
+                call.setAnsweredAt(now);
+            else
+                call.setEndedAt(now);
             call.setStatus(newStatus);
             callRepository.save(call);
         } else {
             CallParticipantModel cp = callParticipantRepository.findByCallIdAndUserId(call.getId(), calleeUserId)
-                .orElse(CallParticipantModel.builder().call(call).userId(calleeUserId).build());
+                    .orElse(CallParticipantModel.builder().call(call).userId(calleeUserId).build());
             cp.setStatus(newStatus);
-            if (newStatus == ECallStatus.ACCEPTED) cp.setJoinedAt(now);
+            if (newStatus == ECallStatus.ACCEPTED)
+                cp.setJoinedAt(now);
             callParticipantRepository.save(cp);
-            
+
             if (newStatus == ECallStatus.ACCEPTED && call.getStatus() == ECallStatus.RINGING) {
                 call.setStatus(ECallStatus.ACCEPTED);
                 call.setAnsweredAt(now);
@@ -173,7 +177,7 @@ public class CallServiceImpl implements CallService {
         }
 
         UserServiceProto.UserDTOResponse calleeInfo = userGrpcClient.getUserById(calleeUserId);
-        final MessageDTO[] savedCallMessageDTO = {null};
+        final MessageDTO[] savedCallMessageDTO = { null };
         if (!call.isGroupCall() && newStatus == ECallStatus.REJECTED) {
             savedCallMessageDTO[0] = saveCallMessage(call, ECallStatus.REJECTED, null, now);
         }
@@ -193,7 +197,8 @@ public class CallServiceImpl implements CallService {
     public CallResponseDTO joinActiveCall(Long callId, Long userId) {
         CallModel call = callRepository.findByIdAndParticipant(callId, userId)
                 .orElseThrow(() -> new ResourceNotFoundException("Call not found or access denied"));
-        if (!call.isGroupCall() || (call.getStatus() != ECallStatus.RINGING && call.getStatus() != ECallStatus.ACCEPTED)) {
+        if (!call.isGroupCall()
+                || (call.getStatus() != ECallStatus.RINGING && call.getStatus() != ECallStatus.ACCEPTED)) {
             throw new IllegalStateException("Call is not active or not a group call");
         }
 
@@ -255,17 +260,17 @@ public class CallServiceImpl implements CallService {
                 cp.setLeftAt(now);
                 callParticipantRepository.save(cp);
             });
-            
+
             boolean activeRemain = callParticipantRepository.findByCallId(call.getId()).stream()
                     .anyMatch(cp -> cp.getStatus() == ECallStatus.ACCEPTED || cp.getStatus() == ECallStatus.RINGING);
             if (activeRemain && !userId.equals(call.getCallerUserId())) {
                 return CallEndedDTO.builder()
-                    .callId(call.getId())
-                    .conversationId(call.getConversationId())
-                    .endedByUserId(userId)
-                    .finalStatus(ECallStatus.ENDED)
-                    .endedAt(now)
-                    .build();
+                        .callId(call.getId())
+                        .conversationId(call.getConversationId())
+                        .endedByUserId(userId)
+                        .finalStatus(ECallStatus.ENDED)
+                        .endedAt(now)
+                        .build();
             }
             finalStatus = ECallStatus.ENDED;
         } else {
@@ -301,7 +306,7 @@ public class CallServiceImpl implements CallService {
     }
 
     private MessageDTO saveCallMessage(CallModel call, ECallStatus status, Long durationSeconds, LocalDateTime now) {
-        final MessageDTO[] saved = {null};
+        final MessageDTO[] saved = { null };
         conversationRepository.findById(call.getConversationId()).ifPresent(conversation -> {
             String content = buildCallMessageContent(call.getCallType(), status, durationSeconds);
             MessageModel callMessage = MessageModel.builder()
@@ -356,5 +361,21 @@ public class CallServiceImpl implements CallService {
         CallModel call = callRepository.findByIdAndParticipant(callId, currentUserId)
                 .orElseThrow(() -> new ResourceNotFoundException("Call not found or access denied"));
         return call.getCallerUserId().equals(currentUserId) ? call.getCalleeUserId() : call.getCallerUserId();
+    }
+
+    @Scheduled(fixedDelay = 30000)
+    public void cleanupGhostCalls() {
+        LocalDateTime timeoutLimit = LocalDateTime.now().minusSeconds(45);
+        List<CallModel> ringingCalls = callRepository.findAll().stream()
+                .filter(c -> c.getStatus() == ECallStatus.RINGING && c.getStartedAt().isBefore(timeoutLimit))
+                .toList();
+
+        for (CallModel call : ringingCalls) {
+            call.setStatus(ECallStatus.MISSED);
+            call.setEndedAt(LocalDateTime.now());
+            callRepository.save(call);
+            saveCallMessage(call, ECallStatus.MISSED, 0L, LocalDateTime.now());
+            log.info("Cleaned up ghost ringing call ID: {}", call.getId());
+        }
     }
 }

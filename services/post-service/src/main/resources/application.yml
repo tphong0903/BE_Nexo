@@ -94,7 +94,11 @@ grpc:
       enable-keep-alive: true
       keep-alive-without-calls: true
       negotiationType: plaintext
+      
+gemini:
+  api-key: ${GEMINI_KEY:AIzaxxxxxxxxxxxxxxxxxxxxxxxx}
+  model: gemini-2.5-flash
 
 kafka:
   topics:
-    user-activity-events: user-activity-events
+    user-activity-events: user-activity-events

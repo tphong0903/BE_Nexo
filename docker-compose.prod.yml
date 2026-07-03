@@ -15,10 +15,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
+          cpus: "0.8"
           memory: 512M
         reservations:
-          cpus: "0.25"
+          cpus: "0.2"
           memory: 256M
     networks:
       - nexo-network
@@ -48,13 +48,14 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.2"
+          memory: 384M
     networks:
       - nexo-network
+
   user-service:
     container_name: user-service
     image: phongga088/user-service:latest
@@ -119,11 +120,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.75"
-          memory: 768M
+          cpus: "1.5"
+          memory: 1G
         reservations:
-          cpus: "0.35"
-          memory: 384M
+          cpus: "0.3"
+          memory: 512M
     networks:
       - nexo-network
 
@@ -161,10 +162,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 1G
+          cpus: "1.5"
+          memory: 1.5G
         reservations:
-          cpus: "0.25"
+          cpus: "0.3"
           memory: 512M
     networks:
       - nexo-network
@@ -202,10 +203,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 512M
+          cpus: "0.8"
+          memory: 768M
         reservations:
-          cpus: "0.15"
+          cpus: "0.1"
           memory: 256M
     networks:
       - nexo-network
@@ -243,8 +244,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.4"
-          memory: 1G
+          cpus: "1.0"
+          memory: 1.5G
         reservations:
           cpus: "0.2"
           memory: 512M
@@ -279,7 +280,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.2"
+          cpus: "0.3"
           memory: 256M
         reservations:
           cpus: "0.1"
@@ -294,6 +295,7 @@ services:
       - "8087:8087"
       - "9094:9094"
     environment:
+      GEMINI_KEY: AQ.Ab8RN6LUOabc5y9uNZ4N2s3VpdF5LtFsw9KufWx4c9nmZwE8Dg
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8087
@@ -328,6 +330,8 @@ services:
       GRPC_CLIENT_USERS_NEGOTIATION_TYPE: plaintext
       GRPC_CLIENT_INTERACTIONS_ADDRESS: static://interaction-service:9095
       GRPC_CLIENT_INTERACTIONS_NEGOTIATION_TYPE: plaintext
+      GRPC_CLIENT_AI-SERVICE_ADDRESS: static://ai-service:50051
+      GRPC_CLIENT_AI-SERVICE_NEGOTIATION_TYPE: plaintext
     depends_on:
       eureka-server:
         condition: service_healthy
@@ -345,11 +349,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.2"
+          memory: 384M
     networks:
       - nexo-network
 
@@ -378,10 +382,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.4"
+          cpus: "0.8"
           memory: 512M
         reservations:
-          cpus: "0.2"
+          cpus: "0.1"
           memory: 256M
     networks:
       nexo-network:
@@ -410,10 +414,10 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.4"
+          cpus: "0.5"
           memory: 512M
         reservations:
-          cpus: "0.2"
+          cpus: "0.1"
           memory: 256M
     networks:
       - nexo-network
@@ -459,11 +463,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.2"
+          memory: 384M
     networks:
       - nexo-network
 
@@ -515,11 +519,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.2"
+          memory: 384M
     networks:
       - nexo-network
 
@@ -557,11 +561,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.2"
+          memory: 384M
     networks:
       - nexo-network
 
@@ -603,23 +607,29 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.0"
+          memory: 768M
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.2"
+          memory: 384M
     networks:
       - nexo-network
 
   ai-service:
     container_name: ai-service
     image: phongga088/ai-service-v2:latest
+    command: python main.py
     ports:
       - "8001:8000"
+      - "50051:50051"
     restart: unless-stopped
     environment:
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka/
+      EUREKA_APP_NAME: ai-service
+      EUREKA_INSTANCE_HOST: ai-service
+      GRPC_PORT: 50051
       TZ: Asia/Ho_Chi_Minh
-      DB_URL: jdbc:postgresql://user-db:5432/userdb
+      DB_URL: postgresql+psycopg2://user:pass@user-db:5432/userdb
       DB_USER: user
       DB_PASS: pass
       REDIS_HOST: redis
@@ -631,11 +641,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "1.5"
+          memory: 1G
         reservations:
-          cpus: "0.25"
-          memory: 256M
+          cpus: "0.3"
+          memory: 384M
     networks:
       - nexo-network
 
@@ -649,15 +659,14 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./pg_hba.conf:/etc/postgresql/pg_hba.conf
-
     command: postgres -c max_connections=50 -c shared_buffers=256MB -c hba_file=/etc/postgresql/pg_hba.conf
     deploy:
       resources:
         limits:
-          cpus: "0.5"
-          memory: 512M
+          cpus: "0.8"
+          memory: 768M
         reservations:
-          cpus: "0.25"
+          cpus: "0.2"
           memory: 256M
     networks:
       - nexo-network
@@ -689,11 +698,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.75"
-          memory: 1280M
+          cpus: "1.5"
+          memory: 1.5G
         reservations:
-          cpus: "0.35"
-          memory: 640M
+          cpus: "0.4"
+          memory: 512M
     networks:
       - nexo-network
 
@@ -707,6 +716,7 @@ services:
     networks:
       - nexo-network
     restart: unless-stopped
+    
   user-db:
     container_name: user-db
     image: postgres:15-alpine
@@ -721,6 +731,7 @@ services:
     restart: unless-stopped
     networks:
       - nexo-network
+      
   zookeeper:
     image: confluentinc/cp-zookeeper:7.6.1
     container_name: zookeeper
@@ -742,11 +753,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 384M
+          cpus: "0.5"
+          memory: 512M
         reservations:
-          cpus: "0.15"
-          memory: 192M
+          cpus: "0.1"
+          memory: 256M
     networks:
       - nexo-network
 
@@ -769,7 +780,7 @@ services:
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
-      KAFKA_HEAP_OPTS: "-Xmx400m -Xms256m"
+      KAFKA_HEAP_OPTS: "-Xmx1G -Xms512m"
       KAFKA_JVM_PERFORMANCE_OPTS: "-XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:InitiatingHeapOccupancyPercent=35 -XX:+ExplicitGCInvokesConcurrent"
 
       KAFKA_ZOOKEEPER_SESSION_TIMEOUT_MS: 30000
@@ -801,11 +812,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "1.0"
-          memory: 1G
+          cpus: "2.0"
+          memory: 2G
         reservations:
           cpus: "0.5"
-          memory: 512M
+          memory: 768M
     networks:
       - nexo-network
 
@@ -823,13 +834,14 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 256M
+          cpus: "0.5"
+          memory: 384M
         reservations:
-          cpus: "0.15"
+          cpus: "0.1"
           memory: 128M
     networks:
       - nexo-network
+      
   meilisearch:
     image: getmeili/meilisearch:v1.25.0
     container_name: meilisearch
@@ -843,11 +855,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.4"
-          memory: 384M
+          cpus: "1.0"
+          memory: 768M
         reservations:
           cpus: "0.2"
-          memory: 192M
+          memory: 256M
     networks:
       - nexo-network
 
@@ -887,6 +899,7 @@ services:
     restart: unless-stopped
     networks:
       - nexo-network
+      
   nginx:
     image: nginx:alpine
     container_name: nginx
@@ -903,6 +916,7 @@ services:
     restart: unless-stopped
     networks:
       - nexo-network
+      
 networks:
   nexo-network:
     driver: bridge

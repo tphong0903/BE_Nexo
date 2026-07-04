@@ -21,4 +21,6 @@ public interface CallRepository extends JpaRepository<CallModel, Long> {
 
     @Query("SELECT c FROM CallModel c WHERE c.conversationId = :conversationId ORDER BY c.startedAt DESC")
     List<CallModel> findByConversationIdOrderByStartedAtDesc(@Param("conversationId") Long conversationId);
+
+    Optional<CallModel> findFirstByConversationIdAndStatusInOrderByStartedAtDesc(@Param("conversationId") Long conversationId, @Param("statuses") List<ECallStatus> statuses);
 }

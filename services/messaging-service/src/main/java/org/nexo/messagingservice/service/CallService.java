@@ -1,5 +1,7 @@
 package org.nexo.messagingservice.service;
 
+import java.util.List;
+
 import org.nexo.messagingservice.dto.*;
 
 public interface CallService {
@@ -17,4 +19,6 @@ public interface CallService {
     CallResponseDTO joinActiveCall(Long callId, Long userId);
 
     Long getOtherParticipantId(Long callId, Long currentUserId);
+
+    List<CallEndedDTO> handleUserDisconnect(Long userId);
 }

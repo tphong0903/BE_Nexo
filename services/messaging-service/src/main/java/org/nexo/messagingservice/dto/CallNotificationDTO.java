@@ -1,5 +1,6 @@
 package org.nexo.messagingservice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -24,6 +25,7 @@ public class CallNotificationDTO {
     private String callerAvatarUrl;
     // VIDEO_CALL (with cam) or AUDIO_CALL (no cam)
     private ECallType callType;
+    @JsonProperty("isGroupCall")
     private boolean isGroupCall;
     private LocalDateTime startedAt;
 }

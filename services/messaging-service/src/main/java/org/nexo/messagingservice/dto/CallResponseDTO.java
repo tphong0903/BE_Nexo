@@ -1,5 +1,6 @@
 package org.nexo.messagingservice.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -19,6 +20,7 @@ public class CallResponseDTO {
     private Long responderId;
     private String responderUsername;
     private ECallStatus status;
+    @JsonProperty("isGroupCall")
     private boolean isGroupCall;
     private MessageDTO callMessage;
 }

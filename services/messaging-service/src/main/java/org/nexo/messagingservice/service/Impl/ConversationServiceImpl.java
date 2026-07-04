@@ -21,6 +21,7 @@ import org.nexo.messagingservice.dto.PageModelResponse;
 import org.nexo.messagingservice.dto.UpdateGroupRequest;
 import org.nexo.messagingservice.dto.UserDTO;
 import org.nexo.messagingservice.enums.EConversationStatus;
+import org.nexo.messagingservice.enums.ECallStatus;
 import org.nexo.messagingservice.exception.ResourceNotFoundException;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.ConversationModel;
@@ -28,6 +29,9 @@ import org.nexo.messagingservice.model.ConversationParticipantModel;
 import org.nexo.messagingservice.model.MessageModel;
 import org.nexo.messagingservice.repository.ConversationParticipantRepository;
 import org.nexo.messagingservice.repository.ConversationRepository;
+import org.nexo.messagingservice.repository.MessageRepository;
+import org.nexo.messagingservice.repository.CallRepository;
+import org.nexo.messagingservice.model.CallModel;
 import org.nexo.messagingservice.repository.MessageRepository;
 import org.nexo.messagingservice.service.ConversationService;
 import org.nexo.messagingservice.service.MessageService;
@@ -50,6 +54,7 @@ public class ConversationServiceImpl implements ConversationService {
     private final MessageRepository messageRepository;
     private final MessageService messageService;
     private final SimpMessagingTemplate messagingTemplate;
+    private final CallRepository callRepository;
 
     @Transactional
     public ConversationResponseDTO getOrCreateDirectConversation(String keycloakUserId, Long recipientUserId) {
@@ -316,6 +321,17 @@ public class ConversationServiceImpl implements ConversationService {
         Long unreadCount = messageRepository.countUnreadMessages(
                 conversation.getId(), requestingUserId, lastReadMsgId != null ? lastReadMsgId : 0L);
 
+        Long activeCallId = null;
+        String activeCallType = null;
+        if (isGroup) {
+            Optional<CallModel> activeCall = callRepository.findFirstByConversationIdAndStatusInOrderByStartedAtDesc(
+                    conversation.getId(), List.of(ECallStatus.RINGING, ECallStatus.ACCEPTED));
+            if (activeCall.isPresent()) {
+                activeCallId = activeCall.get().getId();
+                activeCallType = activeCall.get().getCallType().name();
+            }
+        }
+
         return ConversationResponseDTO.builder()
                 .id(conversation.getId())
                 .senderUserId(requestingUserId)
@@ -337,6 +353,8 @@ public class ConversationServiceImpl implements ConversationService {
                 .groupAvatarUrl(conversation.getGroupAvatarUrl())
                 .createdByUserId(conversation.getCreatedByUserId())
                 .isGroupAdmin(isGroupAdmin)
+                .activeCallId(activeCallId)
+                .activeCallType(activeCallType)
                 .build();
     }
 
@@ -582,6 +600,7 @@ public class ConversationServiceImpl implements ConversationService {
                 .groupAvatarUrl(request.getGroupAvatarUrl())
                 .createdByUserId(creatorId)
                 .status(EConversationStatus.NORMAL)
+                .lastMessageAt(java.time.LocalDateTime.now())
                 .build();
         group = conversationRepository.save(group);
 
@@ -645,14 +664,26 @@ public class ConversationServiceImpl implements ConversationService {
         if (!isUserParticipant(conversationId, userId))
             throw new SecurityException("Not a participant");
 
+        List<Long> addedMemberIds = new ArrayList<>();
         for (Long memberId : request.getUserIds()) {
             if (!isUserParticipant(conversationId, memberId)) {
                 ConversationParticipantModel member = new ConversationParticipantModel();
                 member.setConversation(group);
                 member.setUserId(memberId);
                 participantRepository.save(member);
+                addedMemberIds.add(memberId);
             }
         }
+        
+        if (!addedMemberIds.isEmpty()) {
+            List<UserDTOResponse2> addedUsers = userGrpcClient.getUsersByIds(addedMemberIds);
+            String addedNames = addedUsers.stream().map(UserDTOResponse2::getFullName).collect(Collectors.joining(", "));
+            String messageContent = user.getFullName() + " đã thêm " + addedNames + " vào nhóm.";
+            
+            MessageDTO systemMessage = messageService.sendSystemMessage(conversationId, userId, messageContent);
+            messagingTemplate.convertAndSend("/topic/conversation/" + conversationId, systemMessage);
+        }
+        
         return mapToDto(group, userId);
     }
 

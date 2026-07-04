@@ -567,6 +567,12 @@ public class FollowServiceImpl implements FollowService {
                                         .filter(user -> user.getAccountStatus() == org.nexo.userservice.enums.EAccountStatus.ACTIVE)
                                         .collect(Collectors.toList());
 
+                        // Lấy danh sách userId mà currentUser đã follow (ACTIVE) hoặc đã gửi request (PENDING)
+                        Set<Long> followingActiveIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                        currentUserId, org.nexo.userservice.enums.EStatusFollow.ACTIVE);
+                        Set<Long> followingPendingIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                        currentUserId, org.nexo.userservice.enums.EStatusFollow.PENDING);
+
                         Map<Long, UserModel> userById = users.stream()
                                         .collect(Collectors.toMap(UserModel::getId, u -> u, (a, b) -> a, LinkedHashMap::new));
 
@@ -574,11 +580,19 @@ public class FollowServiceImpl implements FollowService {
                                         .map(userById::get)
                                         .filter(user -> user != null)
                                         .filter(user -> !user.getId().equals(currentUserId))
+                                        // Lọc bỏ user đã follow hoặc đã gửi request follow
+                                        .filter(user -> !followingActiveIds.contains(user.getId()))
+                                        .filter(user -> !followingPendingIds.contains(user.getId()))
                                         .filter(user -> !userBlockRepository.existsByIdBlockerIdAndIdBlockedId(currentUserId,
                                                         user.getId()))
                                         .filter(user -> !userBlockRepository.existsByIdBlockerIdAndIdBlockedId(user.getId(),
                                                         currentUserId))
-                                        .map(userMapper::toPublicUserDTOResponse)
+                                        .map(user -> {
+                                                PublicUserDTOResponse dto = userMapper.toPublicUserDTOResponse(user);
+                                                // Set follow status (false vì đã filter ở trên, nhưng đảm bảo field có giá trị)
+                                                dto.setFollowed(false);
+                                                return dto;
+                                        })
                                         .collect(Collectors.toList());
 
                         int page = pageable.getPageNumber();
@@ -609,23 +623,41 @@ public class FollowServiceImpl implements FollowService {
                         suggestedPage = followRepository.findNewUsersSuggestion(currentUserId, pageable);
                 }
 
+                // Lấy danh sách userId đã follow/gửi request để filter + set status
+                Set<Long> followingActiveIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                currentUserId, org.nexo.userservice.enums.EStatusFollow.ACTIVE);
+                Set<Long> followingPendingIds = followRepository.findAllFollowingIdsByFollowerIdAndStatus(
+                                currentUserId, org.nexo.userservice.enums.EStatusFollow.PENDING);
+
                 Page<UserModel> finalSuggestedPage = suggestedPage.map(user -> {
+                        if (user == null) return null;
                         boolean isBlocked = userBlockRepository.existsByIdBlockerIdAndIdBlockedId(currentUserId,
                                         user.getId());
                         boolean isBlockedBy = userBlockRepository.existsByIdBlockerIdAndIdBlockedId(user.getId(),
                                         currentUserId);
-                        if (isBlocked || isBlockedBy) {
+                        if (isBlocked || isBlockedBy) return null;
+                        // Lọc bỏ user đã follow hoặc đã gửi request
+                        if (followingActiveIds.contains(user.getId()) || followingPendingIds.contains(user.getId())) {
                                 return null;
                         }
                         return user;
                 });
 
-                Page<PublicUserDTOResponse> dtoPage = finalSuggestedPage.map(userMapper::toPublicUserDTOResponse);
+                Page<PublicUserDTOResponse> dtoPage = finalSuggestedPage.map(user -> {
+                        if (user == null) return null;
+                        PublicUserDTOResponse dto = userMapper.toPublicUserDTOResponse(user);
+                        dto.setFollowed(false);
+                        return dto;
+                });
+                // Filter out nulls
+                List<PublicUserDTOResponse> filtered = dtoPage.getContent().stream()
+                                .filter(dto -> dto != null)
+                                .collect(Collectors.toList());
                 return PageModelResponse.<PublicUserDTOResponse>builder()
-                                .content(dtoPage.getContent())
+                                .content(filtered)
                                 .pageNo(dtoPage.getNumber())
                                 .pageSize(dtoPage.getSize())
-                                .totalElements(dtoPage.getTotalElements())
+                                .totalElements(filtered.size())
                                 .totalPages(dtoPage.getTotalPages())
                                 .build();
         }

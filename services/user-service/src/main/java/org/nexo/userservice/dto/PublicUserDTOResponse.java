@@ -11,5 +11,5 @@ public class PublicUserDTOResponse  {
     private String bio;
     private Long followers;
     private Long following;
-
+    private Boolean followed;
 }

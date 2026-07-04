@@ -37,22 +37,30 @@ public class CallWebSocketController {
         String keycloakUserId = (String) authentication.getDetails();
         Long callerUserId = userGrpcClient.getUserByKeycloakId(keycloakUserId).getUserId();
 
+        log.info("[CALL] initiateCall: conversationId={}, callerUserId={}, callType={}",
+                request.getConversationId(), callerUserId, request.getCallType());
+
         CallNotificationDTO notification = callService.initiateCall(request, callerUserId);
+
+        log.info("[CALL] call created: callId={}, isGroupCall={}", notification.getCallId(), notification.isGroupCall());
 
         if (notification.isGroupCall()) {
             List<Long> participantIds = participantRepository.findActiveUserIdsByConversationId(request.getConversationId());
+            log.info("[CALL] group call: broadcasting incoming to {} participants (excluding caller)", participantIds.size() - 1);
             for (Long userId : participantIds) {
                 if (!userId.equals(callerUserId)) {
                     messagingTemplate.convertAndSendToUser(userId.toString(), "/queue/call/incoming", notification);
+                    log.debug("[CALL] sent incoming to userId={}", userId);
                 }
             }
         } else {
             Long calleeUserId = callService.getOtherParticipantId(notification.getCallId(), callerUserId);
+            log.info("[CALL] 1-1 call: sending incoming to calleeUserId={}", calleeUserId);
             messagingTemplate.convertAndSendToUser(calleeUserId.toString(), "/queue/call/incoming", notification);
         }
 
         messagingTemplate.convertAndSendToUser(callerUserId.toString(), "/queue/call/initiated", notification);
-        log.info("Call {} initiated by {}", notification.getCallId(), callerUserId);
+        log.info("[CALL] initiated event sent to caller userId={}", callerUserId);
     }
 
     @MessageMapping("/call.ping")
@@ -123,14 +131,11 @@ public class CallWebSocketController {
             callParticipantRepository.findByCallId(request.getCallId()).forEach(cp -> {
                 messagingTemplate.convertAndSendToUser(cp.getUserId().toString(), "/queue/call/ended", endedDTO);
             });
+            if (endedDTO.getConversationId() != null) {
+                messagingTemplate.convertAndSend("/topic/conversation/" + endedDTO.getConversationId(), endedDTO.getCallMessage());
+            }
         } else {
-            Long otherUserId = callService.getOtherParticipantId(request.getCallId(), userId);
             messagingTemplate.convertAndSendToUser(userId.toString(), "/queue/call/ended", endedDTO);
-            messagingTemplate.convertAndSendToUser(otherUserId.toString(), "/queue/call/ended", endedDTO);
-        }
-
-        if (endedDTO.getCallMessage() != null && endedDTO.getConversationId() != null) {
-            messagingTemplate.convertAndSend("/topic/conversation/" + endedDTO.getConversationId(), endedDTO.getCallMessage());
         }
     }
 

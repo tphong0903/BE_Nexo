@@ -18,6 +18,10 @@ import org.springframework.web.socket.messaging.SessionDisconnectEvent;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import org.nexo.messagingservice.dto.CallEndedDTO;
+import org.nexo.messagingservice.service.CallService;
+import org.nexo.messagingservice.repository.CallParticipantRepository;
+
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -26,6 +30,8 @@ public class WebSocketEventListener {
     private final SimpMessagingTemplate messagingTemplate;
     private final PresenceService presenceService;
     private final UserGrpcClient userGrpcClient;
+    private final CallService callService;
+    private final CallParticipantRepository callParticipantRepository;
 
     @EventListener
     public void handleWebSocketConnectListener(SessionConnectedEvent event) {
@@ -59,6 +65,20 @@ public class WebSocketEventListener {
             presenceService.setUserOffline(userId);
 
             broadcastPresenceToMutualFriends(userId, false);
+
+            List<CallEndedDTO> endedCalls = callService.handleUserDisconnect(userId);
+            for (CallEndedDTO endedDTO : endedCalls) {
+                if (endedDTO.getCallMessage() != null) {
+                    callParticipantRepository.findByCallId(endedDTO.getCallId()).forEach(cp -> {
+                        messagingTemplate.convertAndSendToUser(cp.getUserId().toString(), "/queue/call/ended", endedDTO);
+                    });
+                    if (endedDTO.getConversationId() != null) {
+                        messagingTemplate.convertAndSend("/topic/conversation/" + endedDTO.getConversationId(), endedDTO.getCallMessage());
+                    }
+                } else {
+                    messagingTemplate.convertAndSendToUser(userId.toString(), "/queue/call/ended", endedDTO);
+                }
+            }
         }
     }
 

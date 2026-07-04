@@ -18,6 +18,8 @@ public interface IReportReelRepository extends JpaRepository<ReportReelModel, Lo
 
     boolean existsByUserIdAndReelModel_Id(Long userId, Long reelId);
 
+    ReportReelModel findByUserIdAndReelModel_Id(Long userId, Long reelId);
+
     @Query(value = """
             SELECT
                 COUNT(*) FILTER (WHERE report_status = 'PENDING') AS pendingCount,

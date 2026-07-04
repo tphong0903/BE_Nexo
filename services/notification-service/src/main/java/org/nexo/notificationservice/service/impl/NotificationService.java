@@ -32,6 +32,10 @@ import java.util.stream.Collectors;
 public class NotificationService implements INotificationService {
     private static final String UNREAD_COUNT_KEY = "noti:unread:count:";
     private static final String USER_CACHE_KEY = "user:profile:";
+    private static final Long SYSTEM_ACTOR_ID = 0L;
+    private static final String POST_REMOVED_MESSAGE = " Bài viết của bạn đã bị ẩn vì vi phạm Tiêu chuẩn cộng đồng.";
+    private static final String COMMENT_REMOVED_MESSAGE = " Bình luận của bạn đã bị ẩn vì vi phạm Tiêu chuẩn cộng đồng.";
+
     private final INotificationRepository notificationRepository;
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
@@ -50,22 +54,28 @@ public class NotificationService implements INotificationService {
 
         List<Long> actorIds = rawNotifications.stream()
                 .map(NotificationModel::getActorId)
+                .filter(actorId -> !SYSTEM_ACTOR_ID.equals(actorId))
                 .distinct()
                 .collect(Collectors.toList());
 
         Map<Long, UserDTO> userMap = getUsersWithCache(actorIds);
 
         Map<String, List<NotificationModel>> groupedNotifications = rawNotifications.stream()
-                .collect(Collectors.groupingBy(
-                        n -> n.getTargetUrl() + "::" + n.getNotificationType().name()
-                ));
+                .collect(Collectors.groupingBy(notification -> {
+                    if ((notification.getNotificationType() == ENotificationType.POST_REMOVED || (notification.getNotificationType() == ENotificationType.COMMENT_REMOVED))
+                            && SYSTEM_ACTOR_ID.equals(notification.getActorId())) {
+                        return "SYSTEM_" + notification.getId();
+                    }
+
+                    return notification.getTargetUrl() + "::" + notification.getNotificationType().name();
+                }));
 
         List<NotificationDTO> finalDtoList = new ArrayList<>();
         for (List<NotificationModel> group : groupedNotifications.values()) {
             NotificationModel template = group.getFirst();
 
             List<UserDTO> usersInGroup = group.stream()
-                    .map(notification -> userMap.get(notification.getActorId()))
+                    .map(notification -> getNotificationActor(notification, userMap))
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
 
@@ -175,26 +185,30 @@ public class NotificationService implements INotificationService {
     public void listenNotificationMessage(MessageDTO messageDTO) {
         log.info("Received: {}", messageDTO.toString());
 
-        List<UserServiceProto.UserDTOResponse2> listUser = userGrpcClient.getUsersByIds(
-                List.of(messageDTO.getActorId(), messageDTO.getRecipientId())
-        );
+        ENotificationType notificationType = ENotificationType.valueOf(messageDTO.getNotificationType());
+        boolean systemNotification = SYSTEM_ACTOR_ID.equals(messageDTO.getActorId());
+        List<Long> userIds = systemNotification
+                ? List.of(messageDTO.getRecipientId())
+                : List.of(messageDTO.getActorId(), messageDTO.getRecipientId());
 
-        UserServiceProto.UserDTOResponse2 actor = listUser.stream()
-                .filter(u -> u.getId() == messageDTO.getActorId())
+        List<UserServiceProto.UserDTOResponse2> listUser = userGrpcClient.getUsersByIds(userIds);
+
+        UserServiceProto.UserDTOResponse2 actor = systemNotification ? null : listUser.stream()
+                .filter(u -> Objects.equals(u.getId(), messageDTO.getActorId()))
                 .findFirst()
                 .orElse(null);
 
         UserServiceProto.UserDTOResponse2 recipient = listUser.stream()
-                .filter(u -> u.getId() == messageDTO.getRecipientId())
+                .filter(u -> Objects.equals(u.getId(), messageDTO.getRecipientId()))
                 .findFirst()
                 .orElse(null);
 
-        if (actor == null || recipient == null) {
+        if ((!systemNotification && actor == null) || recipient == null) {
             log.warn("Actor or recipient is not exist for message {}", messageDTO);
             return;
         }
 
-        String message = switch (ENotificationType.valueOf(messageDTO.getNotificationType())) {
+        String message = switch (notificationType) {
             case LIKE_POST -> actor.getUsername() + " đã thích bài viết của bạn";
             case LIKE_STORY -> actor.getUsername() + " đã thích story của bạn";
             case LIKE_COMMENT -> actor.getUsername() + " đã thích bình luận của bạn";
@@ -207,13 +221,19 @@ public class NotificationService implements INotificationService {
             case FOLLOW -> actor.getUsername() + " đã theo dõi bạn";
             case TAG -> actor.getUsername() + " đã gắn thẻ bạn trong một bài viết";
             case MESSAGE -> actor.getUsername() + " đã gửi cho bạn một tin nhắn";
+            case POST_REMOVED -> POST_REMOVED_MESSAGE;
+            case COMMENT_REMOVED -> COMMENT_REMOVED_MESSAGE;
 
             default -> "Có một thông báo mới";
         };
-        if (notificationRepository.existsByRecipientIdAndActorIdAndMessageAndTargetUrl(recipient.getId(), actor.getId(), message, messageDTO.getTargetUrl())) {
+        Long actorId = systemNotification ? SYSTEM_ACTOR_ID : actor.getId();
+        boolean existedNotification = notificationRepository.existsByRecipientIdAndActorIdAndMessageAndTargetUrl(
+                recipient.getId(), actorId, message, messageDTO.getTargetUrl()
+        );
+        if ((notificationType != ENotificationType.POST_REMOVED && notificationType != ENotificationType.COMMENT_REMOVED) && existedNotification) {
             notificationRepository.deleteByRecipientIdAndActorIdAndMessageAndTargetUrl(
                     recipient.getId(),
-                    actor.getId(),
+                    actorId,
                     message,
                     messageDTO.getTargetUrl()
             );
@@ -224,7 +244,7 @@ public class NotificationService implements INotificationService {
                     .notificationType(ENotificationType.valueOf(messageDTO.getNotificationType()))
                     .targetUrl(messageDTO.getTargetUrl())
                     .isRead(false)
-                    .actorId(actor.getId())
+                    .actorId(actorId)
                     .recipientId(recipient.getId())
                     .message(message)
                     .build();
@@ -237,7 +257,7 @@ public class NotificationService implements INotificationService {
                     newModel.getTargetUrl(),
                     message,
                     false,
-                    List.of(new UserDTO(actor.getUsername(), actor.getAvatar())),
+                    List.of(systemNotification ? getSystemUser() : new UserDTO(actor.getUsername(), actor.getAvatar())),
                     newModel.getCreatedAt()
             );
 
@@ -248,6 +268,9 @@ public class NotificationService implements INotificationService {
     }
 
     private String generateDynamicMessage(List<UserDTO> users, ENotificationType type) {
+        if (type == ENotificationType.POST_REMOVED) return POST_REMOVED_MESSAGE;
+        if (type == ENotificationType.COMMENT_REMOVED) return COMMENT_REMOVED_MESSAGE;
+
         int size = users.size();
         if (size == 0) return "Có thông báo mới.";
 
@@ -273,6 +296,18 @@ public class NotificationService implements INotificationService {
         } else {
             return firstActorName + " và " + (size - 1) + " người khác " + actionText;
         }
+    }
+
+    private UserDTO getNotificationActor(NotificationModel notification, Map<Long, UserDTO> userMap) {
+        if ((notification.getNotificationType() == ENotificationType.POST_REMOVED || notification.getNotificationType() == ENotificationType.COMMENT_REMOVED)
+                && SYSTEM_ACTOR_ID.equals(notification.getActorId())) {
+            return getSystemUser();
+        }
+        return userMap.get(notification.getActorId());
+    }
+
+    private UserDTO getSystemUser() {
+        return new UserDTO("System", "https://res.cloudinary.com/dllwsmukj/image/upload/v1783144140/images_2_jyyjbo.jpg");
     }
 
     private void incrementUnreadCache(Long userId) {

@@ -3,7 +3,6 @@ package org.nexo.postservice.repository;
 import org.nexo.postservice.dto.ReportCountProjection;
 import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.model.ReportCommentModel;
-import org.nexo.postservice.model.ReportPostModel;
 import org.nexo.postservice.util.Enum.EReportStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -17,6 +16,8 @@ import java.util.List;
 public interface IReportCommentRepository extends JpaRepository<ReportCommentModel, Long> {
 
     boolean existsByUserIdAndCommentId(Long userId, Long commentId);
+
+    ReportCommentModel findByUserIdAndCommentId(Long userId, Long commentId);
 
     Page<ReportCommentModel> findByReportStatus(EReportStatus status, Pageable pageable);
 

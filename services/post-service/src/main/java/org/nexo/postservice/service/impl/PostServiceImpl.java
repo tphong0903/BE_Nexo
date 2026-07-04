@@ -19,9 +19,11 @@ import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
+import org.nexo.postservice.service.ModerationService;
 import org.nexo.postservice.util.Enum.ENotificationType;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
 import org.nexo.postservice.util.SecurityUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -33,7 +35,6 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.stereotype.Service;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.time.Duration;
@@ -46,6 +47,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class PostServiceImpl implements IPostService {
     private static final Duration CACHE_TTL = Duration.ofDays(7);
+    private static final String CONTENT_TYPE_POST = "POST";
+    private static final String CONTENT_TYPE_REEL = "REEL";
 
     private final FileService fileServiceClient;
     private final SecurityUtil securityUtil;
@@ -57,6 +60,8 @@ public class PostServiceImpl implements IPostService {
     private final IHashTagService hashTagService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final ModerationService moderationService;
+
 
     @Value("${kafka.topics.user-activity-events:user-activity-events}")
     private String userActivityEventsTopic;
@@ -101,6 +106,8 @@ public class PostServiceImpl implements IPostService {
                     .getTokenValue();
             fileServiceClient.savePostMedia(files, model.getId(), token);
         }
+
+        moderationService.triggerModerationAsync(CONTENT_TYPE_POST, model.getId(), 0L);
 
         if (isNew) {
             kafkaTemplate.send("post-created", MessagePostDTO.builder()
@@ -159,6 +166,8 @@ public class PostServiceImpl implements IPostService {
             String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
             fileServiceClient.saveReelMedia(files, model.getId(), token);
         }
+
+        moderationService.triggerModerationAsync(CONTENT_TYPE_REEL, model.getId(), 0L);
 
         if (isNew) {
             kafkaTemplate.send("reel-created", MessagePostDTO.builder()
@@ -543,7 +552,7 @@ public class PostServiceImpl implements IPostService {
             throw new CustomException("Don't have permission to view this content", HttpStatus.FORBIDDEN);
         }
 
-        if (requiredVisibility != null && requiredVisibility == EVisibilityPost.PRIVATE) {
+        if (requiredVisibility == EVisibilityPost.PRIVATE) {
             throw new CustomException("This content is private", HttpStatus.FORBIDDEN);
         }
 

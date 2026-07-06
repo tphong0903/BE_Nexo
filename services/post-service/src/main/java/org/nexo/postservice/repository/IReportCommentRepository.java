@@ -1,8 +1,8 @@
 package org.nexo.postservice.repository;
 
+import org.nexo.postservice.dto.ReportCountProjection;
 import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.model.ReportCommentModel;
-import org.nexo.postservice.model.ReportPostModel;
 import org.nexo.postservice.util.Enum.EReportStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,22 +14,44 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 public interface IReportCommentRepository extends JpaRepository<ReportCommentModel, Long> {
+
     boolean existsByUserIdAndCommentId(Long userId, Long commentId);
 
-    Page<ReportPostModel> findByReportStatus(EReportStatus status, Pageable pageable);
+    ReportCommentModel findByUserIdAndCommentId(Long userId, Long commentId);
+
+    Page<ReportCommentModel> findByReportStatus(EReportStatus status, Pageable pageable);
 
     @Query(value = """
-            SELECT * FROM report_comment_model r 
+            SELECT 
+                r.id as id, 
+                r.reason as reason, 
+                r.report_status as reportStatus, 
+                r.created_at as createdAt,
+                r.owner_comment_name as ownerName,
+                r.reporter_name as reporterName,
+                r.predictai as predictAI,        
+                r.confidence as confidence
+                        
+            FROM report_comment_model r 
             WHERE 
                 (:status = 'ALL' OR r.report_status = :status)
                 AND (
-                    :keyword IS NULL 
-                    OR r.reason  ILIKE CONCAT('%', :keyword, '%')
-                    OR r.owner_comment_name  ILIKE CONCAT('%', :keyword, '%')
-                    OR r.reporter_name ILIKE CONCAT('%', :keyword, '%')
+                    :keyword IS NULL OR :keyword = ''
+                    OR r.reason ILIKE %:keyword%
+                    OR r.owner_comment_name ILIKE %:keyword%
+                    OR r.reporter_name ILIKE %:keyword%
                 )
-            ORDER BY r.id DESC
             """,
+            countQuery = """
+                    SELECT count(*) FROM report_comment_model r 
+                    WHERE (:status = 'ALL' OR r.report_status = :status)
+                    AND (
+                        :keyword IS NULL OR :keyword = '' 
+                        OR r.reason ILIKE %:keyword% 
+                        OR r.owner_comment_name ILIKE %:keyword% 
+                        OR r.reporter_name ILIKE %:keyword%
+                    )
+                    """,
             nativeQuery = true)
     Page<ReportSummaryProjection> searchReportCommentsNative(
             @Param("status") String status,
@@ -37,21 +59,20 @@ public interface IReportCommentRepository extends JpaRepository<ReportCommentMod
             Pageable pageable
     );
 
-    @Query("SELECT DATE(r.createdAt) AS date, COUNT(r) AS total " +
-            "FROM ReportPostModel r " +
+    @Query("SELECT CAST(r.createdAt AS date) AS reportDate, COUNT(r) " +
+            "FROM ReportCommentModel r " +
             "WHERE r.createdAt BETWEEN :start AND :end " +
-            "GROUP BY DATE(r.createdAt) " +
-            "ORDER BY DATE(r.createdAt)")
+            "GROUP BY CAST(r.createdAt AS date) " +
+            "ORDER BY reportDate ASC")
     List<Object[]> countReportsByDate(@Param("start") LocalDateTime start, @Param("end") LocalDateTime end);
 
     @Query(value = """
             SELECT
-                COUNT(*) FILTER (WHERE report_status = 'PENDING') AS pending_count,
-                COUNT(*) FILTER (WHERE report_status = 'IN_REVIEW') AS in_review_count,
-                COUNT(*) FILTER (WHERE report_status = 'APPROVED') AS approved_count,
-                COUNT(*) FILTER (WHERE report_status = 'REJECTED') AS rejected_count
-            FROM report_comment_model r
-            """,
-            nativeQuery = true)
-    List<Object[]> getReportQuantitySummary();
+                COUNT(*) FILTER (WHERE report_status = 'PENDING') AS pendingCount,
+                COUNT(*) FILTER (WHERE report_status = 'IN_REVIEW') AS inReviewCount,
+                COUNT(*) FILTER (WHERE report_status = 'APPROVED') AS approvedCount,
+                COUNT(*) FILTER (WHERE report_status = 'REJECTED') AS rejectedCount
+            FROM report_comment_model
+            """, nativeQuery = true)
+    ReportCountProjection getReportQuantitySummary();
 }

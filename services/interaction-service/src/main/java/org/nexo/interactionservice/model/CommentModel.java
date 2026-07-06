@@ -1,15 +1,13 @@
 package org.nexo.interactionservice.model;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.util.List;
 
-@Data
+@Getter
+@Setter
 @Entity
 @SuperBuilder
 @NoArgsConstructor
@@ -29,4 +27,7 @@ public class CommentModel extends AbstractEntity<Long> {
 
     @OneToMany(fetch = FetchType.LAZY, mappedBy = "parentComment", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<CommentModel> childComments;
+
+    @OneToMany(fetch = FetchType.LAZY, mappedBy = "commentModel", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<LikeCommentModel> likeCommentModels;
 }

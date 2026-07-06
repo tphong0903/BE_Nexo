@@ -6,11 +6,13 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
+
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class FolloweeDTO {
+public class FolloweeDTO implements Serializable {
     private Long userId;
     private String userName;
     private String fullName;

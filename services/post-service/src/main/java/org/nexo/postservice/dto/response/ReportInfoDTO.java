@@ -3,7 +3,6 @@ package org.nexo.postservice.dto.response;
 import lombok.*;
 import org.springframework.data.domain.Page;
 
-@Data
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor

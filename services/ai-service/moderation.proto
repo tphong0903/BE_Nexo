@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package moderation;
+
+service ModerationService {
+
+  rpc Predict (TextRequest) returns (PredictionResponse);
+
+}
+
+message TextRequest {
+  string text = 1;
+}
+
+message PredictionResponse {
+  string label = 1;
+  float confidence = 2;
+}

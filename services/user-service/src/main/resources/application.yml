@@ -22,6 +22,7 @@ spring:
     redis:
       host: localhost
       port: 6379
+      password: Admin@123
       timeout: 2000ms
       connect-timeout: 2000ms
   kafka:
@@ -37,7 +38,7 @@ spring:
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
         spring.json.trusted.packages: "*"
-        spring.json.value.default.type: org.nexo.userservice.dto.UserSearchEvent
+        spring.json.value.default.type: java.util.Map
       auto-offset-reset: earliest
   security:
     oauth2:
@@ -84,8 +85,23 @@ meilisearch:
 kafka:
   topics:
     user-events: user-events
+    user-activity-events: user-activity-events
+
+recommendation:
+  service:
+    url: http://localhost:8000
+  internal-token: change-me-in-env
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 logging:
   level:
-    "org.apache.kafka": OFF
-    "org.springframework.kafka": OFF
+    "org.apache.kafka": WARN
+    "org.springframework.kafka": WARN

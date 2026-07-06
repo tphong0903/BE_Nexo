@@ -3,7 +3,6 @@ package org.nexo.feedservice.dto;
 import lombok.*;
 
 import java.time.LocalDateTime;
-import java.util.List;
 
 @Data
 @Getter

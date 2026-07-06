@@ -6,19 +6,18 @@ import com.meilisearch.sdk.Client;
 import com.meilisearch.sdk.Index;
 import com.meilisearch.sdk.SearchRequest;
 import com.meilisearch.sdk.exceptions.MeilisearchException;
-import com.meilisearch.sdk.model.Searchable;
-
+import com.meilisearch.sdk.model.SearchResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+import org.nexo.userservice.dto.PageModelResponse;
 import org.nexo.userservice.dto.UserResponseAdmin;
 import org.nexo.userservice.dto.UserSearchDocument;
-import org.nexo.userservice.dto.UserSearchResponse;
-import org.nexo.userservice.dto.UserSearchResponseAdmin;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import jakarta.annotation.PostConstruct;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 import org.nexo.userservice.grpc.InteractionGrpcClient;
@@ -72,18 +71,26 @@ public class MeilisearchService {
         }
 
         public void indexUser(UserSearchDocument document) throws JsonProcessingException, MeilisearchException {
-                String json = objectMapper.writeValueAsString(document);
+                String json = objectMapper.writeValueAsString(Collections.singletonList(document));
                 usersIndex.addDocuments(json);
                 log.info("Indexed user: {}", document.getId());
         }
 
         public void updateUser(UserSearchDocument document, UserResponseAdmin documentAdmin)
                         throws JsonProcessingException, MeilisearchException {
-                String json = objectMapper.writeValueAsString(document);
+                String json = objectMapper.writeValueAsString(Collections.singletonList(document));
                 usersIndex.updateDocuments(json);
-                String jsonAdmin = objectMapper.writeValueAsString(documentAdmin);
+                String jsonAdmin = objectMapper.writeValueAsString(Collections.singletonList(documentAdmin));
                 usersAdminIndex.updateDocuments(jsonAdmin);
                 log.info("Updated user in index: {}", document.getId());
+        }
+
+        public void deactivateUser(Long userId, UserResponseAdmin documentAdmin)
+                        throws JsonProcessingException, MeilisearchException {
+                usersIndex.deleteDocument(String.valueOf(userId));
+                String jsonAdmin = objectMapper.writeValueAsString(Collections.singletonList(documentAdmin));
+                usersAdminIndex.updateDocuments(jsonAdmin);
+                log.info("Deactivated user in index: {}", userId);
         }
 
         public void deleteUser(Long userId) throws MeilisearchException {
@@ -91,47 +98,48 @@ public class MeilisearchService {
                 log.info("Deleted user from index: {}", userId);
         }
 
-        public UserSearchResponse searchUsers(String query, Integer limit, Integer offset, String filter)
+        public PageModelResponse<UserSearchDocument> searchUsers(String query, int pageNo, int pageSize, String filter)
                         throws MeilisearchException {
-                int searchLimit = limit != null ? limit : 10;
-                int searchOffset = offset != null ? offset : 0;
+                int offset = pageNo * pageSize;
 
                 SearchRequest searchRequest = SearchRequest.builder()
                                 .q(query)
-                                .limit(searchLimit)
-                                .offset(searchOffset)
+                                .limit(pageSize)
+                                .offset(offset)
                                 .filter(filter != null ? new String[] { filter } : null)
                                 .build();
 
-                Searchable result = usersIndex.search(searchRequest);
+                SearchResult result = (SearchResult) usersIndex.search(searchRequest);
 
                 List<UserSearchDocument> users = result.getHits().stream()
                                 .map(hit -> objectMapper.convertValue(hit, UserSearchDocument.class))
                                 .collect(Collectors.toList());
 
-                return UserSearchResponse.builder()
-                                .users(users)
-                                .totalHits(users.size())
-                                .limit(searchLimit)
-                                .offset(searchOffset)
-                                .processingTimeMs((long) result.getProcessingTimeMs())
-                                .query(query)
+                long totalElements = result.getEstimatedTotalHits();
+                int totalPages = pageSize > 0 ? (int) Math.ceil((double) totalElements / pageSize) : 1;
+
+                return PageModelResponse.<UserSearchDocument>builder()
+                                .pageNo(pageNo)
+                                .pageSize(pageSize)
+                                .totalElements(totalElements)
+                                .totalPages(totalPages)
+                                .last(pageNo >= totalPages - 1)
+                                .content(users)
                                 .build();
         }
 
-        public UserSearchResponseAdmin searchUsersAdmin(String query, Integer limit, Integer offset, String filter)
-                        throws MeilisearchException {
-                int searchLimit = limit != null ? limit : 10;
-                int searchOffset = offset != null ? offset : 0;
+        public PageModelResponse<UserResponseAdmin> searchUsersAdmin(String query, int pageNo, int pageSize,
+                        String filter) throws MeilisearchException {
+                int offset = pageNo * pageSize;
 
                 SearchRequest searchRequest = SearchRequest.builder()
                                 .q(query)
-                                .limit(searchLimit)
-                                .offset(searchOffset)
+                                .limit(pageSize)
+                                .offset(offset)
                                 .filter(filter != null ? new String[] { filter } : null)
                                 .build();
 
-                Searchable result = usersAdminIndex.search(searchRequest);
+                SearchResult result = (SearchResult) usersAdminIndex.search(searchRequest);
 
                 List<UserResponseAdmin> users = result.getHits().stream()
                                 .map(hit -> {
@@ -148,13 +156,16 @@ public class MeilisearchService {
                                 })
                                 .collect(Collectors.toList());
 
-                return UserSearchResponseAdmin.builder()
-                                .users(users)
-                                .totalHits(users.size())
-                                .limit(searchLimit)
-                                .offset(searchOffset)
-                                .processingTimeMs((long) result.getProcessingTimeMs())
-                                .query(query)
+                long totalElements = result.getEstimatedTotalHits();
+                int totalPages = pageSize > 0 ? (int) Math.ceil((double) totalElements / pageSize) : 1;
+
+                return PageModelResponse.<UserResponseAdmin>builder()
+                                .pageNo(pageNo)
+                                .pageSize(pageSize)
+                                .totalElements(totalElements)
+                                .totalPages(totalPages)
+                                .last(pageNo >= totalPages - 1)
+                                .content(users)
                                 .build();
         }
 

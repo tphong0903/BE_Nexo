@@ -8,8 +8,11 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Data;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 @Data
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserResponseAdmin {
     @JsonProperty("id")
     private Long id;
@@ -25,6 +28,9 @@ public class UserResponseAdmin {
 
     @JsonProperty("role")
     private ERole role;
+
+    @JsonProperty("avatar")
+    private String avatar;
 
     @JsonProperty("account_status")
     private EAccountStatus accountStatus;

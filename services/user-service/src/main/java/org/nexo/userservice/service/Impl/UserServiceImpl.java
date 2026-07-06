@@ -1,13 +1,9 @@
 package org.nexo.userservice.service.Impl;
 
-import java.time.LocalDateTime;
-
-import org.nexo.userservice.dto.ChangePasswordRequest;
-import org.nexo.userservice.dto.UpdateUserRequest;
-import org.nexo.userservice.dto.UserDTOResponse;
-import org.nexo.userservice.dto.UserProfileDTOResponse;
-import org.nexo.userservice.dto.UserSearchEvent;
-import org.nexo.userservice.dto.UserStatisticsResponse;
+import org.springframework.transaction.annotation.Transactional;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.nexo.userservice.dto.*;
 import org.nexo.userservice.enums.EAccountStatus;
 import org.nexo.userservice.enums.ERole;
 import org.nexo.userservice.enums.EStatusFollow;
@@ -17,19 +13,23 @@ import org.nexo.userservice.grpc.InteractionGrpcClient;
 import org.nexo.userservice.grpc.PostGrpcClient;
 import org.nexo.userservice.grpc.UploadFileGrpcClient;
 import org.nexo.userservice.mapper.UserMapper;
+import org.nexo.userservice.model.UserActivityLogModel;
 import org.nexo.userservice.model.UserModel;
 import org.nexo.userservice.repository.FollowRepository;
+import org.nexo.userservice.repository.UserActivityLogRepository;
 import org.nexo.userservice.repository.UserRepository;
 import org.nexo.userservice.service.BlockService;
 import org.nexo.userservice.service.UserEventProducer;
 import org.nexo.userservice.service.UserService;
 import org.nexo.userservice.util.JwtUtil;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
-import jakarta.transaction.Transactional;
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -46,9 +46,10 @@ public class UserServiceImpl implements UserService {
     private final AuthGrpcClient authGrpcClient;
     private final PostGrpcClient postGrpcClient;
     private final InteractionGrpcClient interactionGrpcClient;
+    private final UserActivityLogRepository userActivityLogRepository;
 
     public UserProfileDTOResponse getUserProfile(String username, String accessToken) {
-        UserModel user = userRepository.findByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
+        UserModel user = userRepository.findFirstByUsernameAndAccountStatus(username, EAccountStatus.ACTIVE)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with username: " + username));
         String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
         Long currentUserId = userRepository.findActiveByKeycloakUserId(keycloakUserId)
@@ -178,6 +179,11 @@ public class UserServiceImpl implements UserService {
         user.setAccountStatus(EAccountStatus.LOCKED);
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
+        userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                .eventType("USER_DEACTIVATED")
+                .userId(user.getId())
+                .timestamp(Instant.now())
+                .build());
 
     }
 
@@ -193,6 +199,11 @@ public class UserServiceImpl implements UserService {
         user.setAccountStatus(EAccountStatus.ACTIVE);
         userRepository.save(user);
         publishUserEvent(user, "UPDATE");
+        userEventProducer.sendRecommendationStatusEvent(RecommendationStatusEvent.builder()
+                .eventType("USER_REACTIVATED")
+                .userId(user.getId())
+                .timestamp(Instant.now())
+                .build());
 
     }
 
@@ -217,6 +228,50 @@ public class UserServiceImpl implements UserService {
             throw new ResourceNotFoundException("Cannot change password for inactive user");
         }
         authGrpcClient.changePassword(keycloakUserId, request.getOldPassword(), request.getNewPassword());
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public PageModelResponse<UserActivityLogResponse> getUserActivityLogs(String accessToken, int pageNo, int pageSize) {
+        String keycloakUserId = jwtUtil.getUserIdFromToken(accessToken);
+        UserModel user = userRepository.findByKeycloakUserId(keycloakUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found with ID: " + keycloakUserId));
+
+        Page<UserActivityLogModel> page = userActivityLogRepository
+                .findByUserIdOrderByCreatedAtDesc(user.getId(), PageRequest.of(pageNo, pageSize));
+
+        List<UserActivityLogResponse> content = page.getContent().stream()
+                .map(log -> UserActivityLogResponse.builder()
+                        .id(log.getId())
+                        .action(log.getAction())
+                        .detailsJson(log.getDetailsJson())
+                        .createdAt(log.getCreatedAt())
+                        .build())
+                .toList();
+
+        return PageModelResponse.<UserActivityLogResponse>builder()
+                .pageNo(pageNo)
+                .pageSize(pageSize)
+                .totalElements(page.getTotalElements())
+                .totalPages(page.getTotalPages())
+                .last(page.isLast())
+                .content(content)
+                .build();
+    }
+
+    @Override
+    public InfoDashboardUser getInfoDashboardUser() {
+        Long totalUsers = userRepository.count();
+        Long totalUsersActive = userRepository.countUsersByStatus(EAccountStatus.ACTIVE);
+        Long totalUsersBlock = userRepository.countUsersByStatus(EAccountStatus.LOCKED);
+        Long totalUsersPending = userRepository.countUsersByStatus(EAccountStatus.PENDING);
+
+        return InfoDashboardUser.builder()
+                .totalUsers(totalUsers)
+                .totalUsersActive(totalUsersActive)
+                .totalUsersLocked(totalUsersBlock)
+                .totalUsersPending(totalUsersPending)
+                .build();
     }
 
     @Override

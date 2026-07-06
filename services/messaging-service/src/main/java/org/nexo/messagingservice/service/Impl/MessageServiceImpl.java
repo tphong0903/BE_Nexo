@@ -18,7 +18,7 @@ import org.nexo.messagingservice.dto.ReactionUpdateDTO;
 import org.nexo.messagingservice.dto.ReplyStoryRequsestDTO;
 import org.nexo.messagingservice.dto.SendMessageRequest;
 import org.nexo.messagingservice.dto.UserDTO;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+
 import org.nexo.messagingservice.enums.EConversationStatus;
 import org.nexo.messagingservice.enums.EMessageType;
 import org.nexo.messagingservice.enums.EReactionType;
@@ -55,7 +55,6 @@ public class MessageServiceImpl implements MessageService {
     private final MessageMediaRepository mediaRepository;
     private final UserGrpcClient userGrpcClient;
     private final StoryGrpcClient storyGrpcClient;
-    private final SimpMessagingTemplate messagingTemplate;
 
     public MessageDTO sendMessage(SendMessageRequest request, Long senderUserId) {
         ConversationModel conversation = conversationRepository.findById(request.getConversationId())
@@ -111,6 +110,26 @@ public class MessageServiceImpl implements MessageService {
                 mediaRepository.save(media);
             }
         }
+
+        conversation.setLastMessageId(messageModel.getId());
+        conversation.setLastMessageAt(messageModel.getCreatedAt());
+        conversationRepository.save(conversation);
+
+        return mapToDto(messageModel);
+    }
+
+    public MessageDTO sendSystemMessage(Long conversationId, Long senderUserId, String content) {
+        ConversationModel conversation = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
+
+        MessageModel messageModel = MessageModel.builder()
+                .conversation(conversation)
+                .senderUserId(senderUserId)
+                .content(content)
+                .messageType(EMessageType.SYSTEM)
+                .build();
+
+        messageModel = messageRepository.save(messageModel);
 
         conversation.setLastMessageId(messageModel.getId());
         conversation.setLastMessageAt(messageModel.getCreatedAt());
@@ -200,27 +219,33 @@ public class MessageServiceImpl implements MessageService {
         if (!isParticipant(conversationId, requestingUserId)) {
             throw new SecurityException("User is not a participant in this conversation");
         }
+
+        Page<MessageModel> messages;
         if (search != null && !search.isEmpty()) {
-            Page<MessageModel> messages = messageRepository
-                    .searchMessagesByKeyword(conversationId, search, pageable);
-
-            return messages.map(this::mapToDto);
+            messages = messageRepository.searchMessagesByKeyword(conversationId, search, pageable);
         } else {
-            Page<MessageModel> messages = messageRepository
-                    .findByConversationIdAndIsActiveTrueOrderByCreatedAtDesc(conversationId, pageable);
-
-            return messages.map(this::mapToDto);
+            messages = messageRepository.findByConversationIdAndIsActiveTrueOrderByCreatedAtDesc(conversationId, pageable);
         }
 
+        List<Long> senderIds = messages.getContent().stream()
+                .map(MessageModel::getSenderUserId)
+                .distinct()
+                .collect(java.util.stream.Collectors.toList());
+
+        Map<Long, String> nicknameMap = participantRepository
+                .findByConversationIdAndUserIdIn(conversationId, senderIds)
+                .stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ConversationParticipantModel::getUserId,
+                        p -> p.getNickname() != null ? p.getNickname() : "",
+                        (a, b) -> a));
+
+        return messages.map(msg -> mapToDto(msg, nicknameMap));
     }
 
     public void markAsRead(Long messageId, Long userId) {
         MessageModel message = messageRepository.findByIdAndIsActiveTrue(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
-
-        if (message.getSenderUserId().equals(userId)) {
-            return;
-        }
 
         ConversationParticipantModel participant = participantRepository
                 .findByConversationIdAndUserId(message.getConversation().getId(), userId)
@@ -262,7 +287,7 @@ public class MessageServiceImpl implements MessageService {
         log.info("Message {} deleted by user {}", messageId, userId);
     }
 
-    public void addReaction(Long messageId, Long userId, EReactionType reactionType) {
+    public ReactionUpdateDTO addReaction(Long messageId, Long userId, EReactionType reactionType) {
         MessageModel message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
 
@@ -278,23 +303,19 @@ public class MessageServiceImpl implements MessageService {
             reaction.setMessage(message);
             reaction.setUserId(userId);
             reaction.setReactionType(reactionType);
-
             reactionRepository.save(reaction);
         }
 
         List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(messageId);
         List<ReactionDTO> reactions = aggregateReactions(reactionModels);
-        ReactionUpdateDTO update = ReactionUpdateDTO.builder()
+        return ReactionUpdateDTO.builder()
                 .messageId(messageId)
+                .conversationId(message.getConversation().getId())
                 .reactions(reactions)
                 .build();
-
-        messagingTemplate.convertAndSend(
-                "/topic/conversation/" + message.getConversation().getId() + "/reactions",
-                update);
     }
 
-    public void removeReaction(Long messageId, Long userId, EReactionType reactionType) {
+    public ReactionUpdateDTO removeReaction(Long messageId, Long userId, EReactionType reactionType) {
         MessageModel message = messageRepository.findById(messageId)
                 .orElseThrow(() -> new IllegalArgumentException("Message not found"));
 
@@ -302,27 +323,75 @@ public class MessageServiceImpl implements MessageService {
 
         List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(messageId);
         List<ReactionDTO> reactions = aggregateReactions(reactionModels);
-        ReactionUpdateDTO update = ReactionUpdateDTO.builder()
+        return ReactionUpdateDTO.builder()
                 .messageId(messageId)
+                .conversationId(message.getConversation().getId())
                 .reactions(reactions)
                 .build();
-
-        messagingTemplate.convertAndSend(
-                "/topic/conversation/" + message.getConversation().getId() + "/reactions",
-                update);
     }
 
     private boolean isParticipant(Long conversationId, Long userId) {
         return participantRepository.existsByConversationIdAndUserId(conversationId, userId);
     }
 
-    private MessageDTO mapToDto(MessageModel message) {
+    /**
+     * Overload dùng nicknameMap đã được batch-load để tránh N+1 query.
+     */
+    private MessageDTO mapToDto(MessageModel message, Map<Long, String> nicknameMap) {
         UserDTOResponse sender = userGrpcClient.getUserById(message.getSenderUserId());
+        String senderNickname = nicknameMap.getOrDefault(message.getSenderUserId(), null);
+        if (senderNickname != null && senderNickname.isEmpty()) {
+            senderNickname = null;
+        }
         UserDTO senderUserDTO = UserDTO.builder()
                 .id(sender.getId())
                 .username(sender.getUsername())
                 .fullName(sender.getFullName())
                 .avatarUrl(sender.getAvatar())
+                .nickname(senderNickname)
+                .build();
+        List<MessageMediaModel> mediaModels = mediaRepository.findByMessageId(message.getId());
+        List<MessageMediaDTO> mediaList = mediaModels.stream()
+                .map(this::mapMediaToDto)
+                .collect(Collectors.toList());
+        List<MessageReactionModel> reactionModels = reactionRepository.findByMessageId(message.getId());
+        List<ReactionDTO> reactions = aggregateReactions(reactionModels);
+        MessageDTO replyToMessage = null;
+        if (message.getReplyToMessage() != null) {
+            replyToMessage = mapToDto(message.getReplyToMessage());
+        }
+        return MessageDTO.builder()
+                .id(message.getId())
+                .conversationId(message.getConversation().getId())
+                .status(message.getConversation().getStatus())
+                .sender(senderUserDTO)
+                .content(message.getContent())
+                .messageType(message.getMessageType())
+                .replyToMessageId(message.getReplyToMessage() != null ? message.getReplyToMessage().getId() : null)
+                .replyToMessage(replyToMessage)
+                .mediaList(mediaList)
+                .reactions(reactions)
+                .createdAt(message.getCreatedAt())
+                .storyId(message.getStoryId())
+                .storyMediaUrl(message.getStoryId() != null
+                        ? storyGrpcClient.getStoryMediaIfActive(message.getStoryId()) : null)
+                .build();
+    }
+
+    private MessageDTO mapToDto(MessageModel message) {
+        UserDTOResponse sender = userGrpcClient.getUserById(message.getSenderUserId());
+
+        String senderNickname = participantRepository
+                .findByConversationIdAndUserId(message.getConversation().getId(), message.getSenderUserId())
+                .map(org.nexo.messagingservice.model.ConversationParticipantModel::getNickname)
+                .orElse(null);
+
+        UserDTO senderUserDTO = UserDTO.builder()
+                .id(sender.getId())
+                .username(sender.getUsername())
+                .fullName(sender.getFullName())
+                .avatarUrl(sender.getAvatar())
+                .nickname(senderNickname)
                 .build();
         List<MessageMediaModel> mediaModels = mediaRepository.findByMessageId(message.getId());
         List<MessageMediaDTO> mediaList = mediaModels.stream()

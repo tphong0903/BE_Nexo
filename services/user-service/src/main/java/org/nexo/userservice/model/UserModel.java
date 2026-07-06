@@ -6,6 +6,7 @@ import org.nexo.userservice.enums.ERole;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -59,11 +60,15 @@ public class UserModel {
     @Builder.Default
     private Boolean onlineStatus = true;
 
-    @Column(name = "account_status")
+    @Column(name = "is_kol")
+    @Builder.Default
+    private Boolean isKOL = false;
+
+    @Column(name = "account_status", columnDefinition = "varchar(255)")
     @Enumerated(EnumType.STRING)
     private EAccountStatus accountStatus;
 
-    @Column(name="role")
+    @Column(name = "role", columnDefinition = "varchar(255)")
     @Enumerated(EnumType.STRING)
     @Builder.Default
     private ERole role = ERole.USER;

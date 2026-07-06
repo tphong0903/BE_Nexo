@@ -17,5 +17,7 @@ public interface ICommentMentionRepository extends JpaRepository<CommentMentionM
     @Query("DELETE FROM CommentMentionModel item WHERE (item.commentModel.id = :commentId) ")
     void deleteByCommentId(@Param("commentId") Long commentId);
 
+    boolean existsByCommentModelIdAndMentionUserId(Long commentId, Long userId);
+
     List<CommentMentionModel> findAllByCommentModelId(Long id);
 }

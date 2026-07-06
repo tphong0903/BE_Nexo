@@ -1,9 +1,12 @@
 package org.nexo.feedservice.service;
 
+import io.grpc.stub.StreamObserver;
 import net.devh.boot.grpc.client.inject.GrpcClient;
 import org.nexo.grpc.user.UserServiceGrpc;
 import org.nexo.grpc.user.UserServiceProto;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class UserGrpcClient {
@@ -25,5 +28,22 @@ public class UserGrpcClient {
                 .build();
 
         return userStub.getUserFollowees(request);
+    }
+
+    public Long countFollowerOfUser(Long userId) {
+        UserServiceProto.GetUsersByIdsRequest request = UserServiceProto.GetUsersByIdsRequest
+                .newBuilder()
+                .addUserIds(userId)
+                .build();
+        return userStub.countFollowerOfUser(request).getQuantity();
+    }
+
+
+    public List<Long> getFollowedKols(Long userId) {
+        UserServiceProto.GetUsersByIdsRequest request = UserServiceProto.GetUsersByIdsRequest
+                .newBuilder()
+                .addUserIds(userId)
+                .build();
+        return userStub.getFollowedKols(request).getUserIdsList();
     }
 }

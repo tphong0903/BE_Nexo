@@ -10,6 +10,7 @@ spring:
   data:
     redis:
       port: 6379
+      password: Admin@123
       host: localhost
   application:
     name: api-gateway
@@ -21,8 +22,10 @@ spring:
           "[/api/**]":
             allowedOrigins:
               - "https://nexo.nayamishop.id.vn"
+              - "https://auth.nexosocial.id.vn"
+              - "https://api.nexosocial.id.vn"
               - "http://localhost:3000"
-              - "https://nexo.keycloak.nayamishop.id.vn"
+              - "http://localhost:9090"
             allowedMethods:
               - GET
               - POST
@@ -36,6 +39,7 @@ spring:
               - "*"
             allowCredentials: true
             maxAge: 3600
+
       routes:
         - id: user-service
           uri: lb://users
@@ -83,15 +87,12 @@ spring:
             - Path=/api/notifications/**
           filters:
             - StripPrefix=2
-        - id: notification-websocket-route
-          uri: lb://notifications
-          predicates:
-            - Path=/ws/**
+            - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
           metadata:
             websocket: true
 
         - id: messaging-service-ws
-          uri: lb:ws://messaging
+          uri: lb://messaging
           predicates:
             - Path=/messaging/ws/**
           filters:

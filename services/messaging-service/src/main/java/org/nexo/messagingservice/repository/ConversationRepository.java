@@ -18,7 +18,8 @@ public interface ConversationRepository extends JpaRepository<ConversationModel,
                         "JOIN c.participants p2 " +
                         "WHERE p1.userId = :userId1 " +
                         "AND p2.userId = :userId2 " +
-                        "AND p1.userId != p2.userId")
+                        "AND p1.userId != p2.userId " +
+                        "AND c.isGroup = false")
         Optional<ConversationModel> findDirectConversationBetweenUsers(
                         @Param("userId1") Long userId1,
                         @Param("userId2") Long userId2);
@@ -28,7 +29,8 @@ public interface ConversationRepository extends JpaRepository<ConversationModel,
                         "JOIN c.participants p2 " +
                         "WHERE p1.userId = :userId1 " +
                         "AND p2.userId = :userId2 " +
-                        "AND p1.userId != p2.userId")
+                        "AND p1.userId != p2.userId " +
+                        "AND c.isGroup = false")
         List<ConversationModel> findListConversations(@Param("userId1") Long userId1,
                         @Param("userId2") Long userId2);
 
@@ -88,4 +90,11 @@ public interface ConversationRepository extends JpaRepository<ConversationModel,
         Page<ConversationModel> findArchivedConversationsByUserId(
                         @Param("userId") Long userId,
                         Pageable pageable);
+
+        @Query("SELECT c FROM ConversationModel c " +
+                        "JOIN c.participants p " +
+                        "WHERE p.userId = :userId " +
+                        "AND c.isGroup = true " +
+                        "ORDER BY c.lastMessageAt DESC NULLS LAST")
+        List<ConversationModel> findGroupConversationsByUserId(@Param("userId") Long userId);
 }

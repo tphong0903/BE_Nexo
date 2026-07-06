@@ -25,7 +25,8 @@ service UserService {
   rpc GetPercentUsersInThisMonth(Empty) returns (UserPercentResponse);
   rpc GetUsersByTime(DateRange) returns (GetUsersByTimeResponse);
   rpc GetUserIdByEmail(GetUserIdByEmailRequest) returns (GetUserIdByEmailResponse);
-
+  rpc CountFollowerOfUser(GetUsersByIdsRequest) returns (CountQuantityFollowerOfUserResponse);
+  rpc GetFollowedKols(GetUsersByIdsRequest) returns (GetKOLIdsResponse);
 }
 
 message Empty {}
@@ -44,6 +45,10 @@ message GetUsersByTimeResponse {
   repeated UserCountByDate data = 1;
 }
 
+message CountQuantityFollowerOfUserResponse {
+  int64 quantity = 1;
+}
+
 message GetUsersByIdsRequest {
   repeated int64 userIds = 1;
 }
@@ -59,11 +64,15 @@ message GetUsersByIdsResponse2 {
   repeated UserDTOResponse3 users = 1;
 }
 
+message GetKOLIdsResponse {
+  repeated int64 userIds = 1;
+}
+
 message UserDTOResponse2 {
   int64 id = 1;
   string username = 2;
   string avatar = 3;
-  string full_name=4;
+  string full_name = 4;
   bool online_status = 5;
 }
 message UserDTOResponse3 {
@@ -87,6 +96,7 @@ message UserDto {
   string email = 3;
   string username = 4;
   string full_name = 5;
+  string role = 6;
 }
 
 message KeycloakId {
@@ -183,7 +193,7 @@ message GetUserOnlineStatusRequest {
 }
 
 message GetUserOnlineStatusResponse {
-  bool online_status = 1; 
+  bool online_status = 1;
 }
 message CheckMutualFriendsRequest {
   int64 user_id1 = 1;
@@ -203,16 +213,16 @@ message GetMutualFriendsResponse {
 }
 
 message CheckBlockRequest {
-    int64 requester_user_id = 1;
-    int64 target_user_id = 2;
+  int64 requester_user_id = 1;
+  int64 target_user_id = 2;
 }
 
 message CheckBlockResponse {
-    bool is_blocked = 1;
+  bool is_blocked = 1;
 }
 message CheckIfBlockedRequest {
-  int64 user_id = 1;        
-  int64 target_user_id = 2; 
+  int64 user_id = 1;
+  int64 target_user_id = 2;
 }
 
 message CheckIfBlockedResponse {

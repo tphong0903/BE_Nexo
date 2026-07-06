@@ -1,6 +1,9 @@
 package org.nexo.postservice.service;
 
-import org.nexo.postservice.dto.response.*;
+import org.nexo.postservice.dto.response.ChartDataDto;
+import org.nexo.postservice.dto.response.DashboardResponseDto;
+import org.nexo.postservice.dto.response.PageModelResponse;
+import org.nexo.postservice.dto.response.PostManagementInfo;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,7 +19,9 @@ public interface IDashboardService {
 
     ChartDataDto getReportsByTime(LocalDate startDate, LocalDate endDate);
 
-    PageModelResponse getAllPost(String search, int page, int limit, String type);
+    PageModelResponse getAllPost(String search, int page, int limit, String type,
+                                 String hashtag, String content, String authorName,
+                                 LocalDateTime startDate, LocalDateTime endDate);
 
     PostManagementInfo getPostManagementInfo();
 

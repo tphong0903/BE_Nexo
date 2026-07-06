@@ -63,6 +63,7 @@ public class ApplicationStartupListener {
                 .id(user.getId())
                 .username(user.getUsername())
                 .fullName(user.getFullName())
+                .avatar(user.getAvatar())
                 .email(user.getEmail())
                 .role(user.getRole())
                 .accountStatus(user.getAccountStatus())

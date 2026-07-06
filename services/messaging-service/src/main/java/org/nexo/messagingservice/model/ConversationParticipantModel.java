@@ -40,4 +40,7 @@ public class ConversationParticipantModel {
     @Column(name = "is_archived", nullable = false)
     private boolean isArchived = false;
 
+    @Column(name = "is_group_admin", nullable = false)
+    private boolean isGroupAdmin = false;
+
 }

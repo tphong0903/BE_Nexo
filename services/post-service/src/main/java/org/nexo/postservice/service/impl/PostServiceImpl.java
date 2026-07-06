@@ -1,5 +1,6 @@
 package org.nexo.postservice.service.impl;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.user.UserServiceProto;
@@ -11,7 +12,6 @@ import org.nexo.postservice.exception.CustomException;
 import org.nexo.postservice.model.PostMediaModel;
 import org.nexo.postservice.model.PostModel;
 import org.nexo.postservice.model.ReelModel;
-import org.nexo.postservice.repository.AdminContentRepository;
 import org.nexo.postservice.repository.IPostMediaRepository;
 import org.nexo.postservice.repository.IPostRepository;
 import org.nexo.postservice.repository.IReelRepository;
@@ -19,9 +19,11 @@ import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IHashTagService;
 import org.nexo.postservice.service.IPostService;
+import org.nexo.postservice.service.ModerationService;
 import org.nexo.postservice.util.Enum.ENotificationType;
 import org.nexo.postservice.util.Enum.EVisibilityPost;
 import org.nexo.postservice.util.SecurityUtil;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -35,13 +37,19 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class PostServiceImpl implements IPostService {
+    private static final Duration CACHE_TTL = Duration.ofDays(7);
+    private static final String CONTENT_TYPE_POST = "POST";
+    private static final String CONTENT_TYPE_REEL = "REEL";
+
     private final FileService fileServiceClient;
     private final SecurityUtil securityUtil;
     private final IPostRepository postRepository;
@@ -52,93 +60,105 @@ public class PostServiceImpl implements IPostService {
     private final IHashTagService hashTagService;
     private final RedisTemplate<String, Object> redisTemplate;
     private final KafkaTemplate<String, Object> kafkaTemplate;
-    private final AdminContentRepository adminContentRepository;
+    private final ModerationService moderationService;
+
+
+    @Value("${kafka.topics.user-activity-events:user-activity-events}")
+    private String userActivityEventsTopic;
 
     @Override
-    public String savePost(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
-        securityUtil.checkOwner(postRequestDTO.getUserId());
-        UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(postRequestDTO.getUserId());
-        PostModel model;
+    public String savePost(PostRequestDTO request, List<MultipartFile> files) {
+        securityUtil.checkOwner(request.getUserId());
+        UserServiceProto.UserDTOResponse userDTO = userGrpcClient.getUserDTOById(request.getUserId());
 
+        PostModel model;
         String oldTag = "";
-        if (postRequestDTO.getPostId() != 0) {
-            List<PostMediaModel> postMediaModelList = postMediaRepository.findAllByPostModel_Id(postRequestDTO.getPostId());
-            for (PostMediaModel postMediaModel : postMediaModelList) {
-                if (!postRequestDTO.getMediaUrl().contains(postMediaModel.getMediaUrl()))
-                    postMediaRepository.delete(postMediaModel);
-            }
-            model = postRepository.findById(postRequestDTO.getPostId())
+        boolean isNew = (request.getPostId() == 0);
+
+        if (!isNew) {
+            model = postRepository.findById(request.getPostId())
                     .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
             oldTag = model.getTag();
-            model.setCaption(postRequestDTO.getCaption());
-            model.setTag(postRequestDTO.getTag());
-            model.setVisibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()));
-            model.setIsActive(true);
+
+            List<PostMediaModel> oldMedias = postMediaRepository.findAllByPostModel_Id(model.getId());
+            List<PostMediaModel> toDelete = oldMedias.stream()
+                    .filter(m -> !request.getMediaUrl().contains(m.getMediaUrl()))
+                    .toList();
+            if (!toDelete.isEmpty())
+                postMediaRepository.deleteAllInBatch(toDelete);
         } else {
             model = PostModel.builder()
-                    .userId(postRequestDTO.getUserId())
-                    .caption(postRequestDTO.getCaption())
-                    .tag(postRequestDTO.getTag())
+                    .userId(request.getUserId())
                     .commentQuantity(0L)
                     .likeQuantity(0L)
-                    .visibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()))
-                    .isActive(true)
                     .build();
-
         }
-        model.setAuthorName(userDTOResponse.getUsername());
-        postRepository.save(model);
-//        if (postRequestDTO.getPostId() != 0) {
-//            String postKey = "post:" + model.getId();
-//            String feedKey = "feed:" + model.getUserId();
-//
-//            redisTemplate.delete(postKey);
-//            redisTemplate.opsForZSet().remove(feedKey, model.getId());
-//        }
 
+        model.setCaption(request.getCaption());
+        model.setTag(request.getTag());
+        model.setVisibility(EVisibilityPost.valueOf(request.getVisibility()));
+        model.setIsActive(true);
+        model.setAuthorName(userDTO.getUsername());
+
+        postRepository.save(model);
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
-            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
-            String token = ((JwtAuthenticationToken) auth).getToken().getTokenValue();
+            String token = ((JwtAuthenticationToken) SecurityContextHolder.getContext().getAuthentication()).getToken()
+                    .getTokenValue();
             fileServiceClient.savePostMedia(files, model.getId(), token);
         }
 
-        if (postRequestDTO.getPostId() == 0) {
-            MessagePostDTO message = MessagePostDTO.builder()
+        moderationService.triggerModerationAsync(CONTENT_TYPE_POST, model.getId(), 0L);
+
+        if (isNew) {
+            kafkaTemplate.send("post-created", MessagePostDTO.builder()
                     .postId(model.getId())
-                    .authorId(postRequestDTO.getUserId())
+                    .authorId(request.getUserId())
                     .createdAt(Instant.now().toEpochMilli())
+                    .build());
+
+            UserActivityEvent activityEvent = UserActivityEvent.builder()
+                    .eventType("POST_CREATED")
+                    .userId(request.getUserId())
+                    .targetId(model.getId())
+                    .targetType("POST")
+                    .occurredAt(Instant.now())
+                    .metadata("{\"source\":\"post-service\"}")
                     .build();
-            kafkaTemplate.send("post-created", message);
+            kafkaTemplate.send(userActivityEventsTopic, String.valueOf(request.getUserId()), activityEvent);
         }
 
         hashTagService.findAndAddHashTagFromCaption(model);
-        tagUserIntoPost(oldTag, postRequestDTO.getTag(), postRequestDTO.getUserId(), model.getId());
+        tagUserIntoPost(oldTag, request.getTag(), request.getUserId(), model.getId());
+
+        clearPostCache(model.getId());
+
         return "Success";
     }
 
     @Override
-    public String saveReel(PostRequestDTO postRequestDTO, List<MultipartFile> files) {
-        securityUtil.checkOwner(postRequestDTO.getUserId());
-        UserServiceProto.UserDTOResponse userDTOResponse = userGrpcClient.getUserDTOById(postRequestDTO.getUserId());
+    public String saveReel(PostRequestDTO request, List<MultipartFile> files) {
+        securityUtil.checkOwner(request.getUserId());
+        UserServiceProto.UserDTOResponse userDTO = userGrpcClient.getUserDTOById(request.getUserId());
 
         ReelModel model;
-        if (postRequestDTO.getPostId() != 0) {
-            model = reelRepository.findById(postRequestDTO.getPostId())
-                    .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
-            model.setCaption(postRequestDTO.getCaption());
-            model.setVisibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()));
-            model.setIsActive(true);
+        boolean isNew = (request.getPostId() == 0);
+
+        if (!isNew) {
+            model = reelRepository.findById(request.getPostId())
+                    .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.BAD_REQUEST));
         } else {
             model = ReelModel.builder()
-                    .userId(postRequestDTO.getUserId())
-                    .caption(postRequestDTO.getCaption())
+                    .userId(request.getUserId())
                     .commentQuantity(0L)
                     .likeQuantity(0L)
-                    .visibility(EVisibilityPost.valueOf(postRequestDTO.getVisibility()))
-                    .isActive(true)
                     .build();
         }
-        model.setAuthorName(userDTOResponse.getUsername());
+
+        model.setCaption(request.getCaption());
+        model.setVisibility(EVisibilityPost.valueOf(request.getVisibility()));
+        model.setIsActive(true);
+        model.setAuthorName(userDTO.getUsername());
+
         reelRepository.save(model);
 
         if (files != null && !files.isEmpty() && !files.getFirst().isEmpty()) {
@@ -147,284 +167,293 @@ public class PostServiceImpl implements IPostService {
             fileServiceClient.saveReelMedia(files, model.getId(), token);
         }
 
-        if (postRequestDTO.getPostId() == 0) {
-            MessagePostDTO message = MessagePostDTO.builder()
+        moderationService.triggerModerationAsync(CONTENT_TYPE_REEL, model.getId(), 0L);
+
+        if (isNew) {
+            kafkaTemplate.send("reel-created", MessagePostDTO.builder()
                     .postId(model.getId())
-                    .authorId(postRequestDTO.getUserId())
+                    .authorId(request.getUserId())
                     .createdAt(Instant.now().toEpochMilli())
-                    .build();
-            kafkaTemplate.send("reel-created", message);
+                    .build());
         }
 
         hashTagService.findAndAddHashTagFromCaption(model);
+
+        clearReelCache(model.getId()); // Cập nhật Cache
+
         return "Success";
     }
 
     @Override
+    @Transactional
     public String inactivePost(Long id) {
-
-        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
+        PostModel model = postRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Post not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
 
         model.setIsActive(!model.getIsActive());
         postRepository.save(model);
+        clearPostCache(id);
+
         return "Success";
     }
 
     @Override
+    @Transactional
     public String inactiveReel(Long id) {
-        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
+        ReelModel model = reelRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Reel not exist", HttpStatus.BAD_REQUEST));
         securityUtil.checkOwner(model.getUserId());
+
         model.setIsActive(!model.getIsActive());
         reelRepository.save(model);
+        clearReelCache(id);
+
         return "Success";
     }
 
     @Override
+    @Transactional
     public String deletePost(Long id) {
-        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
-        securityUtil.checkOwner(model.getUserId());
-        postRepository.delete(model);
-        String postKey = "post:" + id;
-        String likesKey = "post:likes:" + id;
-        String commentsKey = "post:comments:" + id;
-        String feedKey = "feed:" + model.getUserId();
+        PostModel model = postRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
+        if (!securityUtil.isPrivilegedUser())
+            securityUtil.checkOwner(model.getUserId());
 
-        redisTemplate.delete(postKey);
-        redisTemplate.delete(likesKey);
-        redisTemplate.delete(commentsKey);
-        redisTemplate.opsForZSet().remove(feedKey, id);
+        postRepository.delete(model);
+        clearPostCache(id);
+        redisTemplate.opsForZSet().remove("feed:" + model.getUserId(), id);
+
         return "Success";
     }
 
     @Override
-    public PageModelResponse getAllPostOfUser(Long id, int page, int limit) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
-        Page<PostModel> listPost = Page.empty();
+    @Transactional
+    public String deleteReel(Long id) {
+        ReelModel model = reelRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.BAD_REQUEST));
+        if (!securityUtil.isPrivilegedUser())
+            securityUtil.checkOwner(model.getUserId());
 
-        Sort sort = Sort.by("createdAt").descending();
-        Pageable pageable = PageRequest.of(page, limit, sort);
-        boolean isAllow = false;
-        if (id.equals(currentUser.getUserId())) {
-            isAllow = true;
-            listPost = postRepository.findByUserIdAndIsActive(id, true, pageable);
-        } else {
-            UserServiceProto.CheckFollowResponse followResponse =
-                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
+        reelRepository.delete(model);
+        clearReelCache(id);
 
-            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                listPost = postRepository.findByUserIdAndIsActiveAndVisibility(id, true, EVisibilityPost.PUBLIC, pageable);
-                isAllow = true;
-            }
-        }
-        if (!isAllow)
-            throw new CustomException("Dont allow to get Post", HttpStatus.BAD_REQUEST);
+        redisTemplate.opsForZSet().remove("feed:" + model.getUserId(), id);
 
-        UserServiceProto.UserDTOResponse userInfo = userGrpcClient.getUserDTOById(id);
-
-
-        List<PostModel> posts = listPost.getContent();
-        List<Long> postIds = posts.stream().map(PostModel::getId).toList();
-        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), postIds);
-        List<PostResponseDTO> postResponseList = listPost.getContent().stream()
-                .map(post -> {
-                            Boolean isLike = likedPostIds.getOrDefault(post.getId(), false);
-                            return convertToPostResponseDTO(post, userInfo, isLike);
-                        }
-                )
-                .toList();
-        return PageModelResponse.<PostResponseDTO>builder()
-                .pageNo(listPost.getNumber())
-                .pageSize(listPost.getSize())
-                .totalElements(listPost.getTotalElements())
-                .totalPages(listPost.getTotalPages())
-                .last(listPost.isLast())
-                .content(postResponseList)
-                .build();
+        return "Success";
     }
-
-    @Override
-    public PageModelResponse getAllReelOfUser(Long id, int page, int limit) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
-        Page<ReelModel> listReel = Page.empty();
-
-        Sort sort = Sort.by("createdAt").descending();
-        Pageable pageable = PageRequest.of(page, limit, sort);
-        boolean isAllow = false;
-        if (id.equals(currentUser.getUserId())) {
-            isAllow = true;
-            listReel = reelRepository.findByUserId(id, pageable);
-        } else {
-            UserServiceProto.CheckFollowResponse followResponse =
-                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
-
-            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                listReel = reelRepository.findByUserIdAndIsActive(id, true, pageable);
-                isAllow = true;
-            }
-        }
-        if (!isAllow)
-            throw new CustomException("Dont allow to get Post", HttpStatus.BAD_REQUEST);
-
-        UserServiceProto.UserDTOResponse userInfo = userGrpcClient.getUserDTOById(id);
-
-        List<ReelModel> reels = listReel.getContent();
-        List<Long> reelIds = reels.stream().map(ReelModel::getId).toList();
-        Map<Long, Boolean> likedReelIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), reelIds);
-        List<ReelResponseDTO> reelResponseDTOS = reels.stream()
-                .map(reel -> {
-                    Boolean isLike = likedReelIds.getOrDefault(reel.getId(), false);
-                    return convertToReelResponseDTO(reel, userInfo, isLike);
-                })
-                .toList();
-        return PageModelResponse.<ReelResponseDTO>builder()
-                .pageNo(listReel.getNumber())
-                .pageSize(listReel.getSize())
-                .totalElements(listReel.getTotalElements())
-                .totalPages(listReel.getTotalPages())
-                .last(listReel.isLast())
-                .content(reelResponseDTOS)
-                .build();
-    }
-
 
     @Override
     public PostResponseDTO getPostById(Long id) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
-        boolean isAllow = false;
-        if (id.equals(currentUser.getUserId())) {
-            isAllow = true;
-        } else {
-            UserServiceProto.CheckFollowResponse followResponse =
-                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
-            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                isAllow = true;
-            }
-        }
-        if (!isAllow)
-            throw new CustomException("Dont allow to get Post", HttpStatus.BAD_REQUEST);
+        Long viewerId = securityUtil.getUserIdFromToken();
 
-        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
+        PostResponseDTO cachedPost = getPostCacheDTO(id);
 
-        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
+        checkVisibilityAccess(cachedPost.getUserId(), viewerId, EVisibilityPost.valueOf(cachedPost.getVisibility()));
 
-        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), List.of(model.getId()));
-        return convertToPostResponseDTO(model, response, likedPostIds.getOrDefault(model.getId(), false));
-    }
-
-    @Override
-    public PostResponseDTO getPostById3(Long id, Boolean isLike) {
-        PostModel model = postRepository.findById(id).orElse(null);
-        if (model == null)
-            return null;
-        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
-        return convertToPostResponseDTO(model, response, isLike);
-    }
-
-    @Override
-    public PostResponseDTO getPostById2(Long id) {
-        PostModel model = postRepository.findById(id).orElse(null);
-        if (model == null)
-            return null;
-        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
-        return convertToPostResponseDTO(model, response, false);
+        return buildDynamicPostResponse(cachedPost, viewerId);
     }
 
     @Override
     public ReelResponseDTO getReelById(Long id) {
-        String keyloakId = securityUtil.getKeyloakId();
-        UserServiceProto.UserDto currentUser = userGrpcClient.getUserByKeycloakId(keyloakId);
-        boolean isAllow = false;
-        if (id.equals(currentUser.getUserId())) {
-            isAllow = true;
-        } else {
-            UserServiceProto.CheckFollowResponse followResponse =
-                    userGrpcClient.checkFollow(currentUser.getUserId(), id);
-            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                isAllow = true;
-            }
+        Long viewerId = securityUtil.getUserIdFromToken();
+
+        ReelResponseDTO cachedReel = getReelCacheDTO(id);
+        checkVisibilityAccess(cachedReel.getUserId(), viewerId, EVisibilityPost.valueOf(cachedReel.getVisibility()));
+
+        return buildDynamicReelResponse(cachedReel, viewerId);
+    }
+
+    @Override
+    public PostResponseDTO getPostByIdGrpc(Long id) {
+        PostResponseDTO cachedPost = getPostCacheDTO(id);
+        return updateDynamicCountersForPost(cachedPost);
+    }
+
+    @Override
+    public ReelResponseDTO getReelByIdGrpc(Long id) {
+        ReelResponseDTO cachedReel = getReelCacheDTO(id);
+        return updateDynamicCountersForReel(cachedReel);
+    }
+
+    private PostResponseDTO getPostCacheDTO(Long postId) {
+        String cacheKey = "post_dto_cache:" + postId;
+        PostResponseDTO cachedDto = (PostResponseDTO) redisTemplate.opsForValue().get(cacheKey);
+
+        if (cachedDto != null) {
+            return cachedDto;
         }
-        if (!isAllow)
-            throw new CustomException("Dont allow to get Reel", HttpStatus.BAD_REQUEST);
 
-        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
-        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
-        Map<Long, Boolean> likedReelIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getUserId(), List.of(model.getId()));
-        return convertToReelResponseDTO(model, response, likedReelIds.getOrDefault(model.getId(), false));
+        PostModel dbPost = postRepository.findById(postId)
+                .orElseThrow(() -> new CustomException("Post not found", HttpStatus.BAD_REQUEST));
+
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(dbPost.getUserId());
+
+        PostResponseDTO staticDto = convertToPostResponseDTO(dbPost, authorInfo, false);
+
+        redisTemplate.opsForValue().set(cacheKey, staticDto, CACHE_TTL);
+        return staticDto;
+    }
+
+    private ReelResponseDTO getReelCacheDTO(Long reelId) {
+        String cacheKey = "reel_dto_cache:" + reelId;
+        ReelResponseDTO cachedDto = (ReelResponseDTO) redisTemplate.opsForValue().get(cacheKey);
+
+        if (cachedDto != null) {
+            return cachedDto;
+        }
+
+        ReelModel dbReel = reelRepository.findById(reelId)
+                .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.BAD_REQUEST));
+
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(dbReel.getUserId());
+
+        ReelResponseDTO staticDto = convertToReelResponseDTO(dbReel, authorInfo, false);
+
+        redisTemplate.opsForValue().set(cacheKey, staticDto, CACHE_TTL);
+        return staticDto;
+    }
+
+    private PostResponseDTO buildDynamicPostResponse(PostResponseDTO staticDto, Long viewerId) {
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId,
+                List.of(staticDto.getPostId()));
+        boolean isLiked = likedMap.getOrDefault(staticDto.getPostId(), false);
+        PostResponseDTO updatedDto = updateDynamicCountersForPost(staticDto);
+        return updatedDto.toBuilder()
+                .isLike(isLiked)
+                .build();
+    }
+
+    private PostResponseDTO updateDynamicCountersForPost(PostResponseDTO dto) {
+        Object likesStr = redisTemplate.opsForValue().get("post:likes:" + dto.getPostId());
+        Object commentsStr = redisTemplate.opsForValue().get("post:comments:" + dto.getPostId());
+
+        Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : dto.getQuantityLike();
+        Long comments = (commentsStr != null) ? Long.valueOf(commentsStr.toString()) : dto.getQuantityComment();
+
+        return dto.toBuilder()
+                .quantityLike(likes)
+                .quantityComment(comments)
+                .build();
+    }
+
+    private ReelResponseDTO buildDynamicReelResponse(ReelResponseDTO staticDto, Long viewerId) {
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId,
+                List.of(staticDto.getReelId()));
+        boolean isLiked = likedMap.getOrDefault(staticDto.getReelId(), false);
+
+        ReelResponseDTO updatedDto = updateDynamicCountersForReel(staticDto);
+
+        return updatedDto.toBuilder()
+                .isLike(isLiked)
+                .build();
+    }
+
+    private ReelResponseDTO updateDynamicCountersForReel(ReelResponseDTO dto) {
+        Object likesStr = redisTemplate.opsForValue().get("reel:likes:" + dto.getReelId());
+        Object commentsStr = redisTemplate.opsForValue().get("reel:comments:" + dto.getReelId());
+
+        Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : dto.getQuantityLike();
+        Long comments = (commentsStr != null) ? Long.valueOf(commentsStr.toString()) : dto.getQuantityComment();
+
+        return dto.toBuilder()
+                .quantityLike(likes)
+                .quantityComment(comments)
+                .build();
+    }
+
+    private void clearPostCache(Long id) {
+        redisTemplate.delete(Arrays.asList("post_dto_cache:" + id, "post:likes:" + id, "post:comments:" + id));
+    }
+
+    private void clearReelCache(Long id) {
+        redisTemplate.delete(Arrays.asList("reel_dto_cache:" + id, "reel:likes:" + id, "reel:comments:" + id));
     }
 
     @Override
-    public ReelResponseDTO getReelById3(Long id, Boolean isLike) {
-        ReelModel model = reelRepository.findById(id).orElse(null);
-        if (model == null)
-            return null;
-        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
-        return convertToReelResponseDTO(model, response, isLike);
+    public PageModelResponse getAllPostOfUser(Long targetUserId, int page, int limit) {
+        Long viewerId = securityUtil.getUserIdFromToken();
+        EVisibilityPost visibilityLimit = checkVisibilityAccess(targetUserId, viewerId, null);
+
+        Pageable pageable = PageRequest.of(page, limit, Sort.by("createdAt").descending());
+        Page<PostModel> postPage = (visibilityLimit == null)
+                ? postRepository.findByUserIdAndIsActive(targetUserId, true, pageable)
+                : postRepository.findByUserIdAndIsActiveAndVisibility(targetUserId, true, visibilityLimit, pageable);
+
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(targetUserId);
+        List<Long> postIds = postPage.getContent().stream().map(PostModel::getId).toList();
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId, postIds);
+
+        List<PostResponseDTO> content = postPage.getContent().stream()
+                .map(post -> convertToPostResponseDTO(post, authorInfo, likedMap.getOrDefault(post.getId(), false)))
+                .toList();
+
+        return buildPageResponse(postPage, content);
     }
 
     @Override
-    public ReelResponseDTO getReelById2(Long id) {
-        ReelModel model = reelRepository.findById(id).orElse(null);
-        if (model == null)
-            return null;
-        UserServiceProto.UserDTOResponse response = userGrpcClient.getUserDTOById(model.getUserId());
-        return convertToReelResponseDTO(model, response, false);
+    public PageModelResponse getAllReelOfUser(Long targetUserId, int page, int limit) {
+        Long viewerId = securityUtil.getUserIdFromToken();
+        EVisibilityPost visibilityLimit = checkVisibilityAccess(targetUserId, viewerId, null);
+
+        Pageable pageable = PageRequest.of(page, limit, Sort.by("createdAt").descending());
+        Page<ReelModel> reelPage = (visibilityLimit == null)
+                ? reelRepository.findByUserIdAndIsActive(targetUserId, true, pageable)
+                : reelRepository.findByUserIdAndIsActiveAndVisibility(targetUserId, true, visibilityLimit, pageable);
+
+        UserServiceProto.UserDTOResponse authorInfo = userGrpcClient.getUserDTOById(targetUserId);
+        List<Long> reelIds = reelPage.getContent().stream().map(ReelModel::getId).toList();
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId, reelIds);
+
+        List<ReelResponseDTO> content = reelPage.getContent().stream()
+                .map(reel -> convertToReelResponseDTO(reel, authorInfo, likedMap.getOrDefault(reel.getId(), false)))
+                .toList();
+
+        return buildPageResponse(reelPage, content);
     }
 
     @Override
-    public String deleteReel(Long id) {
-        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
-        securityUtil.checkOwner(model.getUserId());
-        reelRepository.delete(model);
+    public List<PostResponseDTO> getPostsByIds(List<Long> postIds, Long viewerId) {
+        if (postIds == null || postIds.isEmpty())
+            return Collections.emptyList();
 
-        String reelKey = "reel:" + id;
-        String likesKey = "reel:likes:" + id;
-        String commentsKey = "reel:comments:" + id;
-        String feedKey = "feed:" + model.getUserId();
+        List<PostModel> posts = postRepository.findAllById(postIds);
 
-        redisTemplate.delete(reelKey);
-        redisTemplate.delete(likesKey);
-        redisTemplate.delete(commentsKey);
+        List<Long> authorIds = posts.stream().map(PostModel::getUserId).distinct().toList();
+        Map<Long, UserServiceProto.UserDTOResponse2> authorMap = userGrpcClient.getUsersByIds(authorIds).stream()
+                .collect(Collectors.toMap(UserServiceProto.UserDTOResponse2::getId, u -> u));
 
-        redisTemplate.opsForZSet().remove(feedKey, id);
-        return "Success";
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(viewerId, postIds);
+
+        return posts.stream().map(post -> {
+            UserServiceProto.UserDTOResponse2 author2 = authorMap.get(post.getUserId());
+            UserServiceProto.UserDTOResponse authorDto = UserServiceProto.UserDTOResponse.newBuilder()
+                    .setId(author2.getId()).setUsername(author2.getUsername()).setAvatar(author2.getAvatar()).build();
+
+            return convertToPostResponseDTO(post, authorDto, likedMap.getOrDefault(post.getId(), false));
+        }).toList();
     }
 
     @Override
-    public String deleteReel2(Long id) {
-        ReelModel model = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not  exist", HttpStatus.BAD_REQUEST));
-        reelRepository.delete(model);
+    public List<ReelResponseDTO> getReelsByIds(List<Long> reelIds, Long viewerId) {
+        if (reelIds == null || reelIds.isEmpty())
+            return Collections.emptyList();
 
-        String reelKey = "reel:" + id;
-        String likesKey = "reel:likes:" + id;
-        String commentsKey = "reel:comments:" + id;
-        String feedKey = "feed:" + model.getUserId();
+        List<ReelModel> reels = reelRepository.findAllById(reelIds);
 
-        redisTemplate.delete(reelKey);
-        redisTemplate.delete(likesKey);
-        redisTemplate.delete(commentsKey);
+        List<Long> authorIds = reels.stream().map(ReelModel::getUserId).distinct().toList();
+        Map<Long, UserServiceProto.UserDTOResponse2> authorMap = userGrpcClient.getUsersByIds(authorIds).stream()
+                .collect(Collectors.toMap(UserServiceProto.UserDTOResponse2::getId, u -> u));
 
-        redisTemplate.opsForZSet().remove(feedKey, id);
-        return "Success";
-    }
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesReel(viewerId, reelIds);
 
-    @Override
-    public String deletePost2(Long id) {
-        PostModel model = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not  exist", HttpStatus.BAD_REQUEST));
-        postRepository.delete(model);
-        String postKey = "post:" + id;
-        String likesKey = "post:likes:" + id;
-        String commentsKey = "post:comments:" + id;
-        String feedKey = "feed:" + model.getUserId();
+        return reels.stream().map(reel -> {
+            UserServiceProto.UserDTOResponse2 author2 = authorMap.get(reel.getUserId());
+            UserServiceProto.UserDTOResponse authorDto = UserServiceProto.UserDTOResponse.newBuilder()
+                    .setId(author2.getId()).setUsername(author2.getUsername()).setAvatar(author2.getAvatar()).build();
 
-        redisTemplate.delete(postKey);
-        redisTemplate.delete(likesKey);
-        redisTemplate.delete(commentsKey);
-        redisTemplate.opsForZSet().remove(feedKey, id);
-        return "Success";
+            return convertToReelResponseDTO(reel, authorDto, likedMap.getOrDefault(reel.getId(), false));
+        }).toList();
     }
 
     @Override
@@ -432,87 +461,41 @@ public class PostServiceImpl implements IPostService {
         Pageable pageable = PageRequest.of(page, size);
         Long id = securityUtil.getUserIdFromToken();
         UserServiceProto.UserDTOResponse currentUser = userGrpcClient.getUserDTOById(id);
-        Page<PostModel> postPage = null;
-        if (hashtag.isEmpty())
-            postPage = postRepository.findPopularPublicPostsWithHashtagScore(pageable);
-        else
-            postPage = postRepository.findPopularPublicPostsByHashtag(hashtag, pageable);
-        List<PostModel> posts = postPage.getContent();
-        List<Long> postIds = posts.stream().map(PostModel::getId).toList();
-        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(currentUser.getId(), postIds);
+
+        Page<PostModel> postPage = (Objects.equals(hashtag, "#") || hashtag.trim().isEmpty())
+                ? postRepository.findPopularPublicPostsWithHashtagScore(pageable)
+                : postRepository.findPopularPublicPostsByHashtag(hashtag, pageable);
+
+        List<Long> postIds = postPage.getContent().stream().map(PostModel::getId).toList();
+        Map<Long, Boolean> likedMap = interactionGrpcClient.checkBatchLikesPost(currentUser.getId(), postIds);
+
         List<PostResponseDTO> postDTOs = postPage.getContent().stream()
-                .map(post -> {
-                    Boolean isLike = likedPostIds.getOrDefault(post.getId(), false);
-                    return convertToPostResponseDTO(post, currentUser, isLike);
-                })
+                .map(post -> convertToPostResponseDTO(post, currentUser, likedMap.getOrDefault(post.getId(), false)))
                 .toList();
 
-        PageModelResponse<PostResponseDTO> response = new PageModelResponse<>();
-        response.setContent(postDTOs);
-        response.setPageSize(postPage.getNumber());
-        response.setPageSize(postPage.getSize());
-        response.setTotalElements(postPage.getTotalElements());
-        response.setTotalPages(postPage.getTotalPages());
-        response.setLast(postPage.isLast());
-
-        return response;
+        return buildPageResponse(postPage, postDTOs);
     }
 
-    @Override
-    public List<PostResponseDTO> getPostsByIds(List<Long> postIds, Long viewerId) {
-        List<PostResponseDTO> result = new ArrayList<>();
-        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesPost(viewerId, postIds);
-        for (Long id : postIds) {
-            result.add(getPostById3(id, likedPostIds.getOrDefault(id, false)));
-        }
-        return result;
-    }
-
-    @Override
-    public List<ReelResponseDTO> getReelsByIds(List<Long> postIds, Long viewerId) {
-        List<ReelResponseDTO> result = new ArrayList<>();
-        Map<Long, Boolean> likedPostIds = interactionGrpcClient.checkBatchLikesReel(viewerId, postIds);
-        for (Long id : postIds) {
-            result.add(getReelById3(id, likedPostIds.getOrDefault(id, false)));
-        }
-        return result;
-    }
-
-    PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse userDto, Boolean isLike) {
-        List<Long> tagIds = Optional.ofNullable(model.getTag())
-                .filter(tag -> !tag.isBlank())
-                .map(tag -> Arrays.stream(tag.split(","))
-                        .filter(s -> !s.isBlank() && Long.parseLong(s) != model.getUserId())
-                        .map(Long::parseLong)
-                        .toList())
-                .orElse(List.of());
-
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(tagIds);
-
-        List<UserTagDTO> userTagDTOList = users.stream()
-                .map(u -> UserTagDTO.builder()
-                        .userId(u.getId())
-                        .userName(u.getUsername())
-                        .build())
+    private PostResponseDTO convertToPostResponseDTO(PostModel model, UserServiceProto.UserDTOResponse author,
+                                                     Boolean isLike) {
+        List<Long> tagIds = parseTagString(model.getTag(), model.getUserId());
+        List<UserTagDTO> userTags = tagIds.isEmpty() ? Collections.emptyList()
+                : userGrpcClient.getUsersByIds(tagIds).stream()
+                .map(u -> UserTagDTO.builder().userId(u.getId()).userName(u.getUsername()).build())
                 .toList();
 
         Object likesStr = redisTemplate.opsForValue().get("post:likes:" + model.getId());
         Object commentsStr = redisTemplate.opsForValue().get("post:comments:" + model.getId());
-
-        Long likes = likesStr != null ? Long.valueOf(likesStr.toString()) : 0L;
-        Long comments = commentsStr != null ? Long.valueOf(commentsStr.toString()) : 0L;
-        if (likes == 0L || comments == 0L) {
-            likes = model.getLikeQuantity();
-            comments = model.getCommentQuantity();
-        }
+        Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : model.getLikeQuantity();
+        Long comments = (commentsStr != null) ? Long.valueOf(commentsStr.toString()) : model.getCommentQuantity();
 
         return PostResponseDTO.builder()
                 .postId(model.getId())
-                .userName(userDto.getUsername())
-                .avatarUrl(userDto.getAvatar())
+                .userName(author.getUsername())
+                .avatarUrl(author.getAvatar())
                 .visibility(model.getVisibility().toString())
                 .tag(model.getTag())
-                .listUserTag(userTagDTOList)
+                .listUserTag(userTags)
                 .caption(model.getCaption())
                 .createdAt(model.getCreatedAt())
                 .isActive(model.getIsActive())
@@ -520,21 +503,24 @@ public class PostServiceImpl implements IPostService {
                 .quantityLike(likes)
                 .quantityComment(comments)
                 .userId(model.getUserId())
-                .mediaUrl(model.getPostMediaModels() != null ? model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList() : List.of())
+                .mediaUrl(model.getPostMediaModels() != null
+                        ? model.getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList()
+                        : List.of())
                 .updatedAt(model.getUpdatedAt())
                 .build();
     }
 
-    ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse userDto, Boolean isLike) {
+    private ReelResponseDTO convertToReelResponseDTO(ReelModel model, UserServiceProto.UserDTOResponse author,
+                                                     Boolean isLike) {
         Object likesStr = redisTemplate.opsForValue().get("reel:likes:" + model.getId());
         Object commentsStr = redisTemplate.opsForValue().get("reel:comments:" + model.getId());
+        Long likes = (likesStr != null) ? Long.valueOf(likesStr.toString()) : model.getLikeQuantity();
+        Long comments = (commentsStr != null) ? Long.valueOf(commentsStr.toString()) : model.getCommentQuantity();
 
-        Long likes = likesStr != null ? Long.valueOf(likesStr.toString()) : 0L;
-        Long comments = commentsStr != null ? Long.valueOf(commentsStr.toString()) : 0L;
         return ReelResponseDTO.builder()
                 .reelId(model.getId())
-                .userName(userDto.getUsername())
-                .avatarUrl(userDto.getAvatar())
+                .userName(author.getUsername())
+                .avatarUrl(author.getAvatar())
                 .visibility(model.getVisibility().toString())
                 .caption(model.getCaption())
                 .createdAt(model.getCreatedAt())
@@ -548,23 +534,55 @@ public class PostServiceImpl implements IPostService {
                 .build();
     }
 
+    private EVisibilityPost checkVisibilityAccess(Long targetUserId, Long viewerId,
+                                                  EVisibilityPost requiredVisibility) {
+        if (targetUserId.equals(viewerId))
+            return null;
+
+        if (securityUtil.isPrivilegedUser()) {
+            return EVisibilityPost.PUBLIC;
+        }
+
+        if (securityUtil.isPrivilegedUser()) {
+            return EVisibilityPost.PUBLIC;
+        }
+
+        UserServiceProto.CheckFollowResponse followCheck = userGrpcClient.checkFollow(viewerId, targetUserId);
+        if (followCheck.getIsPrivate() && !followCheck.getIsFollow()) {
+            throw new CustomException("Don't have permission to view this content", HttpStatus.FORBIDDEN);
+        }
+
+        if (requiredVisibility == EVisibilityPost.PRIVATE) {
+            throw new CustomException("This content is private", HttpStatus.FORBIDDEN);
+        }
+
+        return EVisibilityPost.PUBLIC;
+    }
+
+    private List<Long> parseTagString(String tagStr, Long excludeId) {
+        if (tagStr == null || tagStr.isBlank())
+            return Collections.emptyList();
+        return Arrays.stream(tagStr.split(","))
+                .filter(s -> !s.isBlank())
+                .map(Long::parseLong)
+                .filter(id -> !id.equals(excludeId))
+                .toList();
+    }
+
+    private <T> PageModelResponse<T> buildPageResponse(Page<?> pageData, List<T> content) {
+        return PageModelResponse.<T>builder()
+                .pageNo(pageData.getNumber())
+                .pageSize(pageData.getSize())
+                .totalElements(pageData.getTotalElements())
+                .totalPages(pageData.getTotalPages())
+                .last(pageData.isLast())
+                .content(content)
+                .build();
+    }
+
     public void tagUserIntoPost(String oldTag, String users, Long currentUserId, Long postId) {
-        List<Long> oldTagIds = Optional.ofNullable(oldTag)
-                .filter(tag -> !tag.isBlank())
-                .map(tag -> Arrays.stream(tag.split(","))
-                        .filter(s -> !s.isBlank() && Long.parseLong(s) != currentUserId)
-                        .map(Long::parseLong)
-                        .toList())
-                .orElse(List.of());
-
-        List<Long> tagIds = Optional.ofNullable(users)
-                .filter(tag -> !tag.isBlank())
-                .map(tag -> Arrays.stream(tag.split(","))
-                        .filter(s -> !s.isBlank() && Long.parseLong(s) != currentUserId)
-                        .map(Long::parseLong)
-                        .toList())
-                .orElse(List.of());
-
+        List<Long> oldTagIds = parseTagString(oldTag, currentUserId);
+        List<Long> tagIds = parseTagString(users, currentUserId);
 
         for (Long id : tagIds) {
             if (!oldTagIds.contains(id)) {

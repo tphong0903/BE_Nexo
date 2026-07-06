@@ -1,17 +1,27 @@
 package org.nexo.messagingservice.service.Impl;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 import org.nexo.grpc.user.UserServiceProto;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse;
 import org.nexo.grpc.user.UserServiceProto.UserDTOResponse2;
+import org.nexo.messagingservice.dto.AddMembersRequest;
 import org.nexo.messagingservice.dto.ConversationResponseDTO;
+import org.nexo.messagingservice.dto.CreateGroupRequest;
 import org.nexo.messagingservice.dto.MessageDTO;
 import org.nexo.messagingservice.dto.NicknameRequest;
+import org.nexo.messagingservice.dto.NicknameUpdateEvent;
 import org.nexo.messagingservice.dto.PageModelResponse;
+import org.nexo.messagingservice.dto.UpdateGroupRequest;
 import org.nexo.messagingservice.dto.UserDTO;
 import org.nexo.messagingservice.enums.EConversationStatus;
+import org.nexo.messagingservice.enums.ECallStatus;
 import org.nexo.messagingservice.exception.ResourceNotFoundException;
 import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.ConversationModel;
@@ -20,10 +30,14 @@ import org.nexo.messagingservice.model.MessageModel;
 import org.nexo.messagingservice.repository.ConversationParticipantRepository;
 import org.nexo.messagingservice.repository.ConversationRepository;
 import org.nexo.messagingservice.repository.MessageRepository;
+import org.nexo.messagingservice.repository.CallRepository;
+import org.nexo.messagingservice.model.CallModel;
+import org.nexo.messagingservice.repository.MessageRepository;
 import org.nexo.messagingservice.service.ConversationService;
 import org.nexo.messagingservice.service.MessageService;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
 
 import jakarta.transaction.Transactional;
@@ -39,6 +53,8 @@ public class ConversationServiceImpl implements ConversationService {
     private final ConversationParticipantRepository participantRepository;
     private final MessageRepository messageRepository;
     private final MessageService messageService;
+    private final SimpMessagingTemplate messagingTemplate;
+    private final CallRepository callRepository;
 
     @Transactional
     public ConversationResponseDTO getOrCreateDirectConversation(String keycloakUserId, Long recipientUserId) {
@@ -237,10 +253,12 @@ public class ConversationServiceImpl implements ConversationService {
     }
 
     private ConversationResponseDTO mapToDto(ConversationModel conversation, Long requestingUserId) {
-        List<Long> participantUserIds = participantRepository
-                .findActiveUserIdsByConversationId(conversation.getId());
+        Map<Long, ConversationParticipantModel> participantMap = participantRepository
+                .findByConversationId(conversation.getId())
+                .stream()
+                .collect(Collectors.toMap(ConversationParticipantModel::getUserId, p -> p));
 
-        List<UserDTOResponse2> participants = userGrpcClient.getUsersByIds(participantUserIds);
+        List<UserDTOResponse2> participants = userGrpcClient.getUsersByIds(new ArrayList<>(participantMap.keySet()));
 
         List<UserDTO> participantDTOs = participants.stream()
                 .map(u -> UserDTO.builder()
@@ -248,43 +266,71 @@ public class ConversationServiceImpl implements ConversationService {
                         .username(u.getUsername())
                         .avatarUrl(u.getAvatar())
                         .fullName(u.getFullName())
-                        .nickname(
-                                participantRepository.findByConversationIdAndUserId(conversation.getId(), u.getId())
-                                        .map(ConversationParticipantModel::getNickname)
-                                        .orElse(null))
+                        .nickname(participantMap.containsKey(u.getId())
+                                ? participantMap.get(u.getId()).getNickname()
+                                : null)
                         .onlineStatus(u.getOnlineStatus())
                         .build())
                 .toList();
 
-        UserDTO otherUser = participantDTOs.stream()
-                .filter(u -> u.getId() != requestingUserId)
-                .findFirst()
-                .orElse(null);
+        ConversationParticipantModel myParticipant = participantMap.get(requestingUserId);
+        boolean isGroup = conversation.isGroup();
 
-        String displayName = "Null";
-        if (otherUser != null) {
-            ConversationParticipantModel participant = participantRepository
-                    .findByConversationIdAndUserId(conversation.getId(), requestingUserId)
+        String displayName;
+        String displayUsername = null;
+        String displayAvatar;
+        Boolean displayOnlineStatus = null;
+        Long lastReadMessageIdValue = null;
+
+        if (isGroup) {
+            displayName = conversation.getGroupName() != null ? conversation.getGroupName() : "Nhóm không tên";
+            displayAvatar = conversation.getGroupAvatarUrl();
+        } else {
+            UserDTO otherUser = participantDTOs.stream()
+                    .filter(u -> !u.getId().equals(requestingUserId))
+                    .findFirst()
                     .orElse(null);
-            if (participant != null && participant.getNickname() != null && !participant.getNickname().isEmpty()) {
-                displayName = participant.getNickname();
+
+            if (otherUser != null) {
+                if (otherUser.getNickname() != null && !otherUser.getNickname().isEmpty()) {
+                    displayName = otherUser.getNickname();
+                } else {
+                    displayName = otherUser.getFullName();
+                }
+                displayUsername = otherUser.getUsername();
+                displayAvatar = otherUser.getAvatarUrl();
+                displayOnlineStatus = otherUser.getOnlineStatus();
+                lastReadMessageIdValue = messageService.getLastReadMessageId(conversation.getId(), otherUser.getId());
             } else {
-                displayName = otherUser.getFullName();
+                displayName = "Null";
+                displayAvatar = null;
             }
         }
-        String displayUsername = otherUser != null ? otherUser.getUsername() : null;
-        String displayAvatar = otherUser != null ? otherUser.getAvatarUrl() : null;
-        Boolean displayOnlineStatus = otherUser != null ? otherUser.getOnlineStatus() : null;
+
+        boolean isGroupAdmin = myParticipant != null && myParticipant.isGroupAdmin();
 
         MessageDTO lastMessage = null;
         if (conversation.getLastMessageId() != null) {
-            Optional<MessageModel> lastMsg = messageRepository
-                    .findById(conversation.getLastMessageId());
+            Optional<MessageModel> lastMsg = messageRepository.findById(conversation.getLastMessageId());
             if (lastMsg.isPresent()) {
                 lastMessage = mapMessageToDto(lastMsg.get());
             }
         }
-        Long unreadCount = getUnreadCount(conversation.getId(), requestingUserId);
+
+        Long lastReadMsgId = myParticipant != null ? myParticipant.getLastReadMessageId() : null;
+        Long unreadCount = messageRepository.countUnreadMessages(
+                conversation.getId(), requestingUserId, lastReadMsgId != null ? lastReadMsgId : 0L);
+
+        Long activeCallId = null;
+        String activeCallType = null;
+        if (isGroup) {
+            Optional<CallModel> activeCall = callRepository.findFirstByConversationIdAndStatusInOrderByStartedAtDesc(
+                    conversation.getId(), List.of(ECallStatus.RINGING, ECallStatus.ACCEPTED));
+            if (activeCall.isPresent()) {
+                activeCallId = activeCall.get().getId();
+                activeCallType = activeCall.get().getCallType().name();
+            }
+        }
 
         return ConversationResponseDTO.builder()
                 .id(conversation.getId())
@@ -301,18 +347,37 @@ public class ConversationServiceImpl implements ConversationService {
                 .status(conversation.getStatus())
                 .isBlockedByMe(conversation.getBlockedByUserId() != null
                         && conversation.getBlockedByUserId().equals(requestingUserId))
-                .lastReadMessageId(messageService.getLastReadMessageId(conversation.getId(), otherUser.getId()))
+                .lastReadMessageId(lastReadMessageIdValue)
+                .isGroup(isGroup)
+                .groupName(conversation.getGroupName())
+                .groupAvatarUrl(conversation.getGroupAvatarUrl())
+                .createdByUserId(conversation.getCreatedByUserId())
+                .isGroupAdmin(isGroupAdmin)
+                .activeCallId(activeCallId)
+                .activeCallType(activeCallType)
                 .build();
     }
 
-    public PageModelResponse<ConversationResponseDTO> getUserConversations(String keycloakUserId, Pageable pageable) {
+    public PageModelResponse<ConversationResponseDTO> getUserConversations(String keycloakUserId, Pageable pageable, String search) {
         UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
         Long userId = user.getUserId();
         Page<ConversationModel> conversations = conversationRepository
                 .findNormalConversationsByUserId(userId, pageable);
 
+        String searchLower = (search != null && !search.isBlank()) ? search.toLowerCase().trim() : null;
+
         List<ConversationResponseDTO> allConversations = conversations.stream()
                 .map(conv -> mapToDto(conv, userId))
+                .filter(dto -> {
+                    if (searchLower == null) return true;
+                    if (dto.isGroup()) {
+                        String name = dto.getGroupName() != null ? dto.getGroupName() : dto.getFullname();
+                        return name != null && name.toLowerCase().contains(searchLower);
+                    }
+                    boolean matchFullname = dto.getFullname() != null && dto.getFullname().toLowerCase().contains(searchLower);
+                    boolean matchUsername = dto.getUsername() != null && dto.getUsername().toLowerCase().contains(searchLower);
+                    return matchFullname || matchUsername;
+                })
                 .toList();
 
         PageModelResponse<ConversationResponseDTO> pageModelResponse = PageModelResponse
@@ -489,7 +554,21 @@ public class ConversationServiceImpl implements ConversationService {
         participant.setNickname(request.getNickname());
         participantRepository.save(participant);
 
-        return mapToDto(conversation, userId);
+        ConversationResponseDTO response = mapToDto(conversation, userId);
+
+        // Broadcast WebSocket event cho tất cả thành viên trong nhóm
+        NicknameUpdateEvent event = NicknameUpdateEvent.builder()
+                .conversationId(conversationId)
+                .targetUserId(targetUserId)
+                .nickname(request.getNickname())
+                .participants(response.getParticipants())
+                .build();
+
+        messagingTemplate.convertAndSend(
+                "/topic/conversation/" + conversationId + "/nickname",
+                event);
+
+        return response;
     }
 
     public ConversationResponseDTO getNickname(Long conversationId, String keycloakUserId) {
@@ -499,5 +578,193 @@ public class ConversationServiceImpl implements ConversationService {
                 .orElseThrow(() -> new IllegalArgumentException("Conversation not found"));
 
         return mapToDto(conversation, userId);
+    }
+
+    // ─── Group operations ─────────────────────────────────────────────────────
+
+    @Transactional
+    public ConversationResponseDTO createGroup(String keycloakUserId, CreateGroupRequest request) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long creatorId = user.getUserId();
+
+        if (request.getGroupName() == null || request.getGroupName().isBlank()) {
+            throw new IllegalArgumentException("Group name is required");
+        }
+        if (request.getMemberUserIds() == null || request.getMemberUserIds().size() < 2) {
+            throw new IllegalArgumentException("A group requires at least 2 other members");
+        }
+
+        ConversationModel group = ConversationModel.builder()
+                .isGroup(true)
+                .groupName(request.getGroupName().trim())
+                .groupAvatarUrl(request.getGroupAvatarUrl())
+                .createdByUserId(creatorId)
+                .status(EConversationStatus.NORMAL)
+                .lastMessageAt(java.time.LocalDateTime.now())
+                .build();
+        group = conversationRepository.save(group);
+
+        ConversationParticipantModel creatorParticipant = new ConversationParticipantModel();
+        creatorParticipant.setConversation(group);
+        creatorParticipant.setUserId(creatorId);
+        creatorParticipant.setGroupAdmin(true);
+        participantRepository.save(creatorParticipant);
+
+        Set<Long> uniqueMemberIds = new HashSet<>(request.getMemberUserIds());
+        for (Long memberId : uniqueMemberIds) {
+            if (!memberId.equals(creatorId)) {
+                ConversationParticipantModel member = new ConversationParticipantModel();
+                member.setConversation(group);
+                member.setUserId(memberId);
+                participantRepository.save(member);
+            }
+        }
+
+        log.info("Group '{}' created by user {} with {} members",
+                group.getGroupName(), creatorId, request.getMemberUserIds().size());
+        return mapToDto(group, creatorId);
+    }
+
+    @Transactional
+    public ConversationResponseDTO updateGroup(Long conversationId, String keycloakUserId, UpdateGroupRequest request) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel group = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
+
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
+
+        boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
+                .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
+        if (!isAdmin)
+            throw new SecurityException("Only admins can update group info");
+
+        if (request.getGroupName() != null && !request.getGroupName().isBlank()) {
+            group.setGroupName(request.getGroupName().trim());
+        }
+        if (request.getGroupAvatarUrl() != null) {
+            group.setGroupAvatarUrl(request.getGroupAvatarUrl());
+        }
+        conversationRepository.save(group);
+        return mapToDto(group, userId);
+    }
+
+    @Transactional
+    public ConversationResponseDTO addMembers(Long conversationId, String keycloakUserId, AddMembersRequest request) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel group = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
+
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
+        if (!isUserParticipant(conversationId, userId))
+            throw new SecurityException("Not a participant");
+
+        List<Long> addedMemberIds = new ArrayList<>();
+        for (Long memberId : request.getUserIds()) {
+            if (!isUserParticipant(conversationId, memberId)) {
+                ConversationParticipantModel member = new ConversationParticipantModel();
+                member.setConversation(group);
+                member.setUserId(memberId);
+                participantRepository.save(member);
+                addedMemberIds.add(memberId);
+            }
+        }
+        
+        if (!addedMemberIds.isEmpty()) {
+            List<UserDTOResponse2> addedUsers = userGrpcClient.getUsersByIds(addedMemberIds);
+            String addedNames = addedUsers.stream().map(UserDTOResponse2::getFullName).collect(Collectors.joining(", "));
+            String messageContent = user.getFullName() + " đã thêm " + addedNames + " vào nhóm.";
+            
+            MessageDTO systemMessage = messageService.sendSystemMessage(conversationId, userId, messageContent);
+            messagingTemplate.convertAndSend("/topic/conversation/" + conversationId, systemMessage);
+        }
+        
+        return mapToDto(group, userId);
+    }
+
+    @Transactional
+    public void removeMember(Long conversationId, String keycloakUserId, Long targetUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel group = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
+
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
+
+        boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
+                .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
+        boolean isSelf = userId.equals(targetUserId);
+
+        if (!isAdmin && !isSelf)
+            throw new SecurityException("Only admins can remove members");
+        if (targetUserId.equals(group.getCreatedByUserId()))
+            throw new IllegalArgumentException("Cannot remove the group creator");
+
+        participantRepository.findByConversationIdAndUserId(conversationId, targetUserId)
+                .ifPresent(participantRepository::delete);
+    }
+
+    @Transactional
+    public void leaveGroup(Long conversationId, String keycloakUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel group = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
+
+        if (!group.isGroup())
+            throw new IllegalArgumentException("Not a group conversation");
+        if (userId.equals(group.getCreatedByUserId()))
+            throw new IllegalArgumentException("Group creator cannot leave. Transfer ownership or delete the group.");
+
+        participantRepository.findByConversationIdAndUserId(conversationId, userId)
+                .ifPresent(participantRepository::delete);
+    }
+
+    @Transactional
+    public void promoteAdmin(Long conversationId, String keycloakUserId, Long targetUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
+                .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
+        if (!isAdmin)
+            throw new SecurityException("Only admins can promote members");
+
+        ConversationParticipantModel target = participantRepository
+                .findByConversationIdAndUserId(conversationId, targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
+        target.setGroupAdmin(true);
+        participantRepository.save(target);
+    }
+
+    @Transactional
+    public void demoteAdmin(Long conversationId, String keycloakUserId, Long targetUserId) {
+        UserServiceProto.UserDto user = userGrpcClient.getUserByKeycloakId(keycloakUserId);
+        Long userId = user.getUserId();
+
+        ConversationModel group = conversationRepository.findById(conversationId)
+                .orElseThrow(() -> new ResourceNotFoundException("Group not found"));
+
+        if (targetUserId.equals(group.getCreatedByUserId()))
+            throw new IllegalArgumentException("Cannot demote the group creator");
+
+        boolean isAdmin = participantRepository.findByConversationIdAndUserId(conversationId, userId)
+                .map(ConversationParticipantModel::isGroupAdmin).orElse(false);
+        if (!isAdmin)
+            throw new SecurityException("Only admins can demote members");
+
+        ConversationParticipantModel target = participantRepository
+                .findByConversationIdAndUserId(conversationId, targetUserId)
+                .orElseThrow(() -> new ResourceNotFoundException("Member not found"));
+        target.setGroupAdmin(false);
+        participantRepository.save(target);
     }
 }

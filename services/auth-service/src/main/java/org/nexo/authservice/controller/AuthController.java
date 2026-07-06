@@ -1,31 +1,17 @@
 package org.nexo.authservice.controller;
 
+import jakarta.validation.Valid;
 import lombok.AllArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import reactor.core.publisher.Mono;
-
-import java.util.Map;
-
-import org.nexo.authservice.dto.CallBackRequest;
-import org.nexo.authservice.dto.ForgotPasswordRequest;
-import org.nexo.authservice.dto.LoginRequest;
-import org.nexo.authservice.dto.OAuthCallbackRequest;
-import org.nexo.authservice.dto.OAuthLoginResponse;
-import org.nexo.authservice.dto.RegisterRequest;
-import org.nexo.authservice.dto.RegisterResponse;
-import org.nexo.authservice.dto.ResendVerifyEmailRequest;
-import org.nexo.authservice.dto.ResponseData;
-import org.nexo.authservice.dto.TokenResponse;
+import org.nexo.authservice.dto.*;
 import org.nexo.authservice.service.AuthService;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
-import jakarta.validation.Valid;
+import java.util.List;
 
 @RestController
 @RequestMapping
@@ -34,10 +20,27 @@ import jakarta.validation.Valid;
 public class AuthController {
         private final AuthService authService;
 
+        private String extractIpAddress(org.springframework.http.server.reactive.ServerHttpRequest request) {
+                String ipAddress = request.getHeaders().getFirst("X-Forwarded-For");
+                if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+                        ipAddress = request.getHeaders().getFirst("X-Real-IP");
+                }
+                if (ipAddress == null || ipAddress.isEmpty() || "unknown".equalsIgnoreCase(ipAddress)) {
+                        if (request.getRemoteAddress() != null) {
+                                ipAddress = request.getRemoteAddress().getAddress().getHostAddress();
+                        }
+                }
+                if (ipAddress != null && ipAddress.contains(",")) {
+                        ipAddress = ipAddress.split(",")[0].trim();
+                }
+                return ipAddress;
+        }
+
         @PostMapping("/login")
-        public Mono<ResponseData<?>> login(@Valid @RequestBody LoginRequest loginRequest) {
-                log.info("Login request received for user: {}", loginRequest.getEmail());
-                return authService.login(loginRequest)
+        public Mono<ResponseData<?>> login(@Valid @RequestBody LoginRequest loginRequest, org.springframework.http.server.reactive.ServerHttpRequest request) {
+                String ipAddress = extractIpAddress(request);
+                log.info("Login request received for user: {} from IP: {}", loginRequest.getEmail(), ipAddress);
+                return authService.login(loginRequest, ipAddress)
                                 .map(tokenResponse -> {
                                         log.info("Login successful for user: {}", loginRequest.getEmail());
                                         return ResponseData.<TokenResponse>builder()
@@ -66,10 +69,11 @@ public class AuthController {
         }
 
         @PostMapping("/refresh")
-        public Mono<ResponseData<?>> refresh(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader) {
+        public Mono<ResponseData<?>> refresh(@RequestHeader(HttpHeaders.AUTHORIZATION) String authHeader, org.springframework.http.server.reactive.ServerHttpRequest request) {
                 String refreshToken = authHeader.replace("Bearer ", "").trim();
+                String ipAddress = extractIpAddress(request);
 
-                return authService.refreshToken(refreshToken)
+                return authService.refreshToken(refreshToken, ipAddress)
                                 .map(tokenResponse -> {
                                         log.info("Token refresh successful for user with refresh token: {}",
                                                         refreshToken);
@@ -111,16 +115,6 @@ public class AuthController {
                                                 .build()));
         }
 
-        @PostMapping("verify-email")
-        public Mono<ResponseData<?>> verifyEmail(
-                        @Valid @RequestBody CallBackRequest request) {
-                return authService.callBack(request)
-                                .map(success -> ResponseData.<Void>builder()
-                                                .status(HttpStatus.OK.value())
-                                                .message("Email verified and updated successfully")
-                                                .build());
-        }
-
         @PostMapping("oauth/callback")
         public Mono<ResponseData<?>> oauthCallback(@Valid @RequestBody OAuthCallbackRequest request) {
                 return authService.oauthCallback(request)
@@ -132,6 +126,24 @@ public class AuthController {
                                                         .data(tokenResponse)
                                                         .build();
                                 });
+        }
+
+        @PostMapping("/sync-keycloak")
+        public Mono<ResponseEntity<List<SyncUserResponse>>> syncData(@RequestBody List<SyncUserRequest> request) {
+                return authService.syncUsersToKeycloak(request)
+                                .map(ResponseEntity::ok);
+        }
+
+        @PostMapping("/internal/seed-users")
+        public Mono<ResponseData<SeedUsersResponse>> seedUsers(@RequestParam(defaultValue = "10") int count) {
+                log.info("Seeding {} fake users", count);
+                return authService.seedFakeUsers(count)
+                                .map(result -> ResponseData.<SeedUsersResponse>builder()
+                                                .status(200)
+                                                .message("Seeded " + result.getSucceeded() + "/" + result.getRequested()
+                                                                + " users successfully")
+                                                .data(result)
+                                                .build());
         }
 
 }

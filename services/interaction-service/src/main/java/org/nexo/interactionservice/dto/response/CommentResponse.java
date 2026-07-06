@@ -1,14 +1,19 @@
 package org.nexo.interactionservice.dto.response;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.List;
 
 @Data
 @Builder
-public class CommentResponse {
+@NoArgsConstructor
+@AllArgsConstructor
+public class CommentResponse implements Serializable {
     private Long id;
     private Long userId;
     private String userName;

@@ -1,8 +1,10 @@
 package org.nexo.postservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.nexo.grpc.interaction.InteractionServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.postservice.dto.MessageDTO;
 import org.nexo.postservice.dto.response.ReportInfoDTO;
 import org.nexo.postservice.dto.response.ReportResponseDTO;
 import org.nexo.postservice.dto.response.ReportSummaryProjection;
@@ -12,22 +14,34 @@ import org.nexo.postservice.repository.*;
 import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
 import org.nexo.postservice.service.IReportService;
+import org.nexo.postservice.service.ModerationService;
+import org.nexo.postservice.util.Enum.ENotificationType;
 import org.nexo.postservice.util.Enum.EReportStatus;
-import org.nexo.postservice.util.Enum.EVisibilityPost;
 import org.nexo.postservice.util.SecurityUtil;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
-import org.springframework.data.jpa.repository.Query;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ReportServiceImpl implements IReportService {
+    private static final String CONTENT_TYPE_POST = "POST";
+    private static final String CONTENT_TYPE_REEL = "REEL";
+    private static final String CONTENT_TYPE_COMMENT = "COMMENT";
+    private static final String COMMUNITY_GUIDELINES_URL = "/community-guidelines";
+    private static final String SYSTEM_REPORTER_NAME = "System";
+
     private final IReportPostRepository reportPostRepository;
     private final IReportReelRepository reportReelRepository;
     private final IReportCommentRepository reportCommentRepository;
@@ -36,362 +50,348 @@ public class ReportServiceImpl implements IReportService {
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final InteractionGrpcClient interactionGrpcClient;
+    private final ModerationService moderationService;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
+
+    private Map<Long, UserServiceProto.UserDTOResponse2> getUserMap(List<Long> ids) {
+        return userGrpcClient.getUsersByIds(ids).stream()
+                .collect(Collectors.toMap(UserServiceProto.UserDTOResponse2::getId, u -> u, (a, b) -> a));
+    }
+
+    private void validateReportPermission(Long reporterId, Long ownerId) {
+        if (reporterId.equals(ownerId)) return;
+        UserServiceProto.CheckFollowResponse followResponse = userGrpcClient.checkFollow(reporterId, ownerId);
+        if (followResponse.getIsPrivate() && !followResponse.getIsFollow()) {
+            throw new CustomException("You are not allowed to access this private content", HttpStatus.FORBIDDEN);
+        }
+    }
+
 
     @Override
     public String reportPost(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
-        boolean exists = reportPostRepository.existsByUserIdAndPostModel_Id(userId, id);
-        if (exists) {
-            throw new CustomException("You reported this post", HttpStatus.BAD_REQUEST);
+        if (reportPostRepository.existsByUserIdAndPostModel_Id(userId, id)) {
+            throw new CustomException("You already reported this post", HttpStatus.BAD_REQUEST);
         }
-        PostModel postModel = postRepository.findById(id).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
-        boolean isAllow = false;
-        if (postModel.getUserId().equals(userId)) {
-            isAllow = true;
-        } else {
-            UserServiceProto.CheckFollowResponse followResponse = userGrpcClient.checkFollow(userId, postModel.getUserId());
-            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                isAllow = true;
-            }
-        }
-        if (!isAllow)
-            throw new CustomException("Dont allow to report this Post", HttpStatus.BAD_REQUEST);
 
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(postModel.getUserId(), userId));
+        PostModel post = postRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Post not found", HttpStatus.NOT_FOUND));
+
+        validateReportPermission(userId, post.getUserId());
+        var userMap = getUserMap(List.of(post.getUserId(), userId));
 
         ReportPostModel report = ReportPostModel.builder()
                 .userId(userId)
-                .postModel(postModel)
+                .postModel(post)
                 .reason(reason)
                 .detail(detail)
-                .reporterName(users.get(1).getUsername())
-                .ownerPostName(users.get(0).getUsername())
+                .reporterName(userMap.get(userId).getUsername())
+                .ownerPostName(userMap.get(post.getUserId()).getUsername())
                 .reportStatus(EReportStatus.PENDING)
                 .build();
 
         reportPostRepository.save(report);
+        moderationService.triggerModerationAsync(CONTENT_TYPE_POST, id, userId);
         return "Success";
     }
 
     @Override
     public String reportReel(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
-        boolean exists = reportReelRepository.existsByUserIdAndReelModel_Id(userId, id);
-        if (exists) {
-            throw new CustomException("You reported this post", HttpStatus.BAD_REQUEST);
+        if (reportReelRepository.existsByUserIdAndReelModel_Id(userId, id)) {
+            throw new CustomException("You already reported this reel", HttpStatus.BAD_REQUEST);
         }
-        ReelModel reelModel = reelRepository.findById(id).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
-        boolean isAllow = false;
-        if (reelModel.getUserId().equals(userId)) {
-            isAllow = true;
-        } else {
-            UserServiceProto.CheckFollowResponse followResponse = userGrpcClient.checkFollow(userId, reelModel.getUserId());
-            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                isAllow = true;
-            }
-        }
-        if (!isAllow)
-            throw new CustomException("Dont allow to report this Post", HttpStatus.BAD_REQUEST);
 
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(reelModel.getUserId(), userId));
+        ReelModel reel = reelRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Reel not found", HttpStatus.NOT_FOUND));
+
+        validateReportPermission(userId, reel.getUserId());
+        var userMap = getUserMap(List.of(reel.getUserId(), userId));
 
         ReportReelModel report = ReportReelModel.builder()
                 .userId(userId)
-                .reelModel(reelModel)
+                .reelModel(reel)
                 .reason(reason)
                 .detail(detail)
-                .reporterName(users.get(1).getUsername())
-                .ownerPostName(users.get(0).getUsername())
+                .reporterName(userMap.get(userId).getUsername())
+                .ownerPostName(userMap.get(reel.getUserId()).getUsername())
                 .reportStatus(EReportStatus.PENDING)
                 .build();
 
         reportReelRepository.save(report);
+        moderationService.triggerModerationAsync(CONTENT_TYPE_REEL, id, userId);
         return "Success";
     }
 
     @Override
     public String reportComment(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
-        boolean exists = reportCommentRepository.existsByUserIdAndCommentId(userId, id);
-        if (exists) {
-            throw new CustomException("You reported this post", HttpStatus.BAD_REQUEST);
+        if (reportCommentRepository.existsByUserIdAndCommentId(userId, id)) {
+            throw new CustomException("You already reported this comment", HttpStatus.BAD_REQUEST);
         }
 
-        InteractionServiceOuterClass.GetCommentByIdResponse commentModel = interactionGrpcClient.getCommentById(id);
-        if (commentModel.getCommentId() == 0)
-            throw new CustomException("Comment is not exist", HttpStatus.BAD_REQUEST);
-        AbstractPost abstractPost = null;
-
-        if (commentModel.getPostId() != 0)
-            abstractPost = postRepository.findById(commentModel.getPostId()).orElseThrow(() -> new CustomException("Post is not exist", HttpStatus.BAD_REQUEST));
-        else
-            abstractPost = reelRepository.findById(commentModel.getReelId()).orElseThrow(() -> new CustomException("Reel is not exist", HttpStatus.BAD_REQUEST));
-        boolean isAllow = false;
-        if (abstractPost.getUserId().equals(userId)) {
-            isAllow = true;
-        } else {
-            UserServiceProto.CheckFollowResponse followResponse = userGrpcClient.checkFollow(userId, abstractPost.getUserId());
-            if (!followResponse.getIsPrivate() || followResponse.getIsFollow()) {
-                isAllow = true;
-            }
+        var commentResponse = interactionGrpcClient.getCommentById(id);
+        if (commentResponse.getCommentId() == 0) {
+            throw new CustomException("Comment does not exist", HttpStatus.NOT_FOUND);
         }
-        if (!isAllow)
-            throw new CustomException("Dont allow to report this Post", HttpStatus.BAD_REQUEST);
 
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(commentModel.getUserId(), userId));
+        Long ownerId = commentResponse.getUserId();
+        validateReportPermission(userId, ownerId);
+
+        var userMap = getUserMap(List.of(ownerId, userId));
 
         ReportCommentModel report = ReportCommentModel.builder()
                 .userId(userId)
-                .commentId(commentModel.getCommentId())
+                .commentId(commentResponse.getCommentId())
                 .reason(reason)
                 .detail(detail)
-                .ownerId(commentModel.getUserId())
-                .content(commentModel.getContent())
-                .reporterName(users.get(1).getUsername())
-                .ownerCommentName(users.get(0).getUsername())
+                .ownerId(ownerId)
+                .content(commentResponse.getContent())
+                .reporterName(userMap.get(userId).getUsername())
+                .ownerCommentName(userMap.get(ownerId).getUsername())
                 .reportStatus(EReportStatus.PENDING)
                 .build();
 
         reportCommentRepository.save(report);
+        moderationService.triggerModerationAsync(CONTENT_TYPE_COMMENT, id, userId);
         return "Success";
     }
 
-    @Override
-    public String handleReportPost(Long id, EReportStatus decision, String note) {
 
+    @Override
+    @Transactional
+    public String handleReportPost(Long id, EReportStatus decision, String note) {
         ReportPostModel report = reportPostRepository.findById(id)
-                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
         if (report.getReportStatus() != EReportStatus.PENDING && report.getReportStatus() != EReportStatus.IN_REVIEW) {
-            throw new CustomException("This report has already been processed", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Report already processed", HttpStatus.BAD_REQUEST);
         }
 
-        PostModel post = report.getPostModel();
-        if (post == null) {
-            throw new CustomException("Post not found for this report", HttpStatus.BAD_REQUEST);
+        if (decision == EReportStatus.APPROVED) {
+            PostModel post = report.getPostModel();
+            post.setIsActive(false);
+            postRepository.save(post);
+            sendViolationNotification(post.getUserId(), ENotificationType.POST_REMOVED);
         }
 
-        switch (decision) {
-            case APPROVED:
-                post.setIsActive(false);
-                postRepository.save(post);
-                report.setReportStatus(EReportStatus.APPROVED);
-                break;
-
-            case REJECTED:
-                report.setReportStatus(EReportStatus.REJECTED);
-                break;
-
-            case IN_REVIEW:
-                report.setReportStatus(EReportStatus.IN_REVIEW);
-                break;
-
-            default:
-                throw new CustomException("Invalid decision", HttpStatus.BAD_REQUEST);
-        }
-
+        report.setReportStatus(decision);
         report.setNote(note);
         reportPostRepository.save(report);
-
-        return "Report processed successfully with decision: " + decision.name();
+        return "Report " + decision.name();
     }
 
-
     @Override
+    @Transactional
     public String handleReportReel(Long id, EReportStatus decision, String note) {
         ReportReelModel report = reportReelRepository.findById(id)
-                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
         if (report.getReportStatus() != EReportStatus.PENDING && report.getReportStatus() != EReportStatus.IN_REVIEW) {
-            throw new CustomException("This report has already been processed", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Report already processed", HttpStatus.BAD_REQUEST);
         }
 
-        ReelModel reel = report.getReelModel();
-        if (reel == null) {
-            throw new CustomException("Reel not found for this report", HttpStatus.BAD_REQUEST);
+        if (decision == EReportStatus.APPROVED) {
+            ReelModel reel = report.getReelModel();
+            reel.setIsActive(false);
+            reelRepository.save(reel);
+            sendViolationNotification(reel.getUserId(), ENotificationType.POST_REMOVED);
         }
 
-        switch (decision) {
-            case APPROVED:
-                reel.setIsActive(false);
-                reelRepository.save(reel);
-                report.setReportStatus(EReportStatus.APPROVED);
-                break;
-
-            case REJECTED:
-                report.setReportStatus(EReportStatus.REJECTED);
-                break;
-
-            case IN_REVIEW:
-                report.setReportStatus(EReportStatus.IN_REVIEW);
-                break;
-
-            default:
-                throw new CustomException("Invalid decision", HttpStatus.BAD_REQUEST);
-        }
+        report.setReportStatus(decision);
         report.setNote(note);
         reportReelRepository.save(report);
-        return "Report processed successfully with decision: " + decision.name();
+        return "Report " + decision.name();
     }
 
     @Override
+    @Transactional
     public String handleReportComment(Long id, EReportStatus decision, String note) {
         ReportCommentModel report = reportCommentRepository.findById(id)
-                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
         if (report.getReportStatus() != EReportStatus.PENDING && report.getReportStatus() != EReportStatus.IN_REVIEW) {
-            throw new CustomException("This report has already been processed", HttpStatus.BAD_REQUEST);
+            throw new CustomException("Report already processed", HttpStatus.BAD_REQUEST);
         }
 
-        switch (decision) {
-            case APPROVED:
-                interactionGrpcClient.deleteCommentById(id);
-                report.setReportStatus(EReportStatus.APPROVED);
-                report.setCommentId(0L);
-                break;
+        if (decision == EReportStatus.APPROVED) {
+            interactionGrpcClient.deleteCommentById(report.getCommentId());
+            InteractionServiceOuterClass.GetCommentByIdResponse comment = interactionGrpcClient.getCommentById(report.getCommentId());
+            report.setCommentId(0L);
+            sendViolationNotification(comment.getUserId(), ENotificationType.COMMENT_REMOVED);
 
-            case REJECTED:
-                report.setReportStatus(EReportStatus.REJECTED);
-                break;
-
-            case IN_REVIEW:
-                report.setReportStatus(EReportStatus.IN_REVIEW);
-                break;
-
-            default:
-                throw new CustomException("Invalid decision", HttpStatus.BAD_REQUEST);
         }
+
+        report.setReportStatus(decision);
         report.setNote(note);
         reportCommentRepository.save(report);
-        return "Report processed successfully with decision: " + decision.name();
+        return "Report " + decision.name();
     }
+
 
     @Override
     public ReportInfoDTO searchReportPosts(int pageNo, int pageSize, EReportStatus status, String keyword) {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
-        if (status == null) {
-            status = EReportStatus.ALL;
-        }
-        List<Object[]> countsList = reportPostRepository.getReportQuantitySummary();
-        Object[] counts = countsList.get(0);
+        String statusStr = (status == null) ? "ALL" : status.name();
 
-        Long pending = ((Number) counts[0]).longValue();
-        Long inReview = ((Number) counts[1]).longValue();
-        Long approved = ((Number) counts[2]).longValue();
-        Long rejected = ((Number) counts[3]).longValue();
+        var counts = reportPostRepository.getReportQuantitySummary();
+        Page<ReportSummaryProjection> reportPage = reportPostRepository.searchReportPostsNative(statusStr, keyword, pageable);
 
-        Page<ReportSummaryProjection> reportPage = reportPostRepository.searchReportPostsNative(status.name(), keyword, pageable);
-        return new ReportInfoDTO(pending, approved, inReview, rejected, reportPage);
+        return new ReportInfoDTO(counts.getPendingCount(), counts.getApprovedCount(),
+                counts.getInReviewCount(), counts.getRejectedCount(), reportPage);
     }
 
     @Override
     public ReportInfoDTO searchReportReels(int pageNo, int pageSize, EReportStatus status, String keyword) {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
-        if (status == null) {
-            status = EReportStatus.ALL;
-        }
-        List<Object[]> countsList = reportReelRepository.getReportQuantitySummary();
-        Object[] counts = countsList.get(0);
+        String statusStr = (status == null) ? "ALL" : status.name();
 
-        Long pending = ((Number) counts[0]).longValue();
-        Long inReview = ((Number) counts[1]).longValue();
-        Long approved = ((Number) counts[2]).longValue();
-        Long rejected = ((Number) counts[3]).longValue();
+        var counts = reportReelRepository.getReportQuantitySummary();
+        Page<ReportSummaryProjection> reportPage = reportReelRepository.searchReportsReelsNative(statusStr, keyword, pageable);
 
-        Page<ReportSummaryProjection> reportPage = reportReelRepository
-                .searchReportsReelsNative(status.name(), keyword, pageable);
-        return new ReportInfoDTO(pending, approved, inReview, rejected, reportPage);
+        return new ReportInfoDTO(counts.getPendingCount(), counts.getApprovedCount(),
+                counts.getInReviewCount(), counts.getRejectedCount(), reportPage);
     }
 
     @Override
     public ReportInfoDTO searchReportComments(int pageNo, int pageSize, EReportStatus status, String keyword) {
         Pageable pageable = PageRequest.of(pageNo, pageSize, Sort.by("id").descending());
-        if (status == null) {
-            status = EReportStatus.ALL;
-        }
-        List<Object[]> countsList = reportCommentRepository.getReportQuantitySummary();
-        Object[] counts = countsList.get(0);
+        String statusStr = (status == null) ? "ALL" : status.name();
 
-        Long pending = ((Number) counts[0]).longValue();
-        Long inReview = ((Number) counts[1]).longValue();
-        Long approved = ((Number) counts[2]).longValue();
-        Long rejected = ((Number) counts[3]).longValue();
+        var counts = reportCommentRepository.getReportQuantitySummary();
+        Page<ReportSummaryProjection> reportPage = reportCommentRepository.searchReportCommentsNative(statusStr, keyword, pageable);
 
-        Page<ReportSummaryProjection> reportPage = reportCommentRepository
-                .searchReportCommentsNative(status.name(), keyword, pageable);
-        return new ReportInfoDTO(pending, approved, inReview, rejected, reportPage);
+        return new ReportInfoDTO(counts.getPendingCount(), counts.getApprovedCount(),
+                counts.getInReviewCount(), counts.getRejectedCount(), reportPage);
     }
+
 
     @Override
     public ReportResponseDTO getPostReportById(Long id) {
-        ReportPostModel model = reportPostRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+        ReportPostModel model = reportPostRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), model.getPostModel().getUserId()));
+        long reporterId = model.getUserId();
+        Map<Long, UserServiceProto.UserDTOResponse2> userMap;
+        if (reporterId != 0)
+            userMap = getUserMap(List.of(reporterId, model.getPostModel().getUserId()));
+        else
+            userMap = getUserMap(List.of(model.getPostModel().getUserId()));
+
+        String reporterAvatar = reporterId == 0
+                ? "https://res.cloudinary.com/dllwsmukj/image/upload/v1783144140/images_2_jyyjbo.jpg"
+                : userMap.get(reporterId).getAvatar();
+
+        String ownerAvatar = userMap.get(model.getPostModel().getUserId()).getAvatar();
 
         return ReportResponseDTO.builder()
-                .postId(model.getPostModel().getId())
                 .id(model.getId())
+                .postId(model.getPostModel().getId())
                 .userId(model.getUserId())
                 .reason(model.getReason())
                 .detail(model.getDetail())
-                .reportStatus(String.valueOf(model.getReportStatus()))
+                .reportStatus(model.getReportStatus().name())
                 .createdAt(model.getCreatedAt())
                 .reporterName(model.getReporterName())
                 .ownerPostName(model.getOwnerPostName())
-                .reporterAvatarUrl(users.get(0).getAvatar())
-                .ownerPostAvatarUrl(users.get(1).getAvatar())
+                .reporterAvatarUrl(reporterAvatar)
+                .ownerPostAvatarUrl(ownerAvatar)
                 .mediaUrls(model.getPostModel().getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
                 .caption(model.getPostModel().getCaption())
-                .note(model.getNote())
                 .isActive(model.getPostModel().getIsActive())
+                .note(model.getNote())
                 .build();
     }
 
     @Override
     public ReportResponseDTO getReelReportById(Long id) {
-        ReportReelModel model = reportReelRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+        ReportReelModel model = reportReelRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), model.getReelModel().getUserId()));
+        long reporterId = model.getUserId();
+        Map<Long, UserServiceProto.UserDTOResponse2> userMap;
+        if (reporterId != 0)
+            userMap = getUserMap(List.of(reporterId, model.getReelModel().getUserId()));
+        else
+            userMap = getUserMap(List.of(model.getReelModel().getUserId()));
+
+        String reporterAvatar = reporterId == 0
+                ? "https://res.cloudinary.com/dllwsmukj/image/upload/v1783144140/images_2_jyyjbo.jpg"
+                : userMap.get(reporterId).getAvatar();
+
+        String ownerAvatar = userMap.get(model.getReelModel().getUserId()).getAvatar();
 
         return ReportResponseDTO.builder()
-                .postId(model.getReelModel().getId())
                 .id(model.getId())
+                .postId(model.getReelModel().getId())
                 .userId(model.getUserId())
                 .reason(model.getReason())
                 .detail(model.getDetail())
-                .reportStatus(String.valueOf(model.getReportStatus()))
+                .reportStatus(model.getReportStatus().name())
                 .createdAt(model.getCreatedAt())
                 .reporterName(model.getReporterName())
                 .ownerPostName(model.getOwnerPostName())
-                .reporterAvatarUrl(users.get(0).getAvatar())
-                .ownerPostAvatarUrl(users.get(1).getAvatar())
+                .reporterAvatarUrl(reporterAvatar)
+                .ownerPostAvatarUrl(ownerAvatar)
                 .mediaUrls(List.of(model.getReelModel().getVideoUrl()))
                 .caption(model.getReelModel().getCaption())
-                .note(model.getNote())
                 .isActive(model.getReelModel().getIsActive())
+                .predictAI(model.getPredictAI())
+                .confidence(model.getConfidence())
+                .note(model.getNote())
                 .build();
     }
 
     @Override
     public ReportResponseDTO getCommentReportById(Long id) {
-        ReportCommentModel model = reportCommentRepository.findById(id).orElseThrow(() -> new CustomException("Report not found", HttpStatus.BAD_REQUEST));
+        ReportCommentModel model = reportCommentRepository.findById(id)
+                .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
-        List<UserServiceProto.UserDTOResponse2> users = userGrpcClient.getUsersByIds(List.of(model.getUserId(), model.getOwnerId()));
+        long reporterId = model.getUserId();
+        Map<Long, UserServiceProto.UserDTOResponse2> userMap;
+
+        if (reporterId != 0)
+            userMap = getUserMap(List.of(reporterId, model.getOwnerId()));
+        else
+            userMap = getUserMap(List.of(model.getOwnerId()));
+
+        String reporterAvatar = reporterId == 0
+                ? "https://res.cloudinary.com/dllwsmukj/image/upload/v1783144140/images_2_jyyjbo.jpg"
+                : userMap.get(reporterId).getAvatar();
+
+        String ownerAvatar = userMap.get(model.getOwnerId()).getAvatar();
 
         return ReportResponseDTO.builder()
-                .postId(model.getCommentId())
                 .id(model.getId())
+                .postId(model.getCommentId())
                 .userId(model.getUserId())
                 .reason(model.getReason())
                 .detail(model.getDetail())
-                .reportStatus(String.valueOf(model.getReportStatus()))
+                .reportStatus(model.getReportStatus().name())
                 .createdAt(model.getCreatedAt())
                 .reporterName(model.getReporterName())
                 .ownerPostName(model.getOwnerCommentName())
-                .reporterAvatarUrl(users.get(0).getAvatar())
-                .ownerPostAvatarUrl(users.get(1).getAvatar())
-                .note(model.getNote())
+                .reporterAvatarUrl(reporterAvatar)
+                .ownerPostAvatarUrl(ownerAvatar)
                 .content(model.getContent())
+                .predictAI(model.getPredictAI())
+                .confidence(model.getConfidence())
+                .note(model.getNote())
                 .build();
+    }
+
+    private void sendViolationNotification(Long ownerId, ENotificationType type) {
+        try {
+            MessageDTO messageDTO = MessageDTO.builder()
+                    .actorId(0L)
+                    .recipientId(ownerId)
+                    .notificationType(type.name())
+                    .targetUrl(COMMUNITY_GUIDELINES_URL)
+                    .build();
+            kafkaTemplate.send("notification", messageDTO);
+            log.info("[MODERATION] Notification sent to user {}", ownerId);
+        } catch (Exception e) {
+            log.error("[MODERATION] Failed to send violation notification to user {}", ownerId, e);
+        }
     }
 }

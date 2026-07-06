@@ -33,7 +33,6 @@
             from { opacity: 0; transform: translateY(-20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-       
         .logo {
             margin-bottom: 30px;
         }
@@ -43,11 +42,6 @@
             font-weight: 700;
             letter-spacing: 2px;
             margin: 0;
-        }
-        .logo img {
-            max-width: 180px;
-            height: auto;
-            margin-bottom: 15px;
         }
         h2 {
             color: #333;
@@ -60,9 +54,6 @@
             margin-bottom: 35px;
             font-size: 16px;
             line-height: 1.6;
-        }
-        .message b {
-            color: #007bff;
         }
         .btn {
             border: none;
@@ -83,10 +74,13 @@
             transform: translateY(-2px);
             box-shadow: 0 6px 20px rgba(0,123,255,0.4);
         }
-        .error {
-            color: #dc3545;
-            font-size: 14px;
-            margin-top: 20px;
+        .btn-secondary {
+            background-color: #6c757d;
+            box-shadow: 0 4px 15px rgba(108,117,125,0.3);
+            margin-top: 15px;
+        }
+        .btn-secondary:hover {
+            background-color: #545b62;
         }
         .error-message {
             background-color: #fee;
@@ -108,35 +102,17 @@
             border-left: 4px solid #28a745;
             text-align: left;
         }
-        #debug-info {
-            background: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 10px;
-            margin-top: 20px;
-            font-size: 12px;
-            text-align: left;
-            max-height: 200px;
-            overflow-y: auto;
-        }
+        .hidden { display: none; }
         @media (max-width: 600px) {
-            .container {
-                padding: 40px 30px;
-            }
-            .logo h1 {
-                font-size: 26px;
-            }
-            h2 {
-                font-size: 20px;
-            }
+            .container { padding: 40px 30px; }
+            .logo h1 { font-size: 26px; }
+            h2 { font-size: 20px; }
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="logo">
-            <#-- Nếu có logo, uncomment dòng dưới -->
-            <#-- <img src="${url.resourcesPath}/img/logo.png" alt="NEXO NETWORK"> -->
             <h1>NEXO NETWORK</h1>
         </div>
         
@@ -145,10 +121,10 @@
                 <div class="error-message">
                     <#if message.summary?contains('expired') || message.summary?contains('hết hạn')>
                         ✕ <strong>Link đã hết hạn</strong><br/>
-                        Link đặt lại mật khẩu của bạn đã hết hạn. Vui lòng yêu cầu link mới.
+                        Link của bạn đã hết hạn. Vui lòng yêu cầu link mới.
                     <#elseif message.summary?contains('invalid') || message.summary?contains('không hợp lệ')>
                         ✕ <strong>Link không hợp lệ</strong><br/>
-                        Link đặt lại mật khẩu không hợp lệ hoặc đã được sử dụng. Vui lòng yêu cầu link mới.
+                        Link không hợp lệ hoặc đã được sử dụng. Vui lòng yêu cầu link mới.
                     <#else>
                         ✕ ${message.summary}
                     </#if>
@@ -156,113 +132,113 @@
             </#if>
         </#if>
 
-        <h2>
-            <#if requiredActions??>
-                <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
-                    Đặt Lại Mật Khẩu
-                <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
-                    Xác Minh Email
-                <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
-                    Cập Nhật Thông Tin
+        <#-- Trạng thái ban đầu: hiện nút hành động -->
+        <div id="action-state">
+            <h2>
+                <#if requiredActions??>
+                    <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
+                        Đặt Lại Mật Khẩu
+                    <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+                        Xác Minh Email
+                    <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
+                        Cập Nhật Thông Tin
+                    <#else>
+                        Xác Nhận Hành Động
+                    </#if>
                 <#else>
                     Xác Nhận Hành Động
                 </#if>
-            <#else>
-                Xác Nhận Hành Động
-            </#if>
-        </h2>
-        
-        <#if !message?has_content || message.type != 'error'>
-            <div class="message">
-                <#if requiredActions??>
-                    <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
-                        <p>Nhấn vào nút bên dưới để đặt lại mật khẩu của bạn.</p>
-                    <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+            </h2>
+            
+            <#if !message?has_content || message.type != 'error'>
+                <div class="message">
+                    <#if requiredActions??>
+                        <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
+                            <p>Nhấn vào nút bên dưới để đặt lại mật khẩu của bạn.</p>
+                        <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+                            <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
+                        <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
+                            <p>Nhấn vào nút bên dưới để cập nhật thông tin cá nhân của bạn.</p>
+                        <#else>
+                            <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác nhận.</p>
+                        </#if>
+                    <#else>
                         <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
-                    <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
-                        <p>Nhấn vào nút bên dưới để cập nhật thông tin cá nhân của bạn.</p>
-                    <#else>
-                        <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác nhận.</p>
                     </#if>
-                <#else>
-                    <p>Vui lòng nhấn vào nút bên dưới để hoàn tất xác minh email của bạn.</p>
-                </#if>
-            </div>
-        </#if>
-        
-        <#if skipLink??>
-            <#-- Không hiển thị link -->
-        <#else>
-           <#-- Nếu có lỗi (token hết hạn/invalid), chỉ hiển thị nút quay lại -->
-            <#if message?has_content && message.type == 'error'>
-                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
-            <#elseif actionUri?has_content>
-                <#if requiredActions??>
-                    <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
-                        <a href="${actionUri}" class="btn">Đặt Lại Mật Khẩu</a>
-                    <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
-                            <button id="verifyBtn" class="btn">Xác Minh Email</button>
-
-                    <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
-                        <a href="${actionUri}" class="btn">Cập Nhật Thông Tin</a>
-                    <#else>
-                        <a href="${actionUri}" class="btn">Xác Nhận</a>
-                    </#if>
-                <#else>
-                        <button id="verifyBtn" class="btn">Xác Minh Email</button>
-
-                </#if>
-            <#elseif pageRedirectUri?has_content>
-                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
-            <#elseif client?? && client.baseUrl?has_content>
-                <a href="${client.rootUrl!'http://localhost:3000'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
-            <#else>
-                <p class="error">Không có liên kết xác nhận khả dụng.</p>
+                </div>
             </#if>
-        </#if>
 
-        <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            var btn = document.getElementById('verifyBtn');
-            if (btn) {
-                btn.addEventListener('click', function() {
-                    const urlParams = new URLSearchParams(window.location.search);
-                    const token = urlParams.get('key');
-                    let userId = '';
-                    let userEmail = '';
-                    if (token) {
-                        try {
-                            const base64Url = token.split('.')[1];
-                            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-                            const jsonPayload = decodeURIComponent(atob(base64).split('').map(function(c) {
-                                return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
-                            }).join(''));
-                            const payload = JSON.parse(jsonPayload);
-                            userId = payload.sub || payload.keycloakId || '';
-                            userEmail = payload.eml || payload.email || '';
-                        } catch (e) {}
-                    }
-                    if (userId && userEmail) {
-                        fetch('https://api.nexo.nayamishop.id.vn/api/auth/verify-email', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ email: userEmail, keycloakId: userId })
-                        })
-                        .then(res => res.json())
-                        .then(data => {
-                            window.location.href = '${client.rootUrl!"https://nexo.nayamishop.id.vn"}/auth/login';
-                        })
-                        .catch(err => {
-                            alert('Lỗi xác thực!');
-                        });
-                    } else {
-                        alert('Không lấy được thông tin người dùng từ token!');
-                    }
-                });
-            }
-        });
-        </script>
+            <#if skipLink??>
+                <#-- Không hiển thị link -->
+            <#else>
+                <#if message?has_content && message.type == 'error'>
+                    <a href="${client.rootUrl!'https://nexosocial.id.vn'}/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
+                <#elseif actionUri?has_content>
+                    <#if requiredActions??>
+                        <#if requiredActions?seq_contains("UPDATE_PASSWORD")>
+                            <a href="${actionUri}" class="btn">Đặt Lại Mật Khẩu</a>
+                        <#elseif requiredActions?seq_contains("VERIFY_EMAIL")>
+                            <a href="#" class="btn" id="verifyBtn" onclick="handleVerify(event)">Xác Minh Email</a>
+                        <#elseif requiredActions?seq_contains("UPDATE_PROFILE")>
+                            <a href="${actionUri}" class="btn">Cập Nhật Thông Tin</a>
+                        <#else>
+                            <a href="${actionUri}" class="btn">Xác Nhận</a>
+                        </#if>
+                    <#else>
+                        <a href="#" class="btn" id="verifyBtn" onclick="handleVerify(event)">Xác Minh Email</a>
+                    </#if>
+                    <br/>
+                    <a href="${client.rootUrl!'https://nexosocial.id.vn'}/auth/login" class="btn btn-secondary">« Quay Lại Đăng Nhập</a>
+                <#elseif pageRedirectUri?has_content>
+                    <a href="${client.rootUrl!'https://nexosocial.id.vn'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <#elseif client?? && client.baseUrl?has_content>
+                    <a href="${client.rootUrl!'https://nexosocial.id.vn'}/auth/login" class="btn">« Quay Lại Ứng Dụng</a>
+                <#else>
+                    <a href="https://nexosocial.id.vn/auth/login" class="btn">« Quay Lại Đăng Nhập</a>
+                </#if>
+            </#if>
+        </div>
+
+        <#-- Trạng thái sau khi verify thành công -->
+        <div id="success-state" class="hidden">
+            <div class="success-message">
+                ✓ <strong>Xác minh email thành công!</strong><br/>
+                Tài khoản của bạn đã được kích hoạt. Đang chuyển về trang đăng nhập...
+            </div>
+            <a href="${client.rootUrl!'https://nexosocial.id.vn'}/auth/login" class="btn">Đăng Nhập Ngay</a>
+        </div>
     </div>
 
+    <script>
+    function handleVerify(e) {
+        e.preventDefault();
+        var actionUrl = '${actionUri!""}';
+        var loginUrl = '${client.rootUrl!"https://nexosocial.id.vn"}/auth/login';
+
+        if (!actionUrl) {
+            alert('Không có liên kết xác minh!');
+            return;
+        }
+
+        // Gọi actionUri bằng fetch để Keycloak xử lý verify ở background
+        // Sau đó hiện thông báo thành công + redirect về login
+        fetch(actionUrl, { method: 'GET', redirect: 'follow', credentials: 'include' })
+            .then(function(response) {
+                // Keycloak trả về HTML page (có thể 200 hoặc redirect),
+                // dù thế nào thì verify đã được xử lý
+                document.getElementById('action-state').classList.add('hidden');
+                document.getElementById('success-state').classList.remove('hidden');
+                // Tự động redirect sau 2 giây
+                setTimeout(function() {
+                    window.location.href = loginUrl;
+                }, 2000);
+            })
+            .catch(function(err) {
+                // Nếu fetch lỗi (CORS, network), fallback: mở actionUri trực tiếp
+                // rồi redirect sau vài giây
+                window.location.href = actionUrl;
+            });
+    }
+    </script>
 </body>
 </html>

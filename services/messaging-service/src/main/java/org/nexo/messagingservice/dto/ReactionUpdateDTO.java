@@ -13,5 +13,6 @@ import java.util.List;
 @Builder
 public class ReactionUpdateDTO {
     private Long messageId;
+    private Long conversationId;
     private List<ReactionDTO> reactions;
 }

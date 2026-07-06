@@ -2,6 +2,7 @@ package org.nexo.interactionservice.dto.response;
 
 import lombok.*;
 
+import java.io.Serializable;
 import java.util.List;
 
 @Data
@@ -9,7 +10,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class PageModelResponse<T> {
+public class PageModelResponse<T> implements Serializable {
     private int pageNo;
     private int pageSize;
     private long totalElements;

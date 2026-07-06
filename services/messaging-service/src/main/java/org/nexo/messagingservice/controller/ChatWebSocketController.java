@@ -121,7 +121,11 @@ public class ChatWebSocketController {
         UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
         Long userId = userDto.getUserId();
 
-        messageService.addReaction(request.getMessageId(), userId, request.getReactionType());
+        var update = messageService.addReaction(request.getMessageId(), userId, request.getReactionType());
+
+        messagingTemplate.convertAndSend(
+                "/topic/conversation/" + update.getConversationId() + "/reactions",
+                update);
     }
 
     @MessageMapping("/chat.remove-reaction")
@@ -132,7 +136,12 @@ public class ChatWebSocketController {
         UserServiceProto.UserDto userDto = userGrpcClient.getUserByKeycloakId(keycloakUserId);
         Long userId = userDto.getUserId();
 
-        messageService.removeReaction(request.getMessageId(), userId, request.getReactionType());
+        // Service commit transaction, sau đó controller broadcast
+        var update = messageService.removeReaction(request.getMessageId(), userId, request.getReactionType());
+
+        messagingTemplate.convertAndSend(
+                "/topic/conversation/" + update.getConversationId() + "/reactions",
+                update);
     }
 
     // bắt lỗi

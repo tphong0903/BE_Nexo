@@ -5,8 +5,6 @@ import lombok.*;
 import java.time.LocalDateTime;
 import java.util.List;
 
-import org.nexo.feedservice.dto.UserTagDTO;
-
 @Data
 @Getter
 @NoArgsConstructor

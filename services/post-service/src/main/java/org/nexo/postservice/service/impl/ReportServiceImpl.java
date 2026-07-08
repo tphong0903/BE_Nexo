@@ -300,6 +300,8 @@ public class ReportServiceImpl implements IReportService {
                 .caption(model.getPostModel().getCaption())
                 .isActive(model.getPostModel().getIsActive())
                 .note(model.getNote())
+                .predictAI(model.getPredictAI())
+                .confidence(model.getConfidence())
                 .build();
     }
 

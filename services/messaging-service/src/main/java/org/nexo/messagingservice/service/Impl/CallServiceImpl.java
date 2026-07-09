@@ -43,6 +43,9 @@ public class CallServiceImpl implements CallService {
 
     @Override
     public CallNotificationDTO initiateCall(CallInitiateRequest request, Long callerUserId) {
+        ConversationModel conversation = conversationRepository.findById(request.getConversationId())
+                .orElseThrow(() -> new ResourceNotFoundException("Conversation not found"));
+
         List<Long> participantIds = participantRepository
                 .findActiveUserIdsByConversationId(request.getConversationId());
         if (!participantIds.contains(callerUserId)) {
@@ -50,6 +53,10 @@ public class CallServiceImpl implements CallService {
         }
 
         boolean isGroupCall = participantIds.size() > 2;
+
+        if (!isGroupCall && conversation.getStatus() == org.nexo.messagingservice.enums.EConversationStatus.PENDING) {
+            throw new AccessDeniedException("Cannot initiate call for pending conversations");
+        }
         Long calleeUserId = null;
 
         if (!isGroupCall) {

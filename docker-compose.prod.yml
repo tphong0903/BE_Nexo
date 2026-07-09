@@ -295,7 +295,7 @@ services:
       - "8087:8087"
       - "9094:9094"
     environment:
-      GEMINI_KEY: AQ.Ab8RN6LUOabc5y9uNZ4N2s3VpdF5LtFsw9KufWx4c9nmZwE8Dg
+      GEMINI_KEY: ""
       TZ: Asia/Ho_Chi_Minh
       JAVA_TOOL_OPTIONS: -Duser.timezone=Asia/Ho_Chi_Minh
       SERVER_PORT: 8087

@@ -12,6 +12,7 @@ import org.nexo.messagingservice.grpc.UserGrpcClient;
 import org.nexo.messagingservice.model.CallModel;
 import org.nexo.messagingservice.model.CallParticipantModel;
 import org.nexo.messagingservice.model.MessageModel;
+import org.nexo.messagingservice.model.ConversationModel;
 import org.nexo.messagingservice.repository.CallParticipantRepository;
 import org.nexo.messagingservice.repository.CallRepository;
 import org.nexo.messagingservice.repository.ConversationParticipantRepository;

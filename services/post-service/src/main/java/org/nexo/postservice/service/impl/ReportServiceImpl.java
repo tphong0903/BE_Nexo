@@ -2,21 +2,20 @@ package org.nexo.postservice.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import moderation.Moderation;
+import org.nexo.grpc.interaction.InteractionServiceOuterClass;
 import org.nexo.grpc.user.UserServiceProto;
+import org.nexo.postservice.dto.MessageDTO;
 import org.nexo.postservice.dto.response.ReportInfoDTO;
 import org.nexo.postservice.dto.response.ReportResponseDTO;
 import org.nexo.postservice.dto.response.ReportSummaryProjection;
 import org.nexo.postservice.exception.CustomException;
-import org.nexo.postservice.grpc.PostMediaServiceProto;
 import org.nexo.postservice.model.*;
 import org.nexo.postservice.repository.*;
-import org.nexo.postservice.service.GrpcServiceImpl.client.AiModerationClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.InteractionGrpcClient;
 import org.nexo.postservice.service.GrpcServiceImpl.client.UserGrpcClient;
-import org.nexo.postservice.service.IPostMediaService;
 import org.nexo.postservice.service.IReportService;
-import org.nexo.postservice.util.Enum.EMediaType;
+import org.nexo.postservice.service.ModerationService;
+import org.nexo.postservice.util.Enum.ENotificationType;
 import org.nexo.postservice.util.Enum.EReportStatus;
 import org.nexo.postservice.util.SecurityUtil;
 import org.springframework.data.domain.Page;
@@ -24,7 +23,7 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
-import org.springframework.scheduling.annotation.Async;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,10 +31,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ReportServiceImpl implements IReportService {
+    private static final String CONTENT_TYPE_POST = "POST";
+    private static final String CONTENT_TYPE_REEL = "REEL";
+    private static final String CONTENT_TYPE_COMMENT = "COMMENT";
+    private static final String COMMUNITY_GUIDELINES_URL = "/community-guidelines";
+    private static final String SYSTEM_REPORTER_NAME = "System";
+
     private final IReportPostRepository reportPostRepository;
     private final IReportReelRepository reportReelRepository;
     private final IReportCommentRepository reportCommentRepository;
@@ -44,10 +50,8 @@ public class ReportServiceImpl implements IReportService {
     private final SecurityUtil securityUtil;
     private final UserGrpcClient userGrpcClient;
     private final InteractionGrpcClient interactionGrpcClient;
-    private final AiModerationClient aiModerationClient;
-    private final IPostMediaService postMediaService;
-    private final GeminiService geminiService;
-
+    private final ModerationService moderationService;
+    private final KafkaTemplate<String, Object> kafkaTemplate;
 
     private Map<Long, UserServiceProto.UserDTOResponse2> getUserMap(List<Long> ids) {
         return userGrpcClient.getUsersByIds(ids).stream()
@@ -64,7 +68,6 @@ public class ReportServiceImpl implements IReportService {
 
 
     @Override
-    @Transactional
     public String reportPost(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
         if (reportPostRepository.existsByUserIdAndPostModel_Id(userId, id)) {
@@ -88,12 +91,11 @@ public class ReportServiceImpl implements IReportService {
                 .build();
 
         reportPostRepository.save(report);
-        callAIServiceToCheck(post.getCaption(), "POST", report.getId());
+        moderationService.triggerModerationAsync(CONTENT_TYPE_POST, id, userId);
         return "Success";
     }
 
     @Override
-    @Transactional
     public String reportReel(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
         if (reportReelRepository.existsByUserIdAndReelModel_Id(userId, id)) {
@@ -117,12 +119,11 @@ public class ReportServiceImpl implements IReportService {
                 .build();
 
         reportReelRepository.save(report);
-        callAIServiceToCheck(reel.getCaption(), "REEL", report.getId());
+        moderationService.triggerModerationAsync(CONTENT_TYPE_REEL, id, userId);
         return "Success";
     }
 
     @Override
-    @Transactional
     public String reportComment(Long id, String reason, String detail) {
         Long userId = securityUtil.getUserIdFromToken();
         if (reportCommentRepository.existsByUserIdAndCommentId(userId, id)) {
@@ -152,7 +153,7 @@ public class ReportServiceImpl implements IReportService {
                 .build();
 
         reportCommentRepository.save(report);
-        callAIServiceToCheck(commentResponse.getContent(), "COMMENT", report.getId());
+        moderationService.triggerModerationAsync(CONTENT_TYPE_COMMENT, id, userId);
         return "Success";
     }
 
@@ -171,6 +172,7 @@ public class ReportServiceImpl implements IReportService {
             PostModel post = report.getPostModel();
             post.setIsActive(false);
             postRepository.save(post);
+            sendViolationNotification(post.getUserId(), ENotificationType.POST_REMOVED);
         }
 
         report.setReportStatus(decision);
@@ -193,6 +195,7 @@ public class ReportServiceImpl implements IReportService {
             ReelModel reel = report.getReelModel();
             reel.setIsActive(false);
             reelRepository.save(reel);
+            sendViolationNotification(reel.getUserId(), ENotificationType.POST_REMOVED);
         }
 
         report.setReportStatus(decision);
@@ -213,7 +216,10 @@ public class ReportServiceImpl implements IReportService {
 
         if (decision == EReportStatus.APPROVED) {
             interactionGrpcClient.deleteCommentById(report.getCommentId());
+            InteractionServiceOuterClass.GetCommentByIdResponse comment = interactionGrpcClient.getCommentById(report.getCommentId());
             report.setCommentId(0L);
+            sendViolationNotification(comment.getUserId(), ENotificationType.COMMENT_REMOVED);
+
         }
 
         report.setReportStatus(decision);
@@ -265,7 +271,18 @@ public class ReportServiceImpl implements IReportService {
         ReportPostModel model = reportPostRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
-        var userMap = getUserMap(List.of(model.getUserId(), model.getPostModel().getUserId()));
+        long reporterId = model.getUserId();
+        Map<Long, UserServiceProto.UserDTOResponse2> userMap;
+        if (reporterId != 0)
+            userMap = getUserMap(List.of(reporterId, model.getPostModel().getUserId()));
+        else
+            userMap = getUserMap(List.of(model.getPostModel().getUserId()));
+
+        String reporterAvatar = reporterId == 0
+                ? "https://res.cloudinary.com/dllwsmukj/image/upload/v1783144140/images_2_jyyjbo.jpg"
+                : userMap.get(reporterId).getAvatar();
+
+        String ownerAvatar = userMap.get(model.getPostModel().getUserId()).getAvatar();
 
         return ReportResponseDTO.builder()
                 .id(model.getId())
@@ -277,12 +294,14 @@ public class ReportServiceImpl implements IReportService {
                 .createdAt(model.getCreatedAt())
                 .reporterName(model.getReporterName())
                 .ownerPostName(model.getOwnerPostName())
-                .reporterAvatarUrl(userMap.get(model.getUserId()).getAvatar())
-                .ownerPostAvatarUrl(userMap.get(model.getPostModel().getUserId()).getAvatar())
+                .reporterAvatarUrl(reporterAvatar)
+                .ownerPostAvatarUrl(ownerAvatar)
                 .mediaUrls(model.getPostModel().getPostMediaModels().stream().map(PostMediaModel::getMediaUrl).toList())
                 .caption(model.getPostModel().getCaption())
                 .isActive(model.getPostModel().getIsActive())
                 .note(model.getNote())
+                .predictAI(model.getPredictAI())
+                .confidence(model.getConfidence())
                 .build();
     }
 
@@ -291,7 +310,18 @@ public class ReportServiceImpl implements IReportService {
         ReportReelModel model = reportReelRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
-        var userMap = getUserMap(List.of(model.getUserId(), model.getReelModel().getUserId()));
+        long reporterId = model.getUserId();
+        Map<Long, UserServiceProto.UserDTOResponse2> userMap;
+        if (reporterId != 0)
+            userMap = getUserMap(List.of(reporterId, model.getReelModel().getUserId()));
+        else
+            userMap = getUserMap(List.of(model.getReelModel().getUserId()));
+
+        String reporterAvatar = reporterId == 0
+                ? "https://res.cloudinary.com/dllwsmukj/image/upload/v1783144140/images_2_jyyjbo.jpg"
+                : userMap.get(reporterId).getAvatar();
+
+        String ownerAvatar = userMap.get(model.getReelModel().getUserId()).getAvatar();
 
         return ReportResponseDTO.builder()
                 .id(model.getId())
@@ -303,8 +333,8 @@ public class ReportServiceImpl implements IReportService {
                 .createdAt(model.getCreatedAt())
                 .reporterName(model.getReporterName())
                 .ownerPostName(model.getOwnerPostName())
-                .reporterAvatarUrl(userMap.get(model.getUserId()).getAvatar())
-                .ownerPostAvatarUrl(userMap.get(model.getReelModel().getUserId()).getAvatar())
+                .reporterAvatarUrl(reporterAvatar)
+                .ownerPostAvatarUrl(ownerAvatar)
                 .mediaUrls(List.of(model.getReelModel().getVideoUrl()))
                 .caption(model.getReelModel().getCaption())
                 .isActive(model.getReelModel().getIsActive())
@@ -319,7 +349,19 @@ public class ReportServiceImpl implements IReportService {
         ReportCommentModel model = reportCommentRepository.findById(id)
                 .orElseThrow(() -> new CustomException("Report not found", HttpStatus.NOT_FOUND));
 
-        var userMap = getUserMap(List.of(model.getUserId(), model.getOwnerId()));
+        long reporterId = model.getUserId();
+        Map<Long, UserServiceProto.UserDTOResponse2> userMap;
+
+        if (reporterId != 0)
+            userMap = getUserMap(List.of(reporterId, model.getOwnerId()));
+        else
+            userMap = getUserMap(List.of(model.getOwnerId()));
+
+        String reporterAvatar = reporterId == 0
+                ? "https://res.cloudinary.com/dllwsmukj/image/upload/v1783144140/images_2_jyyjbo.jpg"
+                : userMap.get(reporterId).getAvatar();
+
+        String ownerAvatar = userMap.get(model.getOwnerId()).getAvatar();
 
         return ReportResponseDTO.builder()
                 .id(model.getId())
@@ -331,8 +373,8 @@ public class ReportServiceImpl implements IReportService {
                 .createdAt(model.getCreatedAt())
                 .reporterName(model.getReporterName())
                 .ownerPostName(model.getOwnerCommentName())
-                .reporterAvatarUrl(userMap.get(model.getUserId()).getAvatar())
-                .ownerPostAvatarUrl(userMap.get(model.getOwnerId()).getAvatar())
+                .reporterAvatarUrl(reporterAvatar)
+                .ownerPostAvatarUrl(ownerAvatar)
                 .content(model.getContent())
                 .predictAI(model.getPredictAI())
                 .confidence(model.getConfidence())
@@ -340,58 +382,18 @@ public class ReportServiceImpl implements IReportService {
                 .build();
     }
 
-    @Async
-    public void callAIServiceToCheck(String content, String type, Long reportId) {
+    private void sendViolationNotification(Long ownerId, ENotificationType type) {
         try {
-            // 1. Lấy kết quả từ Text Moderation (dùng biến final để lambda có thể truy cập)
-            final Moderation.PredictionResponse prediction = aiModerationClient.checkText(content);
-            final String initialLabel = prediction.getLabel();
-            final double initialConf = (double) prediction.getConfidence();
-
-            switch (type) {
-                case "POST" -> reportPostRepository.findById(reportId).ifPresent(r -> {
-                    String finalLabel = initialLabel;
-                    double finalConf = initialConf;
-
-                    List<String> imageUrls = postMediaService.findPostMediasOfPost(r.getPostModel().getId()).stream()
-                            .filter(media -> EMediaType.PICTURE.name().equals(media.getMediaType()))
-                            .map(PostMediaServiceProto.PostMediaRequestDTO::getMediaUrl)
-                            .toList();
-
-                    if (!imageUrls.isEmpty()) {
-                        boolean isImageViolated = false;
-                        for (String url : imageUrls) {
-                            if (geminiService.isImageViolated(url)) {
-                                isImageViolated = true;
-                                break;
-                            }
-                        }
-
-                        if (isImageViolated) {
-                            finalLabel = "negative";
-                            finalConf = 1.0;
-                        }
-                    }
-
-                    r.setPredictAI(finalLabel);
-                    r.setConfidence(finalConf);
-                    reportPostRepository.save(r);
-                });
-
-                case "REEL" -> reportReelRepository.findById(reportId).ifPresent(r -> {
-                    r.setPredictAI(initialLabel);
-                    r.setConfidence(initialConf);
-                    reportReelRepository.save(r);
-                });
-
-                case "COMMENT" -> reportCommentRepository.findById(reportId).ifPresent(r -> {
-                    r.setPredictAI(initialLabel);
-                    r.setConfidence(initialConf);
-                    reportCommentRepository.save(r);
-                });
-            }
+            MessageDTO messageDTO = MessageDTO.builder()
+                    .actorId(0L)
+                    .recipientId(ownerId)
+                    .notificationType(type.name())
+                    .targetUrl(COMMUNITY_GUIDELINES_URL)
+                    .build();
+            kafkaTemplate.send("notification", messageDTO);
+            log.info("[MODERATION] Notification sent to user {}", ownerId);
         } catch (Exception e) {
-            log.error("AI Moderation failed for {} ID: {}", type, reportId, e);
+            log.error("[MODERATION] Failed to send violation notification to user {}", ownerId, e);
         }
     }
 }

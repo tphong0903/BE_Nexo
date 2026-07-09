@@ -19,6 +19,8 @@ public interface IReportPostRepository extends JpaRepository<ReportPostModel, Lo
 
     boolean existsByUserIdAndPostModel_Id(Long userId, Long postId);
 
+    ReportPostModel findByUserIdAndPostModel_Id(Long userId, Long postId);
+
     Page<ReportPostModel> findByReportStatus(EReportStatus status, Pageable pageable);
 
     @Query(value = """

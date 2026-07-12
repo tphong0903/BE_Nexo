@@ -188,8 +188,8 @@ services:
       KAFKA_GROUP_ID: recommendation-consumer-group
       DEFAULT_TOP_K: 10
       EMBEDDING_DIM: 32
-      CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      CELERY_BROKER_URL: redis://:Admin%40123@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:Admin%40123@redis:6379/2
       TRANSFORMERS_VERBOSITY: error
     volumes:
       - recommendation_artifacts:/app/artifacts
@@ -229,8 +229,8 @@ services:
       KAFKA_GROUP_ID: recommendation-worker-group
       DEFAULT_TOP_K: 10
       EMBEDDING_DIM: 32
-      CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      CELERY_BROKER_URL: redis://:Admin%40123@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:Admin%40123@redis:6379/2
       TRANSFORMERS_VERBOSITY: error
     volumes:
       - recommendation_artifacts:/app/artifacts
@@ -255,7 +255,7 @@ services:
   recommendation-beat:
     container_name: recommendation-beat
     image: phongga088/recommendation-service:latest
-    command: celery -A celery_app.celery_app beat --loglevel=info
+    command: celery -A celery_app.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     restart: unless-stopped
     environment:
       SERVICE_PORT: 8000
@@ -270,8 +270,8 @@ services:
       KAFKA_GROUP_ID: recommendation-beat-group
       DEFAULT_TOP_K: 10
       EMBEDDING_DIM: 32
-      CELERY_BROKER_URL: redis://:Admin@123@redis:6379/1
-      CELERY_RESULT_BACKEND: redis://:Admin@123@redis:6379/2
+      CELERY_BROKER_URL: redis://:Admin%40123@redis:6379/1
+      CELERY_RESULT_BACKEND: redis://:Admin%40123@redis:6379/2
       TRANSFORMERS_VERBOSITY: error
     depends_on:
       - user-service
@@ -280,11 +280,11 @@ services:
     deploy:
       resources:
         limits:
-          cpus: "0.3"
-          memory: 256M
+          cpus: "0.5"
+          memory: 768M
         reservations:
           cpus: "0.1"
-          memory: 128M
+          memory: 256M
     networks:
       - nexo-network
 
